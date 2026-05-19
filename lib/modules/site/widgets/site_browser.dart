@@ -63,6 +63,14 @@ List<SiteBrowseTarget> buildSiteBrowseTargets(SiteInfo site, WebSite? website) {
     _createBrowseTarget(
       site: site,
       baseUrl: baseUrl,
+      label: '控制中心',
+      icon: shadcn.LucideIcons.settings,
+      rawPath: website?.pageControlPanel ?? '',
+      replaceUserId: true,
+    ),
+    _createBrowseTarget(
+      site: site,
+      baseUrl: baseUrl,
       label: '消息中心',
       icon: shadcn.LucideIcons.mail,
       rawPath: website?.pageMessage ?? '',

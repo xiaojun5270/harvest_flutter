@@ -37,15 +37,7 @@ class BrowserPage extends StatefulWidget {
   final String? siteId;
   final WebSite? website;
 
-  const BrowserPage({
-    super.key,
-    required this.url,
-    this.title,
-    this.cookie,
-    this.userAgent,
-    this.siteId,
-    this.website,
-  });
+  const BrowserPage({super.key, required this.url, this.title, this.cookie, this.userAgent, this.siteId, this.website});
 
   /// 快捷打开
   static void open(
@@ -81,6 +73,7 @@ class BrowserCookieQuickMenu extends StatelessWidget {
   final ValueChanged<SiteBrowseTarget> onSelected;
   final Widget? badge;
   final String menuLabel;
+  final VoidCallback? onExtractCookie;
 
   const BrowserCookieQuickMenu({
     super.key,
@@ -88,14 +81,17 @@ class BrowserCookieQuickMenu extends StatelessWidget {
     required this.onSelected,
     this.badge,
     this.menuLabel = '快速跳转',
+    this.onExtractCookie,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
-    final effectiveBadge = badge ?? _defaultCookieBadge(targets.isNotEmpty);
+    // 检查是否有任何可显示的内容
+    final hasContent = targets.isNotEmpty || onExtractCookie != null;
+    final effectiveBadge = badge ?? _defaultCookieBadge(hasContent);
 
-    if (targets.isEmpty) return effectiveBadge;
+    if (!hasContent) return effectiveBadge;
 
     return shadcn.OverlayManagerLayer(
       popoverHandler: const shadcn.PopoverOverlayHandler(),
@@ -128,25 +124,29 @@ class BrowserCookieQuickMenu extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            target.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          Text(target.label, maxLines: 1, overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 2),
                           Text(
                             _browserDisplayUrl(target.url),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: cs.foreground.withValues(alpha: 0.48),
-                            ),
+                            style: TextStyle(fontSize: 10, color: cs.foreground.withValues(alpha: 0.48)),
                           ),
                         ],
                       ),
                     ),
                   ),
+                if (onExtractCookie != null) ...[
+                  const shadcn.MenuDivider(),
+                  shadcn.MenuButton(
+                    leading: const Icon(shadcn.LucideIcons.cloudDownload),
+                    onPressed: (itemContext) {
+                      shadcn.closeOverlay(itemContext);
+                      onExtractCookie!();
+                    },
+                    child: const Text('提取并同步 Cookie'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -169,27 +169,16 @@ class BrowserCookieQuickMenu extends StatelessWidget {
           Container(
             width: 5,
             height: 5,
-            decoration: const BoxDecoration(
-              color: Color(0xFF10B981),
-              shape: BoxShape.circle,
-            ),
+            decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
           ),
           const SizedBox(width: 4),
           const Text(
             'Cookie',
-            style: TextStyle(
-              color: Color(0xFF10B981),
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w600),
           ),
           if (hasTargets) ...[
             const SizedBox(width: 3),
-            const Icon(
-              shadcn.LucideIcons.chevronDown,
-              size: 10,
-              color: Color(0xFF10B981),
-            ),
+            const Icon(shadcn.LucideIcons.chevronDown, size: 10, color: Color(0xFF10B981)),
           ],
         ],
       ),
@@ -202,9 +191,7 @@ String _normalizeInitialBrowserUrl(String value) {
   final uri = Uri.tryParse(text);
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) return text;
   final normalizedPath = uri.path.replaceAll(RegExp(r'/+'), '/');
-  return uri
-      .replace(path: normalizedPath.isEmpty ? null : normalizedPath)
-      .toString();
+  return uri.replace(path: normalizedPath.isEmpty ? null : normalizedPath).toString();
 }
 
 String _browserDisplayUrl(String url) {
@@ -212,9 +199,7 @@ String _browserDisplayUrl(String url) {
   try {
     final uri = Uri.parse(url);
     final display = uri.host + uri.path;
-    return display.endsWith('/')
-        ? display.substring(0, display.length - 1)
-        : display;
+    return display.endsWith('/') ? display.substring(0, display.length - 1) : display;
   } catch (_) {
     return url;
   }
@@ -358,9 +343,7 @@ class _BrowserPageState extends State<BrowserPage> {
     }
 
     try {
-      final cookies = await CookieManager.instance().getCookies(
-        url: WebUri(targetUrl),
-      );
+      final cookies = await CookieManager.instance().getCookies(url: WebUri(targetUrl));
       final hasCookie = cookies.any((cookie) => cookie.name.isNotEmpty);
       if (mounted && !_closing && _hasReadableCookie != hasCookie) {
         setState(() => _hasReadableCookie = hasCookie);
@@ -401,10 +384,7 @@ class _BrowserPageState extends State<BrowserPage> {
     final torrentWebsite = _currentTorrentWebsiteConfig();
     final detailWebsite = _currentDetailWebsiteConfig();
     final userWebsite = _currentUserWebsiteConfig();
-    final showTorrentFab =
-        (torrentWebsite != null || detailWebsite != null) &&
-        !_closing &&
-        !_isLoading;
+    final showTorrentFab = (torrentWebsite != null || detailWebsite != null) && !_closing && !_isLoading;
     final showUserProfileFab = userWebsite != null && !_closing && !_isLoading;
 
     final pageBackground = appSurfaceColor(context, cs.background);
@@ -442,9 +422,7 @@ class _BrowserPageState extends State<BrowserPage> {
                           ? const SizedBox.shrink()
                           : _cookiesReady
                           ? _buildWebView()
-                          : const Center(
-                              child: shadcn.CircularProgressIndicator(),
-                            ),
+                          : const Center(child: shadcn.CircularProgressIndicator()),
                     ),
                     _buildBottomBar(cs),
                   ],
@@ -459,9 +437,7 @@ class _BrowserPageState extends State<BrowserPage> {
                         if (showUserProfileFab) ...[
                           FloatingActionButton.small(
                             heroTag: 'browser_user_profile_fab',
-                            onPressed: _extractingUserProfile
-                                ? null
-                                : () => _extractUserProfile(userWebsite!),
+                            onPressed: _extractingUserProfile ? null : () => _extractUserProfile(userWebsite!),
                             backgroundColor: cs.primary,
                             foregroundColor: cs.primaryForeground,
                             child: _extractingUserProfile
@@ -473,10 +449,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                       color: cs.primaryForeground,
                                     ),
                                   )
-                                : const Icon(
-                                    shadcn.LucideIcons.userRound,
-                                    size: 18,
-                                  ),
+                                : const Icon(shadcn.LucideIcons.userRound, size: 18),
                           ),
                           if (showTorrentFab) const SizedBox(height: 10),
                         ],
@@ -487,9 +460,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                 ? null
                                 : () async {
                                     if (detailWebsite != null) {
-                                      await _extractSingleTorrentDetail(
-                                        detailWebsite,
-                                      );
+                                      await _extractSingleTorrentDetail(detailWebsite);
                                       return;
                                     }
                                     if (torrentWebsite != null) {
@@ -508,9 +479,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                     ),
                                   )
                                 : Icon(
-                                    detailWebsite != null
-                                        ? shadcn.LucideIcons.download
-                                        : shadcn.LucideIcons.listChecks,
+                                    detailWebsite != null ? shadcn.LucideIcons.download : shadcn.LucideIcons.listChecks,
                                     size: 18,
                                   ),
                           ),
@@ -527,13 +496,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
   Widget _buildTopBar(shadcn.ColorScheme cs) {
     return Container(
-      padding: appHeaderPadding(
-        context,
-        left: 12,
-        top: 8,
-        right: 12,
-        bottom: 8,
-      ),
+      padding: appHeaderPadding(context, left: 12, top: 8, right: 12, bottom: 8),
       decoration: BoxDecoration(
         color: appSurfaceColor(context, cs.background),
         border: Border(bottom: BorderSide(color: cs.border, width: 0.5)),
@@ -548,11 +511,7 @@ class _BrowserPageState extends State<BrowserPage> {
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.all(4),
-                child: Icon(
-                  shadcn.LucideIcons.x,
-                  size: 18,
-                  color: cs.foreground,
-                ),
+                child: Icon(shadcn.LucideIcons.x, size: 18, color: cs.foreground),
               ),
             ),
           ),
@@ -565,20 +524,13 @@ class _BrowserPageState extends State<BrowserPage> {
                 if (_currentTitle.isNotEmpty)
                   Text(
                     _currentTitle,
-                    style: TextStyle(
-                      color: cs.foreground,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(color: cs.foreground, fontSize: 13, fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 Text(
                   _displayUrl(_currentUrl),
-                  style: TextStyle(
-                    color: cs.foreground.withValues(alpha: 0.4),
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: cs.foreground.withValues(alpha: 0.4), fontSize: 10),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -590,22 +542,11 @@ class _BrowserPageState extends State<BrowserPage> {
           // 加载状态
           if (_isLoading) ...[
             const SizedBox(width: 8),
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: shadcn.CircularProgressIndicator(
-                strokeWidth: 2,
-                color: cs.primary,
-              ),
-            ),
+            SizedBox(width: 14, height: 14, child: shadcn.CircularProgressIndicator(strokeWidth: 2, color: cs.primary)),
           ],
           if (_error != null) ...[
             const SizedBox(width: 8),
-            Icon(
-              shadcn.LucideIcons.circleAlert,
-              size: 14,
-              color: const Color(0xFFF85149),
-            ),
+            Icon(shadcn.LucideIcons.circleAlert, size: 14, color: const Color(0xFFF85149)),
           ],
         ],
       ),
@@ -617,7 +558,49 @@ class _BrowserPageState extends State<BrowserPage> {
     return BrowserCookieQuickMenu(
       targets: targets,
       onSelected: _openQuickBrowseTarget,
+      onExtractCookie: _shouldShowExtractCookieButton() ? _extractAndSyncCookie : null,
     );
+  }
+
+  bool _shouldShowExtractCookieButton() {
+    final website = _websiteConfigForCurrentSite();
+    final siteInfo = _currentSiteInfoForQuickLinks(website);
+    return siteInfo != null && _hasReadableCookie;
+  }
+
+  Future<void> _extractAndSyncCookie() async {
+    final website = _websiteConfigForCurrentSite();
+    final siteInfo = _currentSiteInfoForQuickLinks(website);
+
+    if (siteInfo == null) {
+      Toast.warning('未找到对应的站点配置');
+      return;
+    }
+
+    AppLogger.info('开始提取 Cookie: site=${siteInfo.site}, url=$_currentUrl');
+    final cookie = await _cookieHeaderFor(_currentUrl);
+
+    if (cookie == null || cookie.isEmpty) {
+      Toast.warning('未检测到 Cookie');
+      AppLogger.warn('Cookie 提取失败或为空');
+      return;
+    }
+
+    AppLogger.info('提取到的 Cookie 长度: ${cookie.length} 字符');
+    AppLogger.info('Cookie 内容预览: ${cookie.substring(0, cookie.length > 200 ? 200 : cookie.length)}...');
+
+    try {
+      final notifier = ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider.notifier);
+
+      final updated = siteInfo.copyWith(cookie: cookie);
+      await notifier.updateSite(updated);
+
+      AppLogger.info('Cookie 已同步到后端: site=${siteInfo.site}, cookieLength=${cookie.length}');
+      Toast.success('Cookie 已同步到后端 (${cookie.length} 字符)');
+    } catch (e, st) {
+      AppLogger.error('同步 Cookie 失败', e, st);
+      Toast.error('同步 Cookie 失败');
+    }
   }
 
   bool _shouldShowCookieQuickMenu() {
@@ -634,11 +617,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
   SiteInfo? _currentSiteInfoForQuickLinks(WebSite? website) {
     final sites =
-        ProviderScope.containerOf(
-          context,
-          listen: false,
-        ).read(siteInfoListProvider).valueOrNull ??
-        const <SiteInfo>[];
+        ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
     if (sites.isEmpty) return null;
 
     final siteId = widget.siteId?.trim().toLowerCase() ?? '';
@@ -649,14 +628,11 @@ class _BrowserPageState extends State<BrowserPage> {
     for (final site in sites) {
       final siteName = site.site.trim().toLowerCase();
       final nickname = site.nickname.trim().toLowerCase();
-      if (siteId.isNotEmpty && (siteName == siteId || nickname == siteId))
-        return site;
-      if (websiteName.isNotEmpty &&
-          (siteName == websiteName || nickname == websiteName)) {
+      if (siteId.isNotEmpty && (siteName == siteId || nickname == siteId)) return site;
+      if (websiteName.isNotEmpty && (siteName == websiteName || nickname == websiteName)) {
         return site;
       }
-      if (websiteNickname.isNotEmpty &&
-          (siteName == websiteNickname || nickname == websiteNickname)) {
+      if (websiteNickname.isNotEmpty && (siteName == websiteNickname || nickname == websiteNickname)) {
         return site;
       }
     }
@@ -669,14 +645,64 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   Future<void> _openQuickBrowseTarget(SiteBrowseTarget target) async {
+    AppLogger.info('快速跳转: label=${target.label}, url=${target.url}');
     final controller = _controller;
-    if (controller == null || _closing) return;
+    if (controller == null || _closing) {
+      AppLogger.warn('无法跳转: controller=${controller == null ? "null" : "ok"}, _closing=$_closing');
+      return;
+    }
     try {
+      AppLogger.info('开始加载 URL: ${target.url}');
       await controller.loadUrl(urlRequest: URLRequest(url: WebUri(target.url)));
+      AppLogger.info('URL 加载请求已发送');
     } catch (e, st) {
       AppLogger.error('内置浏览器快速跳转失败', e, st);
       if (mounted) Toast.error('快速跳转失败');
     }
+  }
+
+  Future<void> _showCopyMenu() async {
+    if (!mounted) return;
+    final cs = shadcn.Theme.of(context).colorScheme;
+
+    await shadcn.showDropdown<void>(
+      context: context,
+      alignment: Alignment.bottomCenter,
+      offset: const Offset(0, -8),
+      widthConstraint: shadcn.PopoverConstraint.intrinsic,
+      heightConstraint: shadcn.PopoverConstraint.intrinsic,
+      consumeOutsideTaps: true,
+      builder: (_) => AppDropdownMenu(
+        children: [
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.link),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              Clipboard.setData(ClipboardData(text: _currentUrl));
+              Toast.success('链接已复制');
+            },
+            child: const Text('复制链接'),
+          ),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.cookie),
+            enabled: _hasReadableCookie,
+            onPressed: _hasReadableCookie
+                ? (itemContext) async {
+                    shadcn.closeOverlay(itemContext);
+                    final cookie = await _cookieHeaderFor(_currentUrl);
+                    if (cookie != null && cookie.isNotEmpty) {
+                      Clipboard.setData(ClipboardData(text: cookie));
+                      Toast.success('Cookie 已复制 (${cookie.length} 字符)');
+                    } else {
+                      Toast.warning('未检测到 Cookie');
+                    }
+                  }
+                : null,
+            child: const Text('复制 Cookie'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── 底部工具栏 ──
@@ -698,48 +724,19 @@ class _BrowserPageState extends State<BrowserPage> {
               _closeBrowser();
             }
           }),
-          _bottomBtn(
-            cs,
-            shadcn.LucideIcons.arrowRight,
-            '前进',
-            _canGoForward,
-            () => _controller?.goForward(),
-          ),
-          _bottomBtn(
-            cs,
-            shadcn.LucideIcons.refreshCw,
-            '刷新',
-            true,
-            () => _controller?.reload(),
-          ),
-          _bottomBtn(cs, shadcn.LucideIcons.copy, '复制', true, () {
-            Clipboard.setData(ClipboardData(text: _currentUrl));
-            Toast.success('链接已复制');
-          }),
-          _bottomBtn(
-            cs,
-            shadcn.LucideIcons.globe,
-            'UA',
-            true,
-            _showUserAgentPicker,
-          ),
+          _bottomBtn(cs, shadcn.LucideIcons.arrowRight, '前进', _canGoForward, () => _controller?.goForward()),
+          _bottomBtn(cs, shadcn.LucideIcons.refreshCw, '刷新', true, () => _controller?.reload()),
+          _bottomBtn(cs, shadcn.LucideIcons.copy, '复制', true, () => _showCopyMenu()),
+          _bottomBtn(cs, shadcn.LucideIcons.globe, 'UA', true, _showUserAgentPicker),
           _bottomBtn(cs, shadcn.LucideIcons.share2, '分享', true, () {
-            SharePlus.instance.share(
-              ShareParams(text: _currentUrl, subject: _currentTitle),
-            );
+            SharePlus.instance.share(ShareParams(text: _currentUrl, subject: _currentTitle));
           }),
         ],
       ),
     );
   }
 
-  Widget _bottomBtn(
-    shadcn.ColorScheme cs,
-    IconData icon,
-    String label,
-    bool enabled,
-    VoidCallback onTap,
-  ) {
+  Widget _bottomBtn(shadcn.ColorScheme cs, IconData icon, String label, bool enabled, VoidCallback onTap) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       behavior: HitTestBehavior.opaque,
@@ -751,18 +748,14 @@ class _BrowserPageState extends State<BrowserPage> {
             Icon(
               icon,
               size: 18,
-              color: enabled
-                  ? cs.foreground.withValues(alpha: 0.7)
-                  : cs.foreground.withValues(alpha: 0.15),
+              color: enabled ? cs.foreground.withValues(alpha: 0.7) : cs.foreground.withValues(alpha: 0.15),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
                 fontSize: 9,
-                color: enabled
-                    ? cs.foreground.withValues(alpha: 0.5)
-                    : cs.foreground.withValues(alpha: 0.15),
+                color: enabled ? cs.foreground.withValues(alpha: 0.5) : cs.foreground.withValues(alpha: 0.15),
               ),
             ),
           ],
@@ -904,12 +897,7 @@ class _BrowserPageState extends State<BrowserPage> {
         userAgent: _safariMacosUserAgent,
       ),
       if (configuredUserAgent != null && configuredUserAgent.isNotEmpty)
-        _UserAgentPreset(
-          id: 'site',
-          label: '站点配置',
-          description: configuredUserAgent,
-          userAgent: configuredUserAgent,
-        ),
+        _UserAgentPreset(id: 'site', label: '站点配置', description: configuredUserAgent, userAgent: configuredUserAgent),
       _UserAgentPreset(
         id: 'default',
         label: '默认 WebView',
@@ -945,8 +933,7 @@ class _BrowserPageState extends State<BrowserPage> {
       id: 'firefox_windows',
       label: 'Firefox Windows',
       description: 'Windows Firefox Desktop',
-      userAgent:
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
     ),
   ];
 
@@ -972,13 +959,9 @@ class _BrowserPageState extends State<BrowserPage> {
                 dense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                 leading: Icon(
-                  selected
-                      ? shadcn.LucideIcons.check
-                      : shadcn.LucideIcons.globe,
+                  selected ? shadcn.LucideIcons.check : shadcn.LucideIcons.globe,
                   size: 18,
-                  color: selected
-                      ? cs.primary
-                      : cs.foreground.withValues(alpha: 0.62),
+                  color: selected ? cs.primary : cs.foreground.withValues(alpha: 0.62),
                 ),
                 title: Text(
                   preset.label,
@@ -992,10 +975,7 @@ class _BrowserPageState extends State<BrowserPage> {
                   preset.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.foreground.withValues(alpha: 0.56),
-                  ),
+                  style: TextStyle(fontSize: 11, color: cs.foreground.withValues(alpha: 0.56)),
                 ),
                 onTap: () async {
                   closeAppSheet(context);
@@ -1009,34 +989,22 @@ class _BrowserPageState extends State<BrowserPage> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                 children: [
-                  for (final preset in presets) ...[
-                    presetTile(preset),
-                    Divider(height: 1, color: cs.border),
-                  ],
+                  for (final preset in presets) ...[presetTile(preset), Divider(height: 1, color: cs.border)],
                   ListTile(
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     leading: Icon(
-                      fallbackExpanded
-                          ? shadcn.LucideIcons.chevronDown
-                          : shadcn.LucideIcons.chevronRight,
+                      fallbackExpanded ? shadcn.LucideIcons.chevronDown : shadcn.LucideIcons.chevronRight,
                       size: 18,
                       color: cs.foreground.withValues(alpha: 0.62),
                     ),
                     title: Text(
                       '备选 UA',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: cs.foreground,
-                      ),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.foreground),
                     ),
                     subtitle: Text(
                       'Chrome / Edge / Firefox',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.foreground.withValues(alpha: 0.56),
-                      ),
+                      style: TextStyle(fontSize: 11, color: cs.foreground.withValues(alpha: 0.56)),
                     ),
                     onTap: () {
                       setSheetState(() {
@@ -1045,10 +1013,7 @@ class _BrowserPageState extends State<BrowserPage> {
                     },
                   ),
                   if (fallbackExpanded)
-                    for (final preset in fallbackPresets) ...[
-                      Divider(height: 1, color: cs.border),
-                      presetTile(preset),
-                    ],
+                    for (final preset in fallbackPresets) ...[Divider(height: 1, color: cs.border), presetTile(preset)],
                 ],
               ),
             );
@@ -1064,9 +1029,7 @@ class _BrowserPageState extends State<BrowserPage> {
     if (mounted) setState(() {});
 
     try {
-      await _controller?.setSettings(
-        settings: InAppWebViewSettings(userAgent: _activeUserAgent),
-      );
+      await _controller?.setSettings(settings: InAppWebViewSettings(userAgent: _activeUserAgent));
       await _controller?.reload();
       Toast.success('已切换 UA：${preset.label}');
     } catch (e, st) {
@@ -1085,14 +1048,12 @@ class _BrowserPageState extends State<BrowserPage> {
     if ((siteId == null || siteId.isEmpty) && currentUrl.isEmpty) return null;
 
     final container = ProviderScope.containerOf(context, listen: false);
-    final configs =
-        container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
+    final configs = container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
     final siteKey = siteId?.toLowerCase() ?? '';
     final currentHost = _uriHost(currentUrl);
 
     for (final config in configs) {
-      if (config.name.toLowerCase() == siteKey ||
-          config.nickname.toLowerCase() == siteKey) {
+      if (config.name.toLowerCase() == siteKey || config.nickname.toLowerCase() == siteKey) {
         return config;
       }
     }
@@ -1113,13 +1074,10 @@ class _BrowserPageState extends State<BrowserPage> {
     }
     final website = _websiteConfigForCurrentSite();
     if (website == null) return null;
-    if (website.pageTorrents.trim().isEmpty ||
-        website.torrentsRule.trim().isEmpty) {
+    if (website.pageTorrents.trim().isEmpty || website.torrentsRule.trim().isEmpty) {
       return null;
     }
-    return _matchesWebsitePage(currentUrl, website.pageTorrents)
-        ? website
-        : null;
+    return _matchesWebsitePage(currentUrl, website.pageTorrents) ? website : null;
   }
 
   WebSite? _currentDetailWebsiteConfig() {
@@ -1130,8 +1088,7 @@ class _BrowserPageState extends State<BrowserPage> {
     final website = _websiteConfigForCurrentSite();
     if (website == null) return null;
     if (website.pageDetail.trim().isEmpty) return null;
-    if (website.detailDownloadUrlRule.trim().isEmpty &&
-        website.detailTitleRule.trim().isEmpty) {
+    if (website.detailDownloadUrlRule.trim().isEmpty && website.detailTitleRule.trim().isEmpty) {
       return null;
     }
     return _matchesWebsitePage(currentUrl, website.pageDetail) ? website : null;
@@ -1145,19 +1102,13 @@ class _BrowserPageState extends State<BrowserPage> {
     if (!_hasUserProfileRules(website)) return null;
     final pageUser = website.pageUser.trim();
     final pageControlPanel = website.pageControlPanel.trim();
-    final matchesUser =
-        pageUser.isNotEmpty && _matchesWebsitePage(currentUrl, pageUser);
-    final matchesControlPanel =
-        pageControlPanel.isNotEmpty &&
-        _matchesWebsitePage(currentUrl, pageControlPanel);
+    final matchesUser = pageUser.isNotEmpty && _matchesWebsitePage(currentUrl, pageUser);
+    final matchesControlPanel = pageControlPanel.isNotEmpty && _matchesWebsitePage(currentUrl, pageControlPanel);
     return matchesUser || matchesControlPanel ? website : null;
   }
 
   bool _hasUserProfileRules(WebSite website) {
-    return website.pageUser.contains('{}') ||
-        _userProfileRuleSpecs(
-          website,
-        ).any((spec) => spec.rule.trim().isNotEmpty);
+    return website.pageUser.contains('{}') || _userProfileRuleSpecs(website).any((spec) => spec.rule.trim().isNotEmpty);
   }
 
   List<_BrowserUserProfileRule> _userProfileRuleSpecs(WebSite website) {
@@ -1165,142 +1116,47 @@ class _BrowserPageState extends State<BrowserPage> {
       _BrowserUserProfileRule('username', '用户名', '账号', website.myUsernameRule),
       _BrowserUserProfileRule('email', '邮箱', '账号', website.myEmailRule),
       _BrowserUserProfileRule('uid', 'UID', '账号', website.myUidRule),
-      _BrowserUserProfileRule(
-        'passkey',
-        'Passkey',
-        '账号',
-        website.myPasskeyRule,
-      ),
-      _BrowserUserProfileRule(
-        'time_join',
-        '注册时间',
-        '时间',
-        website.myTimeJoinRule,
-      ),
-      _BrowserUserProfileRule(
-        'latest_active',
-        '最后活动',
-        '时间',
-        website.myLatestActiveRule,
-      ),
+      _BrowserUserProfileRule('passkey', 'Passkey', '账号', website.myPasskeyRule),
+      _BrowserUserProfileRule('time_join', '注册时间', '时间', website.myTimeJoinRule),
+      _BrowserUserProfileRule('latest_active', '最后活动', '时间', website.myLatestActiveRule),
       _BrowserUserProfileRule('level', '等级', '账号', website.myLevelRule),
       _BrowserUserProfileRule('uploaded', '上传量', '流量', website.myUploadedRule),
-      _BrowserUserProfileRule(
-        'downloaded',
-        '下载量',
-        '流量',
-        website.myDownloadedRule,
-      ),
+      _BrowserUserProfileRule('downloaded', '下载量', '流量', website.myDownloadedRule),
       _BrowserUserProfileRule('ratio', '分享率', '账号', website.myRatioRule),
       _BrowserUserProfileRule('bonus', '魔力值', '魔力/积分', website.myBonusRule),
-      _BrowserUserProfileRule(
-        'bonus_hour',
-        '时魔',
-        '魔力/积分',
-        website.myPerHourBonusRule,
-      ),
+      _BrowserUserProfileRule('bonus_hour', '时魔', '魔力/积分', website.myPerHourBonusRule),
       _BrowserUserProfileRule('score', '积分', '魔力/积分', website.myScoreRule),
-      _BrowserUserProfileRule(
-        'invitation',
-        '邀请',
-        '统计',
-        website.myInvitationRule,
-      ),
+      _BrowserUserProfileRule('invitation', '邀请', '统计', website.myInvitationRule),
       _BrowserUserProfileRule('hr', 'HR', '统计', website.myHrRule),
       _BrowserUserProfileRule('leech', '下载中', '统计', website.myLeechRule),
       _BrowserUserProfileRule('publish', '发布数', '统计', website.myPublishRule),
       _BrowserUserProfileRule('seed', '做种数', '统计', website.mySeedRule),
-      _BrowserUserProfileRule(
-        'seed_volume',
-        '做种量',
-        '统计',
-        website.mySeedVolRule,
-      ),
+      _BrowserUserProfileRule('seed_volume', '做种量', '统计', website.mySeedVolRule),
     ];
   }
 
   _BrowserUserProfileDisplay _userProfileDisplay(String key) {
     return switch (key) {
-      'username' => const _BrowserUserProfileDisplay(
-        Icons.person_outline,
-        Color(0xFF2563EB),
-      ),
-      'email' => const _BrowserUserProfileDisplay(
-        Icons.alternate_email,
-        Color(0xFF0EA5E9),
-      ),
-      'uid' => const _BrowserUserProfileDisplay(
-        Icons.badge_outlined,
-        Color(0xFF64748B),
-      ),
-      'passkey' => const _BrowserUserProfileDisplay(
-        Icons.key_outlined,
-        Color(0xFF64748B),
-      ),
-      'time_join' => const _BrowserUserProfileDisplay(
-        Icons.event_available_outlined,
-        Color(0xFF14B8A6),
-      ),
-      'latest_active' => const _BrowserUserProfileDisplay(
-        Icons.schedule_outlined,
-        Color(0xFF06B6D4),
-      ),
-      'level' => const _BrowserUserProfileDisplay(
-        Icons.workspace_premium_outlined,
-        Color(0xFFF59E0B),
-      ),
-      'uploaded' => const _BrowserUserProfileDisplay(
-        Icons.cloud_upload_outlined,
-        Color(0xFF10B981),
-      ),
-      'downloaded' => const _BrowserUserProfileDisplay(
-        Icons.cloud_download_outlined,
-        Color(0xFFEF4444),
-      ),
-      'ratio' => const _BrowserUserProfileDisplay(
-        Icons.balance_outlined,
-        Color(0xFF8B5CF6),
-      ),
-      'bonus' => const _BrowserUserProfileDisplay(
-        Icons.diamond_outlined,
-        Color(0xFFF59E0B),
-      ),
-      'bonus_hour' => const _BrowserUserProfileDisplay(
-        Icons.bolt_outlined,
-        Color(0xFFF97316),
-      ),
-      'score' => const _BrowserUserProfileDisplay(
-        Icons.star_border_outlined,
-        Color(0xFFEAB308),
-      ),
-      'invitation' => const _BrowserUserProfileDisplay(
-        Icons.group_add_outlined,
-        Color(0xFF8B5CF6),
-      ),
-      'hr' => const _BrowserUserProfileDisplay(
-        Icons.warning_amber_outlined,
-        Color(0xFFEF4444),
-      ),
-      'leech' => const _BrowserUserProfileDisplay(
-        Icons.arrow_downward,
-        Color(0xFFF97316),
-      ),
-      'publish' => const _BrowserUserProfileDisplay(
-        Icons.rocket_launch_outlined,
-        Color(0xFF6366F1),
-      ),
-      'seed' => const _BrowserUserProfileDisplay(
-        Icons.grass_outlined,
-        Color(0xFF10B981),
-      ),
-      'seed_volume' => const _BrowserUserProfileDisplay(
-        Icons.storage_outlined,
-        Color(0xFF0EA5E9),
-      ),
-      _ => const _BrowserUserProfileDisplay(
-        Icons.info_outline,
-        Color(0xFF64748B),
-      ),
+      'username' => const _BrowserUserProfileDisplay(Icons.person_outline, Color(0xFF2563EB)),
+      'email' => const _BrowserUserProfileDisplay(Icons.alternate_email, Color(0xFF0EA5E9)),
+      'uid' => const _BrowserUserProfileDisplay(Icons.badge_outlined, Color(0xFF64748B)),
+      'passkey' => const _BrowserUserProfileDisplay(Icons.key_outlined, Color(0xFF64748B)),
+      'time_join' => const _BrowserUserProfileDisplay(Icons.event_available_outlined, Color(0xFF14B8A6)),
+      'latest_active' => const _BrowserUserProfileDisplay(Icons.schedule_outlined, Color(0xFF06B6D4)),
+      'level' => const _BrowserUserProfileDisplay(Icons.workspace_premium_outlined, Color(0xFFF59E0B)),
+      'uploaded' => const _BrowserUserProfileDisplay(Icons.cloud_upload_outlined, Color(0xFF10B981)),
+      'downloaded' => const _BrowserUserProfileDisplay(Icons.cloud_download_outlined, Color(0xFFEF4444)),
+      'ratio' => const _BrowserUserProfileDisplay(Icons.balance_outlined, Color(0xFF8B5CF6)),
+      'bonus' => const _BrowserUserProfileDisplay(Icons.diamond_outlined, Color(0xFFF59E0B)),
+      'bonus_hour' => const _BrowserUserProfileDisplay(Icons.bolt_outlined, Color(0xFFF97316)),
+      'score' => const _BrowserUserProfileDisplay(Icons.star_border_outlined, Color(0xFFEAB308)),
+      'invitation' => const _BrowserUserProfileDisplay(Icons.group_add_outlined, Color(0xFF8B5CF6)),
+      'hr' => const _BrowserUserProfileDisplay(Icons.warning_amber_outlined, Color(0xFFEF4444)),
+      'leech' => const _BrowserUserProfileDisplay(Icons.arrow_downward, Color(0xFFF97316)),
+      'publish' => const _BrowserUserProfileDisplay(Icons.rocket_launch_outlined, Color(0xFF6366F1)),
+      'seed' => const _BrowserUserProfileDisplay(Icons.grass_outlined, Color(0xFF10B981)),
+      'seed_volume' => const _BrowserUserProfileDisplay(Icons.storage_outlined, Color(0xFF0EA5E9)),
+      _ => const _BrowserUserProfileDisplay(Icons.info_outline, Color(0xFF64748B)),
     };
   }
 
@@ -1311,10 +1167,7 @@ class _BrowserPageState extends State<BrowserPage> {
     final rawRule = pageRule.trim();
     if (rawRule.contains('{}')) {
       const marker = '__HARVEST_PAGE_MARKER__';
-      final target = _resolveWebsitePageUri(
-        current,
-        rawRule.replaceAll('{}', marker),
-      );
+      final target = _resolveWebsitePageUri(current, rawRule.replaceAll('{}', marker));
       if (target == null || !target.toString().contains(marker)) return false;
 
       if (target.queryParameters.containsValue(marker)) {
@@ -1332,9 +1185,7 @@ class _BrowserPageState extends State<BrowserPage> {
         }
       }
 
-      final escaped = RegExp.escape(
-        target.toString(),
-      ).replaceAll(RegExp.escape(marker), r'([^/?#&]+)');
+      final escaped = RegExp.escape(target.toString()).replaceAll(RegExp.escape(marker), r'([^/?#&]+)');
       return RegExp('^$escaped(?:[?#&].*)?\$').hasMatch(current.toString());
     }
 
@@ -1342,8 +1193,7 @@ class _BrowserPageState extends State<BrowserPage> {
     if (target == null) return false;
     final currentPath = _normalizePath(current.path);
     final targetPath = _normalizePath(target.path);
-    return targetPath.isNotEmpty &&
-        (currentPath == targetPath || currentPath.startsWith('$targetPath/'));
+    return targetPath.isNotEmpty && (currentPath == targetPath || currentPath.startsWith('$targetPath/'));
   }
 
   Uri? _resolveWebsitePageUri(Uri current, String pageRule) {
@@ -1358,6 +1208,23 @@ class _BrowserPageState extends State<BrowserPage> {
       path: '/',
     );
     return origin.resolve(value);
+  }
+
+  /// 解析页面 URL，支持 {} 占位符替换为 userId
+  String? _resolvePageUrl(String pageRule, String? userId) {
+    AppLogger.info('Resolve page URL: $pageRule, userId: $userId');
+
+    final rule = pageRule.trim();
+    if (rule.isEmpty) return null;
+
+    // 如果规则中包含 {}，则替换为 userId
+    if (rule.contains('{}')) {
+      if (userId == null || userId.isEmpty) return null;
+      return rule.replaceAll('{}', userId);
+    }
+
+    // 否则直接返回规则
+    return rule;
   }
 
   String? _uriHost(String value) {
@@ -1380,9 +1247,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
     setState(() => _extractingTorrentList = true);
     try {
-      final raw = await controller.evaluateJavascript(
-        source: _buildTorrentExtractScript(website),
-      );
+      final raw = await controller.evaluateJavascript(source: _buildTorrentExtractScript(website));
       if (!mounted || _closing) return;
       final items = _parseExtractedTorrents(raw);
       if (items.isEmpty) {
@@ -1405,9 +1270,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
     setState(() => _extractingTorrentList = true);
     try {
-      final raw = await controller.evaluateJavascript(
-        source: _buildTorrentDetailExtractScript(website),
-      );
+      final raw = await controller.evaluateJavascript(source: _buildTorrentDetailExtractScript(website));
       if (!mounted || _closing) return;
       final item = _parseExtractedTorrentDetail(raw);
       if (item == null) {
@@ -1442,16 +1305,17 @@ class _BrowserPageState extends State<BrowserPage> {
 
     setState(() => _extractingUserProfile = true);
     try {
-      final raw = await controller.evaluateJavascript(
-        source: _buildUserProfileExtractScript(website),
-      );
+      final raw = await controller.evaluateJavascript(source: _buildUserProfileExtractScript(website));
       if (!mounted || _closing) return;
       final items = _parseExtractedUserProfile(raw);
       if (items.isEmpty) {
         Toast.warning('未提取到用户页信息');
         return;
       }
-      await _showUserProfileDialog(items, website);
+
+      // 从 WebView 中提取当前最新的 Cookie，确保使用的是有效的登录状态
+      final cookie = await _cookieHeaderFor(_currentUrl);
+      await _showUserProfileDialog(items, website, extractedCookie: cookie);
     } catch (e, st) {
       AppLogger.error('提取用户页信息失败', e, st);
       if (mounted) Toast.error('提取用户页信息失败');
@@ -1462,19 +1326,8 @@ class _BrowserPageState extends State<BrowserPage> {
 
   String _buildUserProfileExtractScript(WebSite website) {
     final specs = _userProfileRuleSpecs(website)
-        .where(
-          (spec) =>
-              spec.rule.trim().isNotEmpty ||
-              (spec.key == 'uid' && website.pageUser.contains('{}')),
-        )
-        .map(
-          (spec) => {
-            'key': spec.key,
-            'label': spec.label,
-            'group': spec.group,
-            'rule': spec.rule,
-          },
-        )
+        .where((spec) => spec.rule.trim().isNotEmpty || (spec.key == 'uid' && website.pageUser.contains('{}')))
+        .map((spec) => {'key': spec.key, 'label': spec.label, 'group': spec.group, 'rule': spec.rule})
         .toList();
     return '''
 (() => {
@@ -1686,13 +1539,11 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   String _formatUserProfileValue(String key, String rawValue) {
-    final value = rawValue
-        .replaceAll('\u00a0', ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final value = rawValue.replaceAll('\u00a0', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     if (_isUserProfilePlaceholder(value)) return '-';
     if (key == 'uid') return value.isEmpty ? '-' : value;
     if (key == 'passkey') return maskKey(value);
+    if (key == 'email') return _extractEmailFromText(value);
 
     if (key == 'time_join' || key == 'latest_active') {
       return formatFlexibleLocalDateTimeString(value);
@@ -1749,25 +1600,17 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   String _formatUserProfileNumber(String value) {
-    final match = RegExp(
-      r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?',
-    ).firstMatch(value);
+    final match = RegExp(r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?').firstMatch(value);
     if (match == null) return '-';
-    final number = double.tryParse(
-      _normalizeUserProfileNumberText(match.group(0) ?? ''),
-    );
+    final number = double.tryParse(_normalizeUserProfileNumberText(match.group(0) ?? ''));
     if (number == null || !number.isFinite) return '-';
     return fmtCompact(number);
   }
 
   String _formatUserProfileInteger(String value) {
-    final match = RegExp(
-      r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?',
-    ).firstMatch(value);
+    final match = RegExp(r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?').firstMatch(value);
     if (match == null) return '-';
-    final number = double.tryParse(
-      _normalizeUserProfileNumberText(match.group(0) ?? ''),
-    );
+    final number = double.tryParse(_normalizeUserProfileNumberText(match.group(0) ?? ''));
     if (number == null || !number.isFinite || number < 0) return '-';
     final integer = number.roundToDouble();
     if (number != integer) return '-';
@@ -1776,33 +1619,56 @@ class _BrowserPageState extends State<BrowserPage> {
 
   String _normalizeUserProfileNumberText(String value) {
     final text = value.trim();
-    if (text.contains(',') && text.contains('.'))
+    if (text.contains(',') && text.contains('.')) {
       return text.replaceAll(',', '');
-    if (RegExp(r'^-?\d{1,3}(,\d{3})+$').hasMatch(text))
+    }
+    if (RegExp(r'^-?\d{1,3}(,\d{3})+$').hasMatch(text)) {
       return text.replaceAll(',', '');
+    }
     return text.replaceAll(',', '.');
   }
 
   String _formatUserProfileInvitation(String value) {
-    final match = RegExp(
-      r'(\d+)\s*(?:[/（(]\s*(\d+)\s*[）)]?)?',
-    ).firstMatch(value);
+    final match = RegExp(r'(\d+)\s*(?:[/（(]\s*(\d+)\s*[）)]?)?').firstMatch(value);
     if (match == null) return '-';
     final invitation = int.tryParse(match.group(1) ?? '') ?? 0;
     final temporary = int.tryParse(match.group(2) ?? '') ?? 0;
     return '邀请 $invitation 个，临时邀请 $temporary 个';
   }
 
+  /// 从文本中提取邮箱地址，去除前后的提示文字
+  String _extractEmailFromText(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '-';
+
+    // 使用正则表达式匹配邮箱地址
+    // 支持常见的邮箱格式：user@domain.com, user.name+tag@sub.domain.co.uk 等
+    final emailRegex = RegExp(
+      r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+      caseSensitive: false,
+    );
+
+    final match = emailRegex.firstMatch(trimmed);
+    if (match != null) {
+      final email = match.group(0)!;
+      AppLogger.info('从文本中提取到邮箱: $email (原文本: $trimmed)');
+      return email;
+    }
+
+    // 如果没有匹配到邮箱格式，返回原文本
+    AppLogger.warn('未从文本中提取到邮箱地址: $trimmed');
+    return trimmed;
+  }
+
   Future<void> _showUserProfileDialog(
     List<_BrowserUserProfileMetric> items,
-    WebSite website,
-  ) async {
+    WebSite website, {
+    String? extractedCookie,
+  }) async {
     if (!mounted || items.isEmpty) return;
     final cs = shadcn.Theme.of(context).colorScheme;
     final siteInfo = _currentSiteInfoForWebsite(website);
-    final hasUid = items.any(
-      (item) => item.key == 'uid' && !_isUserProfilePlaceholder(item.rawValue),
-    );
+    final hasUid = items.any((item) => item.key == 'uid' && !_isUserProfilePlaceholder(item.rawValue));
     final grouped = <String, List<_BrowserUserProfileMetric>>{};
     for (final item in items) {
       grouped.putIfAbsent(item.group, () => []).add(item);
@@ -1824,10 +1690,7 @@ class _BrowserPageState extends State<BrowserPage> {
               width: 30,
               height: 30,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
               child: Icon(display.icon, size: 16, color: color),
             ),
             const SizedBox(width: 10),
@@ -1850,12 +1713,7 @@ class _BrowserPageState extends State<BrowserPage> {
                     item.value,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: cs.foreground,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
-                    ),
+                    style: TextStyle(color: cs.foreground, fontSize: 14, fontWeight: FontWeight.w700, height: 1.2),
                   ),
                 ],
               ),
@@ -1871,31 +1729,21 @@ class _BrowserPageState extends State<BrowserPage> {
         children: [
           Text(
             title,
-            style: TextStyle(
-              color: cs.foreground.withValues(alpha: 0.62),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: cs.foreground.withValues(alpha: 0.62), fontSize: 12, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = metrics.length > 1 && constraints.maxWidth >= 520
-                  ? 2
-                  : 1;
+              final columns = metrics.length > 1 && constraints.maxWidth >= 520 ? 2 : 1;
               const spacing = 8.0;
-              final width =
-                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              final width = (constraints.maxWidth - spacing * (columns - 1)) / columns;
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
                 children: [
                   for (var i = 0; i < metrics.length; i++)
                     SizedBox(
-                      width:
-                          columns == 2 &&
-                              i == metrics.length - 1 &&
-                              metrics.length.isOdd
+                      width: columns == 2 && i == metrics.length - 1 && metrics.length.isOdd
                           ? constraints.maxWidth
                           : width,
                       child: metricTile(context, metrics[i]),
@@ -1910,10 +1758,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
     Widget content(BuildContext dialogContext) {
       return ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 680,
-          maxHeight: MediaQuery.of(dialogContext).size.height * 0.78,
-        ),
+        constraints: BoxConstraints(maxWidth: 680, maxHeight: MediaQuery.of(dialogContext).size.height * 0.78),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1924,28 +1769,16 @@ class _BrowserPageState extends State<BrowserPage> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                 decoration: BoxDecoration(
                   color: cs.destructive.withValues(alpha: 0.10),
-                  border: Border(
-                    bottom: BorderSide(
-                      color: cs.destructive.withValues(alpha: 0.22),
-                    ),
-                  ),
+                  border: Border(bottom: BorderSide(color: cs.destructive.withValues(alpha: 0.22))),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      shadcn.LucideIcons.triangleAlert,
-                      size: 16,
-                      color: cs.destructive,
-                    ),
+                    Icon(shadcn.LucideIcons.triangleAlert, size: 16, color: cs.destructive),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '未抓取到 UID',
-                        style: TextStyle(
-                          color: cs.destructive,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: TextStyle(color: cs.destructive, fontSize: 13, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
@@ -1963,11 +1796,7 @@ class _BrowserPageState extends State<BrowserPage> {
                       color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      shadcn.LucideIcons.userRound,
-                      size: 20,
-                      color: cs.primary,
-                    ),
+                    child: Icon(shadcn.LucideIcons.userRound, size: 20, color: cs.primary),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1976,21 +1805,14 @@ class _BrowserPageState extends State<BrowserPage> {
                       children: [
                         Text(
                           '用户页信息',
-                          style: TextStyle(
-                            color: cs.foreground,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: TextStyle(color: cs.foreground, fontSize: 16, fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           '${items.length} 项 · ${_displayUrl(_currentUrl)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: cs.foreground.withValues(alpha: 0.52),
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: cs.foreground.withValues(alpha: 0.52), fontSize: 12),
                         ),
                       ],
                     ),
@@ -2006,8 +1828,7 @@ class _BrowserPageState extends State<BrowserPage> {
                 children: [
                   for (final entry in grouped.entries) ...[
                     section(entry.key, entry.value),
-                    if (entry.key != grouped.keys.last)
-                      const SizedBox(height: 16),
+                    if (entry.key != grouped.keys.last) const SizedBox(height: 16),
                   ],
                 ],
               ),
@@ -2027,35 +1848,21 @@ class _BrowserPageState extends State<BrowserPage> {
                 ? null
                 : () async {
                     setDialogState(() => saving = true);
-                    final ok = await _saveUserProfileToSite(
-                      website,
-                      siteInfo,
-                      items,
-                    );
+                    final ok = await _saveUserProfileToSite(website, siteInfo, items, extractedCookie: extractedCookie);
                     if (!dialogContext.mounted) return;
                     setDialogState(() => saving = false);
                     if (ok) Navigator.of(dialogContext).pop();
                   },
-            child: Text(
-              saving ? '保存中...' : (siteInfo == null ? '添加站点' : '更新站点'),
-            ),
+            child: Text(saving ? '保存中...' : (siteInfo == null ? '添加站点' : '更新站点')),
           );
           return shadcn.AlertDialog(
             content: content(dialogContext),
             actions: [
               shadcn.Button.outline(
-                onPressed: saving
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(),
+                onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
                 child: const Text('关闭'),
               ),
-              if (hasUid)
-                saveButton
-              else
-                shadcn.Tooltip(
-                  tooltip: (_) => const Text('未抓取到 UID'),
-                  child: saveButton,
-                ),
+              if (hasUid) saveButton else shadcn.Tooltip(tooltip: (_) => const Text('未抓取到 UID'), child: saveButton),
             ],
           );
         },
@@ -2065,19 +1872,14 @@ class _BrowserPageState extends State<BrowserPage> {
 
   SiteInfo? _currentSiteInfoForWebsite(WebSite website) {
     final sites =
-        ProviderScope.containerOf(
-          context,
-          listen: false,
-        ).read(siteInfoListProvider).valueOrNull ??
-        const <SiteInfo>[];
+        ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
     final configName = website.name.trim().toLowerCase();
     final siteId = widget.siteId?.trim().toLowerCase() ?? '';
     final currentHost = _uriHost(_currentUrl);
 
     for (final site in sites) {
       final siteName = site.site.trim().toLowerCase();
-      if (siteName.isNotEmpty && (siteName == configName || siteName == siteId))
-        return site;
+      if (siteName.isNotEmpty && (siteName == configName || siteName == siteId)) return site;
     }
     if (currentHost == null) return null;
     for (final site in sites) {
@@ -2089,8 +1891,9 @@ class _BrowserPageState extends State<BrowserPage> {
   Future<bool> _saveUserProfileToSite(
     WebSite website,
     SiteInfo? siteInfo,
-    List<_BrowserUserProfileMetric> items,
-  ) async {
+    List<_BrowserUserProfileMetric> items, {
+    String? extractedCookie,
+  }) async {
     String? raw(String key) {
       for (final item in items) {
         if (item.key == key) {
@@ -2107,22 +1910,23 @@ class _BrowserPageState extends State<BrowserPage> {
     }
 
     try {
-      final notifier = ProviderScope.containerOf(
-        context,
-        listen: false,
-      ).read(siteInfoListProvider.notifier);
+      final notifier = ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider.notifier);
+
+      // 优先使用提取的 Cookie，如果没有则从浏览器读取
+      final cookie = extractedCookie?.trim().isNotEmpty == true
+          ? extractedCookie!.trim()
+          : await _cookieHeaderFor(_currentUrl);
+      AppLogger.info("当前站点Cookie: $cookie");
       final next =
           (siteInfo ??
                   SiteInfo(
                     id: 0,
-                    site: website.name.trim().isNotEmpty
-                        ? website.name.trim()
-                        : (widget.siteId?.trim() ?? ''),
+                    site: website.name.trim().isNotEmpty ? website.name.trim() : (widget.siteId?.trim() ?? ''),
                     nickname: website.nickname.trim(),
                     sortId: 1,
                     tags: website.tagList,
                     mirror: _currentOriginOrFirstWebsiteUrl(website),
-                    cookie: await _cookieHeaderFor(_currentUrl),
+                    cookie: cookie,
                     available: true,
                     signIn: website.signIn,
                     getInfo: website.getInfo,
@@ -2137,12 +1941,9 @@ class _BrowserPageState extends State<BrowserPage> {
                 username: raw('username') ?? siteInfo?.username,
                 email: raw('email') ?? siteInfo?.email,
                 passkey: raw('passkey') ?? siteInfo?.passkey,
-                timeJoin:
-                    _normalizedUserProfileDateTime(raw('time_join')) ??
-                    siteInfo?.timeJoin,
-                latestActive:
-                    _normalizedUserProfileDateTime(raw('latest_active')) ??
-                    siteInfo?.latestActive,
+                timeJoin: _normalizedUserProfileDateTime(raw('time_join')) ?? siteInfo?.timeJoin,
+                latestActive: _normalizedUserProfileDateTime(raw('latest_active')) ?? siteInfo?.latestActive,
+                cookie: cookie ?? siteInfo?.cookie,
               );
 
       if (siteInfo == null) {
@@ -2431,19 +2232,12 @@ class _BrowserPageState extends State<BrowserPage> {
         .whereType<Object?>()
         .map((item) {
           if (item is Map) {
-            return _BrowserExtractedTorrent.fromMap(
-              Map<String, dynamic>.from(item as Map),
-            );
+            return _BrowserExtractedTorrent.fromMap(Map<String, dynamic>.from(item as Map));
           }
           return null;
         })
         .whereType<_BrowserExtractedTorrent>()
-        .where(
-          (item) =>
-              item.title.isNotEmpty ||
-              item.detailUrl.isNotEmpty ||
-              item.magnetUrl.isNotEmpty,
-        )
+        .where((item) => item.title.isNotEmpty || item.detailUrl.isNotEmpty || item.magnetUrl.isNotEmpty)
         .toList();
   }
 
@@ -2457,20 +2251,14 @@ class _BrowserPageState extends State<BrowserPage> {
       }
     }
     if (data is! Map) return null;
-    final item = _BrowserExtractedTorrent.fromMap(
-      Map<String, dynamic>.from(data),
-    );
-    if (item.title.isEmpty &&
-        item.detailUrl.isEmpty &&
-        item.magnetUrl.isEmpty) {
+    final item = _BrowserExtractedTorrent.fromMap(Map<String, dynamic>.from(data));
+    if (item.title.isEmpty && item.detailUrl.isEmpty && item.magnetUrl.isEmpty) {
       return null;
     }
     return item;
   }
 
-  Future<void> _showExtractedTorrentDialog(
-    List<_BrowserExtractedTorrent> items,
-  ) async {
+  Future<void> _showExtractedTorrentDialog(List<_BrowserExtractedTorrent> items) async {
     final cs = shadcn.Theme.of(context).colorScheme;
     final selected = <int>{
       for (var i = 0; i < items.length; i += 1)
@@ -2483,51 +2271,27 @@ class _BrowserPageState extends State<BrowserPage> {
     bool sortAscending = false;
     bool panelExpanded = !context.isMobile;
 
-    final saleOptions =
-        items
-            .map((item) => item.sale.trim())
-            .where((item) => item.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    final categoryOptions =
-        items
-            .map((item) => item.category.trim())
-            .where((item) => item.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+    final saleOptions = items.map((item) => item.sale.trim()).where((item) => item.isNotEmpty).toSet().toList()..sort();
+    final categoryOptions = items.map((item) => item.category.trim()).where((item) => item.isNotEmpty).toSet().toList()
+      ..sort();
     final tagOptions =
-        items
-            .expand((item) => item.tags)
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toSet()
-            .toList()
+        items.expand((item) => item.tags).map((item) => item.trim()).where((item) => item.isNotEmpty).toSet().toList()
           ..sort();
 
     Widget content(BuildContext dialogContext, StateSetter setDialogState) {
       bool matchesCurrentFilters(_BrowserExtractedTorrent item) {
         final saleOk = saleFilter.isEmpty || item.sale.trim() == saleFilter;
-        final categoryOk =
-            categoryFilter.isEmpty || item.category.trim() == categoryFilter;
-        final tagOk =
-            tagFilter.isEmpty ||
-            item.tags.any((tag) => tag.trim() == tagFilter);
+        final categoryOk = categoryFilter.isEmpty || item.category.trim() == categoryFilter;
+        final tagOk = tagFilter.isEmpty || item.tags.any((tag) => tag.trim() == tagFilter);
         return saleOk && categoryOk && tagOk;
       }
 
       Iterable<MapEntry<int, _BrowserExtractedTorrent>> matchingEntries() {
-        return items.asMap().entries.where(
-          (entry) => matchesCurrentFilters(entry.value),
-        );
+        return items.asMap().entries.where((entry) => matchesCurrentFilters(entry.value));
       }
 
       List<int> matchingPushableKeys() {
-        return matchingEntries()
-            .where((entry) => entry.value.hasPushableUrl)
-            .map((entry) => entry.key)
-            .toList();
+        return matchingEntries().where((entry) => entry.value.hasPushableUrl).map((entry) => entry.key).toList();
       }
 
       final visibleEntries = matchingEntries().toList()
@@ -2535,15 +2299,9 @@ class _BrowserPageState extends State<BrowserPage> {
           final left = a.value;
           final right = b.value;
           final result = switch (sortKey) {
-            _BrowserTorrentSortKey.name => left.titleSortValue.compareTo(
-              right.titleSortValue,
-            ),
-            _BrowserTorrentSortKey.seeders => left.seedersValue.compareTo(
-              right.seedersValue,
-            ),
-            _BrowserTorrentSortKey.size => left.sizeBytes.compareTo(
-              right.sizeBytes,
-            ),
+            _BrowserTorrentSortKey.name => left.titleSortValue.compareTo(right.titleSortValue),
+            _BrowserTorrentSortKey.seeders => left.seedersValue.compareTo(right.seedersValue),
+            _BrowserTorrentSortKey.size => left.sizeBytes.compareTo(right.sizeBytes),
           };
           if (result == 0) {
             return left.titleSortValue.compareTo(right.titleSortValue);
@@ -2556,13 +2314,8 @@ class _BrowserPageState extends State<BrowserPage> {
           if (items[i].hasPushableUrl) i,
       ];
       final visibleKeys = matchingPushableKeys();
-      final allVisibleSelected =
-          visibleKeys.isNotEmpty &&
-          visibleKeys.every((key) => selected.contains(key));
-      final hasActiveFilter =
-          saleFilter.isNotEmpty ||
-          categoryFilter.isNotEmpty ||
-          tagFilter.isNotEmpty;
+      final allVisibleSelected = visibleKeys.isNotEmpty && visibleKeys.every((key) => selected.contains(key));
+      final hasActiveFilter = saleFilter.isNotEmpty || categoryFilter.isNotEmpty || tagFilter.isNotEmpty;
       selected.removeWhere((index) => !allKeys.contains(index));
 
       void syncSelectionToCurrentFilter() {
@@ -2629,14 +2382,10 @@ class _BrowserPageState extends State<BrowserPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: selectedValue
-                  ? activeColor.withValues(alpha: 0.12)
-                  : cs.muted.withValues(alpha: 0.4),
+              color: selectedValue ? activeColor.withValues(alpha: 0.12) : cs.muted.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: selectedValue
-                    ? activeColor.withValues(alpha: 0.32)
-                    : cs.border.withValues(alpha: 0.7),
+                color: selectedValue ? activeColor.withValues(alpha: 0.32) : cs.border.withValues(alpha: 0.7),
               ),
             ),
             child: Text(
@@ -2644,9 +2393,7 @@ class _BrowserPageState extends State<BrowserPage> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: selectedValue ? FontWeight.w700 : FontWeight.w500,
-                color: selectedValue
-                    ? activeColor
-                    : cs.foreground.withValues(alpha: 0.72),
+                color: selectedValue ? activeColor : cs.foreground.withValues(alpha: 0.72),
               ),
             ),
           ),
@@ -2658,20 +2405,14 @@ class _BrowserPageState extends State<BrowserPage> {
           padding: const EdgeInsets.only(bottom: 6),
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: cs.foreground.withValues(alpha: 0.56),
-            ),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.foreground.withValues(alpha: 0.56)),
           ),
         );
       }
 
       Color saleColor(String sale) {
         final value = sale.toLowerCase();
-        if (value.contains('免费') ||
-            value.contains('free') ||
-            value.contains('0')) {
+        if (value.contains('免费') || value.contains('free') || value.contains('0')) {
           return const Color(0xFF10B981);
         }
         if (value.contains('2x') || value.contains('双倍')) {
@@ -2769,8 +2510,7 @@ class _BrowserPageState extends State<BrowserPage> {
                             child: const Text('仅选当前'),
                           ),
                           shadcn.MenuButton(
-                            enabled:
-                                visibleKeys.isNotEmpty && allVisibleSelected,
+                            enabled: visibleKeys.isNotEmpty && allVisibleSelected,
                             onPressed: (_) {
                               setDialogState(() {
                                 unselectVisible();
@@ -2811,9 +2551,7 @@ class _BrowserPageState extends State<BrowserPage> {
         );
       }
 
-      final dialogHeight =
-          MediaQuery.of(dialogContext).size.height *
-          (dialogContext.isMobile ? 0.86 : 0.78);
+      final dialogHeight = MediaQuery.of(dialogContext).size.height * (dialogContext.isMobile ? 0.86 : 0.78);
       return SizedBox(
         width: dialogContext.isMobile ? double.infinity : 720,
         height: dialogHeight,
@@ -2834,10 +2572,7 @@ class _BrowserPageState extends State<BrowserPage> {
                             const SizedBox(height: 4),
                             Text(
                               '共 ${items.length} 条，当前 ${visibleEntries.length} 条，可推送 ${visibleKeys.length} 条，已选 ${selected.length} 条',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.foreground.withValues(alpha: 0.56),
-                              ),
+                              style: TextStyle(fontSize: 12, color: cs.foreground.withValues(alpha: 0.56)),
                             ),
                           ],
                         ),
@@ -2853,55 +2588,34 @@ class _BrowserPageState extends State<BrowserPage> {
                   ? Center(
                       child: Text(
                         '没有符合当前筛选条件的种子',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: cs.foreground.withValues(alpha: 0.5),
-                        ),
+                        style: TextStyle(fontSize: 13, color: cs.foreground.withValues(alpha: 0.5)),
                       ),
                     )
                   : ListView.separated(
                       itemCount: visibleEntries.length,
-                      separatorBuilder: (_, _) =>
-                          Divider(height: 1, color: cs.border),
+                      separatorBuilder: (_, _) => Divider(height: 1, color: cs.border),
                       itemBuilder: (itemContext, index) {
                         final entry = visibleEntries[index];
                         final item = entry.value;
                         final itemIndex = entry.key;
                         final isSelected = selected.contains(itemIndex);
                         final compact = dialogContext.isMobile;
-                        Widget metricBadge({
-                          required String text,
-                          IconData? icon,
-                          Color? color,
-                          bool filled = false,
-                        }) {
-                          final accent =
-                              color ?? cs.foreground.withValues(alpha: 0.72);
+                        Widget metricBadge({required String text, IconData? icon, Color? color, bool filled = false}) {
+                          final accent = color ?? cs.foreground.withValues(alpha: 0.72);
                           return Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: compact ? 7 : 8,
-                              vertical: compact ? 3 : 4,
-                            ),
+                            padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 8, vertical: compact ? 3 : 4),
                             decoration: BoxDecoration(
-                              color: filled
-                                  ? accent.withValues(alpha: 0.12)
-                                  : cs.background.withValues(alpha: 0.6),
+                              color: filled ? accent.withValues(alpha: 0.12) : cs.background.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: filled
-                                    ? accent.withValues(alpha: 0.26)
-                                    : cs.border.withValues(alpha: 0.7),
+                                color: filled ? accent.withValues(alpha: 0.26) : cs.border.withValues(alpha: 0.7),
                               ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (icon != null) ...[
-                                  Icon(
-                                    icon,
-                                    size: compact ? 10 : 11,
-                                    color: accent,
-                                  ),
+                                  Icon(icon, size: compact ? 10 : 11, color: accent),
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
@@ -2919,10 +2633,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
                         final metricBadges = <Widget>[
                           if (item.formattedCategory.isNotEmpty)
-                            metricBadge(
-                              text: item.formattedCategory,
-                              icon: shadcn.LucideIcons.folder,
-                            ),
+                            metricBadge(text: item.formattedCategory, icon: shadcn.LucideIcons.folder),
                           if (item.displaySize.isNotEmpty)
                             metricBadge(
                               text: item.displaySize,
@@ -2955,22 +2666,13 @@ class _BrowserPageState extends State<BrowserPage> {
 
                         final saleBadge = item.sale.isEmpty
                             ? null
-                            : metricBadge(
-                                text: item.sale,
-                                color: saleColor(item.sale),
-                                filled: true,
-                              );
+                            : metricBadge(text: item.sale, color: saleColor(item.sale), filled: true);
 
                         return AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
+                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                           decoration: BoxDecoration(
-                            color: isSelected
-                                ? cs.primary.withValues(alpha: 0.08)
-                                : cs.background,
+                            color: isSelected ? cs.primary.withValues(alpha: 0.08) : cs.background,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: isSelected
@@ -3015,81 +2717,55 @@ class _BrowserPageState extends State<BrowserPage> {
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  item.title.isEmpty
-                                                      ? item.primaryUrl
-                                                      : item.title,
+                                                  item.title.isEmpty ? item.primaryUrl : item.title,
                                                   maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                                  overflow: TextOverflow.ellipsis,
                                                   style: TextStyle(
-                                                    fontSize: compact
-                                                        ? 12.5
-                                                        : 13.5,
+                                                    fontSize: compact ? 12.5 : 13.5,
                                                     fontWeight: FontWeight.w700,
                                                     color: cs.foreground,
                                                   ),
                                                 ),
                                               ),
-                                              if (saleBadge != null) ...[
-                                                const SizedBox(width: 8),
-                                                saleBadge,
-                                              ],
+                                              if (saleBadge != null) ...[const SizedBox(width: 8), saleBadge],
                                             ],
                                           ),
                                           if (item.subtitle.isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 2,
-                                              ),
+                                              padding: const EdgeInsets.only(top: 2),
                                               child: Text(
                                                 item.subtitle,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                  fontSize: compact
-                                                      ? 10.5
-                                                      : 11.5,
-                                                  color: cs.foreground
-                                                      .withValues(alpha: 0.68),
+                                                  fontSize: compact ? 10.5 : 11.5,
+                                                  color: cs.foreground.withValues(alpha: 0.68),
                                                 ),
                                               ),
                                             ),
                                           if (metricBadges.isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 6,
-                                              ),
-                                              child: Wrap(
-                                                spacing: 6,
-                                                runSpacing: 6,
-                                                children: metricBadges,
-                                              ),
+                                              padding: const EdgeInsets.only(top: 6),
+                                              child: Wrap(spacing: 6, runSpacing: 6, children: metricBadges),
                                             ),
                                           if (item.tags.isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 6,
-                                              ),
+                                              padding: const EdgeInsets.only(top: 6),
                                               child: Wrap(
                                                 spacing: 6,
                                                 runSpacing: 6,
                                                 children: [
-                                                  for (final tag
-                                                      in item.tags.take(6))
+                                                  for (final tag in item.tags.take(6))
                                                     metricBadge(
                                                       text: tag,
-                                                      color: const Color(
-                                                        0xFF8B5CF6,
-                                                      ),
+                                                      color: const Color(0xFF8B5CF6),
                                                       filled: true,
                                                     ),
                                                 ],
@@ -3100,23 +2776,15 @@ class _BrowserPageState extends State<BrowserPage> {
                                     ),
                                     const SizedBox(width: 8),
                                     shadcn.IconButton.ghost(
-                                      onPressed: item.hasPushableUrl
-                                          ? () => unawaited(pushPicked([item]))
-                                          : null,
+                                      onPressed: item.hasPushableUrl ? () => unawaited(pushPicked([item])) : null,
                                       icon: shadcn.Tooltip(
-                                        tooltip: (_) => Text(
-                                          item.hasPushableUrl
-                                              ? '推送此种子'
-                                              : '缺少可用链接',
-                                        ),
+                                        tooltip: (_) => Text(item.hasPushableUrl ? '推送此种子' : '缺少可用链接'),
                                         child: Icon(
                                           shadcn.LucideIcons.send,
                                           size: compact ? 16 : 17,
                                           color: item.hasPushableUrl
                                               ? cs.primary
-                                              : cs.foreground.withValues(
-                                                  alpha: 0.32,
-                                                ),
+                                              : cs.foreground.withValues(alpha: 0.32),
                                         ),
                                       ),
                                     ),
@@ -3133,9 +2801,7 @@ class _BrowserPageState extends State<BrowserPage> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              decoration: BoxDecoration(
-                color: cs.muted.withValues(alpha: 0.22),
-              ),
+              decoration: BoxDecoration(color: cs.muted.withValues(alpha: 0.22)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -3143,20 +2809,14 @@ class _BrowserPageState extends State<BrowserPage> {
                     children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setDialogState(
-                            () => panelExpanded = !panelExpanded,
-                          ),
+                          onTap: () => setDialogState(() => panelExpanded = !panelExpanded),
                           behavior: HitTestBehavior.opaque,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '筛选与排序',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: cs.foreground,
-                                ),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.foreground),
                               ),
                               if (filterSummary.isNotEmpty)
                                 Padding(
@@ -3165,12 +2825,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                     filterSummary,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: cs.foreground.withValues(
-                                        alpha: 0.58,
-                                      ),
-                                    ),
+                                    style: TextStyle(fontSize: 11, color: cs.foreground.withValues(alpha: 0.58)),
                                   ),
                                 ),
                             ],
@@ -3183,21 +2838,14 @@ class _BrowserPageState extends State<BrowserPage> {
                       pushSelectedButton(),
                       if (hasActiveFilter) ...[
                         const SizedBox(width: 8),
-                        shadcn.Button.ghost(
-                          onPressed: () => setDialogState(clearFilters),
-                          child: const Text('重置'),
-                        ),
+                        shadcn.Button.ghost(onPressed: () => setDialogState(clearFilters), child: const Text('重置')),
                       ],
                       const SizedBox(width: 6),
                       GestureDetector(
-                        onTap: () => setDialogState(
-                          () => panelExpanded = !panelExpanded,
-                        ),
+                        onTap: () => setDialogState(() => panelExpanded = !panelExpanded),
                         behavior: HitTestBehavior.opaque,
                         child: Icon(
-                          panelExpanded
-                              ? shadcn.LucideIcons.chevronDown
-                              : shadcn.LucideIcons.chevronUp,
+                          panelExpanded ? shadcn.LucideIcons.chevronDown : shadcn.LucideIcons.chevronUp,
                           size: 16,
                           color: cs.foreground.withValues(alpha: 0.72),
                         ),
@@ -3206,11 +2854,7 @@ class _BrowserPageState extends State<BrowserPage> {
                   ),
                   if (panelExpanded)
                     ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight:
-                            dialogHeight *
-                            (dialogContext.isMobile ? 0.46 : 0.42),
-                      ),
+                      constraints: BoxConstraints(maxHeight: dialogHeight * (dialogContext.isMobile ? 0.46 : 0.42)),
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.only(top: 12),
                         child: Column(
@@ -3226,9 +2870,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                     children: [
                                       filterChip(
                                         label: '名称',
-                                        selectedValue:
-                                            sortKey ==
-                                            _BrowserTorrentSortKey.name,
+                                        selectedValue: sortKey == _BrowserTorrentSortKey.name,
                                         onTap: () => setDialogState(() {
                                           sortKey = _BrowserTorrentSortKey.name;
                                           sortAscending = true;
@@ -3236,20 +2878,15 @@ class _BrowserPageState extends State<BrowserPage> {
                                       ),
                                       filterChip(
                                         label: '做种人数',
-                                        selectedValue:
-                                            sortKey ==
-                                            _BrowserTorrentSortKey.seeders,
+                                        selectedValue: sortKey == _BrowserTorrentSortKey.seeders,
                                         onTap: () => setDialogState(() {
-                                          sortKey =
-                                              _BrowserTorrentSortKey.seeders;
+                                          sortKey = _BrowserTorrentSortKey.seeders;
                                           sortAscending = false;
                                         }),
                                       ),
                                       filterChip(
                                         label: '大小',
-                                        selectedValue:
-                                            sortKey ==
-                                            _BrowserTorrentSortKey.size,
+                                        selectedValue: sortKey == _BrowserTorrentSortKey.size,
                                         onTap: () => setDialogState(() {
                                           sortKey = _BrowserTorrentSortKey.size;
                                           sortAscending = false;
@@ -3260,36 +2897,23 @@ class _BrowserPageState extends State<BrowserPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 GestureDetector(
-                                  onTap: () => setDialogState(
-                                    () => sortAscending = !sortAscending,
-                                  ),
+                                  onTap: () => setDialogState(() => sortAscending = !sortAscending),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: cs.background,
                                       borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: cs.border.withValues(alpha: 0.7),
-                                      ),
+                                      border: Border.all(color: cs.border.withValues(alpha: 0.7)),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
                                           sortAscending
-                                              ? shadcn
-                                                    .LucideIcons
-                                                    .arrowUpNarrowWide
-                                              : shadcn
-                                                    .LucideIcons
-                                                    .arrowDownWideNarrow,
+                                              ? shadcn.LucideIcons.arrowUpNarrowWide
+                                              : shadcn.LucideIcons.arrowDownWideNarrow,
                                           size: 12,
-                                          color: cs.foreground.withValues(
-                                            alpha: 0.72,
-                                          ),
+                                          color: cs.foreground.withValues(alpha: 0.72),
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
@@ -3297,9 +2921,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
-                                            color: cs.foreground.withValues(
-                                              alpha: 0.72,
-                                            ),
+                                            color: cs.foreground.withValues(alpha: 0.72),
                                           ),
                                         ),
                                       ],
@@ -3317,20 +2939,14 @@ class _BrowserPageState extends State<BrowserPage> {
                                 filterChip(
                                   label: '全部',
                                   selectedValue: saleFilter.isEmpty,
-                                  onTap: () => setDialogState(
-                                    () => updateFilters(() => saleFilter = ''),
-                                  ),
+                                  onTap: () => setDialogState(() => updateFilters(() => saleFilter = '')),
                                 ),
                                 for (final sale in saleOptions)
                                   filterChip(
                                     label: sale,
                                     selectedValue: saleFilter == sale,
                                     onTap: () => setDialogState(
-                                      () => updateFilters(
-                                        () => saleFilter = saleFilter == sale
-                                            ? ''
-                                            : sale,
-                                      ),
+                                      () => updateFilters(() => saleFilter = saleFilter == sale ? '' : sale),
                                     ),
                                     accent: saleColor(sale),
                                   ),
@@ -3346,11 +2962,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                   filterChip(
                                     label: '全部',
                                     selectedValue: categoryFilter.isEmpty,
-                                    onTap: () => setDialogState(
-                                      () => updateFilters(
-                                        () => categoryFilter = '',
-                                      ),
-                                    ),
+                                    onTap: () => setDialogState(() => updateFilters(() => categoryFilter = '')),
                                   ),
                                   for (final category in categoryOptions)
                                     filterChip(
@@ -3358,10 +2970,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                       selectedValue: categoryFilter == category,
                                       onTap: () => setDialogState(
                                         () => updateFilters(
-                                          () => categoryFilter =
-                                              categoryFilter == category
-                                              ? ''
-                                              : category,
+                                          () => categoryFilter = categoryFilter == category ? '' : category,
                                         ),
                                       ),
                                     ),
@@ -3378,20 +2987,14 @@ class _BrowserPageState extends State<BrowserPage> {
                                   filterChip(
                                     label: '全部',
                                     selectedValue: tagFilter.isEmpty,
-                                    onTap: () => setDialogState(
-                                      () => updateFilters(() => tagFilter = ''),
-                                    ),
+                                    onTap: () => setDialogState(() => updateFilters(() => tagFilter = '')),
                                   ),
                                   for (final tag in tagOptions)
                                     filterChip(
                                       label: tag,
                                       selectedValue: tagFilter == tag,
                                       onTap: () => setDialogState(
-                                        () => updateFilters(
-                                          () => tagFilter = tagFilter == tag
-                                              ? ''
-                                              : tag,
-                                        ),
+                                        () => updateFilters(() => tagFilter = tagFilter == tag ? '' : tag),
                                       ),
                                       accent: const Color(0xFF8B5CF6),
                                     ),
@@ -3416,8 +3019,7 @@ class _BrowserPageState extends State<BrowserPage> {
         isScrollControlled: true,
         backgroundColor: cs.background,
         builder: (sheetContext) => StatefulBuilder(
-          builder: (sheetContext, setDialogState) =>
-              SafeArea(child: content(sheetContext, setDialogState)),
+          builder: (sheetContext, setDialogState) => SafeArea(child: content(sheetContext, setDialogState)),
         ),
       );
       return;
@@ -3426,15 +3028,12 @@ class _BrowserPageState extends State<BrowserPage> {
     await shadcn.showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) =>
-            shadcn.AlertDialog(content: content(dialogContext, setDialogState)),
+        builder: (dialogContext, setDialogState) => shadcn.AlertDialog(content: content(dialogContext, setDialogState)),
       ),
     );
   }
 
-  Future<void> _showDownloaderSelectAndPush(
-    List<_BrowserExtractedTorrent> torrents,
-  ) async {
+  Future<void> _showDownloaderSelectAndPush(List<_BrowserExtractedTorrent> torrents) async {
     if (!mounted || _closing || torrents.isEmpty) return;
     await showAppSheet<void>(
       context: context,
@@ -3442,9 +3041,7 @@ class _BrowserPageState extends State<BrowserPage> {
       showDefaultHeader: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(
-        maxWidth: DownloaderSelectSheet.desktopWidth,
-      ),
+      constraints: const BoxConstraints(maxWidth: DownloaderSelectSheet.desktopWidth),
       builder: (sheetContext) => DownloaderSelectSheet(
         useDefaultHeader: true,
         onSelected: (downloader) async {
@@ -3466,17 +3063,13 @@ class _BrowserPageState extends State<BrowserPage> {
           }
           final cookie = await _cookieHeaderFor(urls.first);
           if (!mounted || _closing) return;
-          final singleTorrent = torrents.length == 1
-              ? _toSearchTorrentInfo(torrents.first, cookie: cookie)
-              : null;
+          final singleTorrent = torrents.length == 1 ? _toSearchTorrentInfo(torrents.first, cookie: cookie) : null;
           if (context.isMobile) {
             await showAppSheet<void>(
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              constraints: const BoxConstraints(
-                maxWidth: PushTorrentSheet.desktopWidth,
-              ),
+              constraints: const BoxConstraints(maxWidth: PushTorrentSheet.desktopWidth),
               builder: (_) => PushTorrentSheet(
                 downloader: downloader,
                 torrent: singleTorrent,
@@ -3509,32 +3102,20 @@ class _BrowserPageState extends State<BrowserPage> {
     );
   }
 
-  SearchTorrentInfo _toSearchTorrentInfo(
-    _BrowserExtractedTorrent item, {
-    String? cookie,
-    String? overrideUrl,
-  }) {
-    final primaryUrl = (overrideUrl?.trim().isNotEmpty == true
-        ? overrideUrl!.trim()
-        : item.primaryUrl.trim());
+  SearchTorrentInfo _toSearchTorrentInfo(_BrowserExtractedTorrent item, {String? cookie, String? overrideUrl}) {
+    final primaryUrl = (overrideUrl?.trim().isNotEmpty == true ? overrideUrl!.trim() : item.primaryUrl.trim());
     final detailUrl = item.detailUrl.trim();
     final siteId = widget.siteId?.trim() ?? '';
     return SearchTorrentInfo(
       siteId: siteId,
-      tid: _extractTorrentIdFromBrowserUrl(
-        primaryUrl.isNotEmpty ? primaryUrl : detailUrl,
-      ),
+      tid: _extractTorrentIdFromBrowserUrl(primaryUrl.isNotEmpty ? primaryUrl : detailUrl),
       poster: item.poster,
-      category: item.formattedCategory.isNotEmpty
-          ? item.formattedCategory
-          : item.category,
+      category: item.formattedCategory.isNotEmpty ? item.formattedCategory : item.category,
       magnetUrl: primaryUrl,
       detailUrl: detailUrl,
       title: item.title.isNotEmpty ? item.title : primaryUrl,
       subtitle: item.subtitle,
-      cookie: cookie?.trim().isNotEmpty == true
-          ? cookie!.trim()
-          : widget.cookie,
+      cookie: cookie?.trim().isNotEmpty == true ? cookie!.trim() : widget.cookie,
       saleStatus: item.sale.isNotEmpty ? item.sale : '无优惠',
       saleExpire: item.saleExpire.isEmpty ? null : item.saleExpire,
       tags: item.tags,
@@ -3547,26 +3128,17 @@ class _BrowserPageState extends State<BrowserPage> {
     );
   }
 
-  Future<SearchTorrentInfo?> _extractInterceptedTorrentInfo(
-    String torrentUrl, {
-    String? cookie,
-  }) async {
+  Future<SearchTorrentInfo?> _extractInterceptedTorrentInfo(String torrentUrl, {String? cookie}) async {
     final controller = _controller;
     if (controller == null || _closing || !mounted) return null;
 
     final detailWebsite = _currentDetailWebsiteConfig();
     if (detailWebsite != null) {
       try {
-        final raw = await controller.evaluateJavascript(
-          source: _buildTorrentDetailExtractScript(detailWebsite),
-        );
+        final raw = await controller.evaluateJavascript(source: _buildTorrentDetailExtractScript(detailWebsite));
         final item = _parseExtractedTorrentDetail(raw);
         if (item != null) {
-          return _toSearchTorrentInfo(
-            item,
-            cookie: cookie,
-            overrideUrl: torrentUrl,
-          );
+          return _toSearchTorrentInfo(item, cookie: cookie, overrideUrl: torrentUrl);
         }
       } catch (e, st) {
         AppLogger.warn('拦截种子下载时解析详情页种子信息失败: $e\n$st');
@@ -3576,17 +3148,11 @@ class _BrowserPageState extends State<BrowserPage> {
     final listWebsite = _currentTorrentWebsiteConfig();
     if (listWebsite != null) {
       try {
-        final raw = await controller.evaluateJavascript(
-          source: _buildTorrentExtractScript(listWebsite),
-        );
+        final raw = await controller.evaluateJavascript(source: _buildTorrentExtractScript(listWebsite));
         final items = _parseExtractedTorrents(raw);
         final matched = _matchInterceptedTorrent(items, torrentUrl);
         if (matched != null) {
-          return _toSearchTorrentInfo(
-            matched,
-            cookie: cookie,
-            overrideUrl: torrentUrl,
-          );
+          return _toSearchTorrentInfo(matched, cookie: cookie, overrideUrl: torrentUrl);
         }
       } catch (e, st) {
         AppLogger.warn('拦截种子下载时解析列表页种子信息失败: $e\n$st');
@@ -3596,18 +3162,11 @@ class _BrowserPageState extends State<BrowserPage> {
     return null;
   }
 
-  _BrowserExtractedTorrent? _matchInterceptedTorrent(
-    List<_BrowserExtractedTorrent> items,
-    String torrentUrl,
-  ) {
+  _BrowserExtractedTorrent? _matchInterceptedTorrent(List<_BrowserExtractedTorrent> items, String torrentUrl) {
     final targetUrl = _normalizeTorrentCompareUrl(torrentUrl);
     final targetId = _extractTorrentIdFromBrowserUrl(torrentUrl);
     for (final item in items) {
-      final candidates = <String>[
-        item.magnetUrl,
-        item.detailUrl,
-        item.primaryUrl,
-      ];
+      final candidates = <String>[item.magnetUrl, item.detailUrl, item.primaryUrl];
       for (final candidate in candidates) {
         final normalized = _normalizeTorrentCompareUrl(candidate);
         if (normalized.isNotEmpty && normalized == targetUrl) return item;
@@ -3632,9 +3191,7 @@ class _BrowserPageState extends State<BrowserPage> {
             normalized == 'auth' ||
             normalized == 'token';
       });
-    return uri
-        .replace(queryParameters: query.isEmpty ? null : query)
-        .toString();
+    return uri.replace(queryParameters: query.isEmpty ? null : query).toString();
   }
 
   String _extractTorrentIdFromBrowserUrl(String value) {
@@ -3657,10 +3214,7 @@ class _BrowserPageState extends State<BrowserPage> {
       }
     }
 
-    final match = RegExp(
-      r'([?&](?:tid|id|torrentid|topicid)=)([^&#]+)',
-      caseSensitive: false,
-    ).firstMatch(raw);
+    final match = RegExp(r'([?&](?:tid|id|torrentid|topicid)=)([^&#]+)', caseSensitive: false).firstMatch(raw);
     return match?.group(2)?.trim() ?? '';
   }
 
@@ -3678,9 +3232,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
   bool _isLoadedPageUrl(String url) {
     final uri = Uri.tryParse(url.trim());
-    return uri != null &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        !_isTorrentUrl(url);
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && !_isTorrentUrl(url);
   }
 
   bool _isTorrentDownloadRequest({
@@ -3711,9 +3263,7 @@ class _BrowserPageState extends State<BrowserPage> {
     _torrentSheetOpen = true;
     _activeTorrentUrl = torrentUrl;
     if (mounted) {
-      final restoredUrl = (restoreUrl?.trim().isNotEmpty ?? false)
-          ? restoreUrl!.trim()
-          : _lastLoadedPageUrl.trim();
+      final restoredUrl = (restoreUrl?.trim().isNotEmpty ?? false) ? restoreUrl!.trim() : _lastLoadedPageUrl.trim();
       setState(() {
         if (restoredUrl.isNotEmpty) {
           _currentUrl = restoredUrl;
@@ -3730,9 +3280,7 @@ class _BrowserPageState extends State<BrowserPage> {
       showDefaultHeader: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(
-        maxWidth: DownloaderSelectSheet.desktopWidth,
-      ),
+      constraints: const BoxConstraints(maxWidth: DownloaderSelectSheet.desktopWidth),
       builder: (sheetContext) => DownloaderSelectSheet(
         useDefaultHeader: true,
         onSelected: (downloader) async {
@@ -3742,19 +3290,14 @@ class _BrowserPageState extends State<BrowserPage> {
           if (!mounted || _closing) return;
           final cookie = await _cookieHeaderFor(torrentUrl);
           if (!mounted || _closing) return;
-          final torrent = await _extractInterceptedTorrentInfo(
-            torrentUrl,
-            cookie: cookie,
-          );
+          final torrent = await _extractInterceptedTorrentInfo(torrentUrl, cookie: cookie);
           if (!mounted || _closing) return;
 
           await showAppSheet<void>(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
-            constraints: const BoxConstraints(
-              maxWidth: PushTorrentSheet.desktopWidth,
-            ),
+            constraints: const BoxConstraints(maxWidth: PushTorrentSheet.desktopWidth),
             builder: (_) => PushTorrentSheet(
               downloader: downloader,
               torrent: torrent,
@@ -3777,28 +3320,55 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   Future<String?> _cookieHeaderFor(String url) async {
-    final configuredCookie = widget.cookie?.trim();
-    if (configuredCookie != null && configuredCookie.isNotEmpty) {
-      return configuredCookie;
-    }
+    // 不再使用配置的 Cookie，总是从 WebView 中提取最新的 Cookie
+    // 这样可以避免使用过期或无效的 Cookie
 
     final uri = Uri.tryParse(url);
     if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      AppLogger.warn('无效的 URL，无法提取 Cookie: $url');
       return null;
     }
 
     try {
-      final cookies = await CookieManager.instance().getCookies(
-        url: WebUri(url),
-      );
+      // 只使用 scheme + host 来获取该域名下的所有 Cookie，不包含 path
+      final domainUrl = '${uri.scheme}://${uri.host}';
+      AppLogger.info('从 WebView 提取最新 Cookie: $domainUrl');
+
+      final cookies = await CookieManager.instance().getCookies(url: WebUri(domainUrl));
+      AppLogger.info('从 WebView 获取到 ${cookies.length} 个 Cookie');
+
+      if (cookies.isEmpty) {
+        AppLogger.warn('未获取到任何 Cookie，可能未登录或 Cookie 已过期');
+        return null;
+      }
+
+      // 打印所有 Cookie 的详细信息用于调试
+      for (var i = 0; i < cookies.length; i++) {
+        final cookie = cookies[i];
+        AppLogger.info(
+          'Cookie[$i]: ${cookie.name}=${cookie.value.substring(0, cookie.value.length > 30 ? 30 : cookie.value.length)}... (domain: ${cookie.domain}, path: ${cookie.path})',
+        );
+      }
+
       final pairs = cookies
           .where((cookie) => cookie.name.isNotEmpty)
           .map((cookie) => '${cookie.name}=${cookie.value}')
           .toList();
-      if (pairs.isEmpty) return null;
-      return pairs.join('; ');
+
+      if (pairs.isEmpty) {
+        AppLogger.warn('没有有效的 Cookie');
+        return null;
+      }
+
+      final cookieString = pairs.join('; ');
+      AppLogger.info('最终 Cookie 字符串长度: ${cookieString.length} 字符');
+      AppLogger.info(
+        'Cookie 预览: ${cookieString.substring(0, cookieString.length > 100 ? 100 : cookieString.length)}...',
+      );
+
+      return cookieString;
     } catch (e, st) {
-      AppLogger.warn('读取种子下载 Cookie 失败: $e\n$st');
+      AppLogger.error('读取 Cookie 失败', e, st);
       return null;
     }
   }
@@ -3810,10 +3380,8 @@ class _BrowserPageState extends State<BrowserPage> {
   Future<void> _showSiteTimeline() async {
     if (!mounted) return;
     final container = ProviderScope.containerOf(context, listen: false);
-    final websites =
-        container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
-    final mySites =
-        container.read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
+    final websites = container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
+    final mySites = container.read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
     if (websites.isEmpty) {
       Toast.warning('暂无站点配置');
       return;
@@ -3878,8 +3446,7 @@ class _BrowserPageState extends State<BrowserPage> {
             ..sort((a, b) {
               final at = a.registeredAt;
               final bt = b.registeredAt;
-              if (at == null && bt == null)
-                return a.displayName.compareTo(b.displayName);
+              if (at == null && bt == null) return a.displayName.compareTo(b.displayName);
               if (at == null) return 1;
               if (bt == null) return -1;
               final cmp = at.compareTo(bt);
@@ -3887,18 +3454,12 @@ class _BrowserPageState extends State<BrowserPage> {
             });
           final filteredUnowned = unownedEntries.where(matches).toList()
             ..sort((a, b) => a.displayName.compareTo(b.displayName));
-          final displayList = <_SiteTimelineEntry>[
-            ...filteredOwned,
-            ...filteredUnowned,
-          ];
+          final displayList = <_SiteTimelineEntry>[...filteredOwned, ...filteredUnowned];
 
           Widget fieldLine(String label, String value) {
             return Row(
               children: [
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 11, color: cs.mutedForeground),
-                ),
+                Text(label, style: TextStyle(fontSize: 11, color: cs.mutedForeground)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -3916,9 +3477,7 @@ class _BrowserPageState extends State<BrowserPage> {
           Widget openUnownedAction(_SiteTimelineEntry entry) {
             return shadcn.Button.ghost(
               onPressed: () async {
-                final urls = entry.website.url
-                    .where((e) => e.trim().isNotEmpty)
-                    .toList();
+                final urls = entry.website.url.where((e) => e.trim().isNotEmpty).toList();
                 if (urls.isEmpty) {
                   Toast.warning('该站点未配置可用 URL');
                   return;
@@ -3947,23 +3506,14 @@ class _BrowserPageState extends State<BrowserPage> {
                           children: [
                             for (final url in urls)
                               ListTile(
-                                title: Text(
-                                  url,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
                                 onTap: () => Navigator.of(ctx).pop(url),
                               ),
                           ],
                         ),
                       ),
                     ),
-                    actions: [
-                      shadcn.Button.outline(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text('取消'),
-                      ),
-                    ],
+                    actions: [shadcn.Button.outline(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消'))],
                   ),
                 );
                 if (selected == null || selected.isEmpty) return;
@@ -3995,12 +3545,9 @@ class _BrowserPageState extends State<BrowserPage> {
                       shadcn.Button.secondary(
                         onPressed: () => setState(() {
                           ownership = switch (ownership) {
-                            _TimelineOwnership.all =>
-                              _TimelineOwnership.ownedOnly,
-                            _TimelineOwnership.ownedOnly =>
-                              _TimelineOwnership.unownedOnly,
-                            _TimelineOwnership.unownedOnly =>
-                              _TimelineOwnership.all,
+                            _TimelineOwnership.all => _TimelineOwnership.ownedOnly,
+                            _TimelineOwnership.ownedOnly => _TimelineOwnership.unownedOnly,
+                            _TimelineOwnership.unownedOnly => _TimelineOwnership.all,
                           };
                         }),
                         child: Text(switch (ownership) {
@@ -4012,12 +3559,9 @@ class _BrowserPageState extends State<BrowserPage> {
                       shadcn.Button.secondary(
                         onPressed: () => setState(() {
                           inviteFilter = switch (inviteFilter) {
-                            _TimelineInviteFilter.all =>
-                              _TimelineInviteFilter.has,
-                            _TimelineInviteFilter.has =>
-                              _TimelineInviteFilter.none,
-                            _TimelineInviteFilter.none =>
-                              _TimelineInviteFilter.all,
+                            _TimelineInviteFilter.all => _TimelineInviteFilter.has,
+                            _TimelineInviteFilter.has => _TimelineInviteFilter.none,
+                            _TimelineInviteFilter.none => _TimelineInviteFilter.all,
                           };
                         }),
                         child: Text(switch (inviteFilter) {
@@ -4032,8 +3576,7 @@ class _BrowserPageState extends State<BrowserPage> {
                       ),
                       shadcn.OverlayManagerLayer(
                         popoverHandler: const shadcn.PopoverOverlayHandler(),
-                        tooltipHandler:
-                            const shadcn.FixedTooltipOverlayHandler(),
+                        tooltipHandler: const shadcn.FixedTooltipOverlayHandler(),
                         menuHandler: const shadcn.PopoverOverlayHandler(),
                         child: Builder(
                           builder: (menuContext) => shadcn.Button.ghost(
@@ -4057,8 +3600,7 @@ class _BrowserPageState extends State<BrowserPage> {
                                   ])
                                     shadcn.MenuButton(
                                       onPressed: (_) => setState(() {
-                                        visibleFields[item.$1] =
-                                            !(visibleFields[item.$1] ?? true);
+                                        visibleFields[item.$1] = !(visibleFields[item.$1] ?? true);
                                       }),
                                       child: Row(
                                         children: [
@@ -4104,37 +3646,21 @@ class _BrowserPageState extends State<BrowserPage> {
                                   Expanded(
                                     child: Text(
                                       entry.displayName,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: cs.foreground,
-                                      ),
+                                      style: TextStyle(fontWeight: FontWeight.w700, color: cs.foreground),
                                     ),
                                   ),
-                                  if (!entry.isOwned)
-                                    shadcn.OutlineBadge(
-                                      child: const Text('未添加'),
-                                    ),
-                                  if (!entry.isOwned) ...[
-                                    const SizedBox(width: 8),
-                                    openUnownedAction(entry),
-                                  ],
+                                  if (!entry.isOwned) shadcn.OutlineBadge(child: const Text('未添加')),
+                                  if (!entry.isOwned) ...[const SizedBox(width: 8), openUnownedAction(entry)],
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              if (visibleFields['duration'] == true)
-                                fieldLine('注册时长', entry.durationText),
-                              if (visibleFields['uploaded'] == true)
-                                fieldLine('上传量', entry.uploadedText),
-                              if (visibleFields['downloaded'] == true)
-                                fieldLine('下载量', entry.downloadedText),
-                              if (visibleFields['invitation'] == true)
-                                fieldLine('邀请数', '${entry.invitationCount}'),
-                              if (visibleFields['username'] == true)
-                                fieldLine('用户名', entry.usernameText),
-                              if (visibleFields['email'] == true)
-                                fieldLine('邮箱', entry.emailText),
-                              if (visibleFields['uid'] == true)
-                                fieldLine('UID', entry.uidText),
+                              if (visibleFields['duration'] == true) fieldLine('注册时长', entry.durationText),
+                              if (visibleFields['uploaded'] == true) fieldLine('上传量', entry.uploadedText),
+                              if (visibleFields['downloaded'] == true) fieldLine('下载量', entry.downloadedText),
+                              if (visibleFields['invitation'] == true) fieldLine('邀请数', '${entry.invitationCount}'),
+                              if (visibleFields['username'] == true) fieldLine('用户名', entry.usernameText),
+                              if (visibleFields['email'] == true) fieldLine('邮箱', entry.emailText),
+                              if (visibleFields['uid'] == true) fieldLine('UID', entry.uidText),
                             ],
                           ),
                         );
@@ -4145,10 +3671,7 @@ class _BrowserPageState extends State<BrowserPage> {
               ),
             ),
             actions: [
-              shadcn.Button.outline(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('关闭'),
-              ),
+              shadcn.Button.outline(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('关闭')),
             ],
           );
         },
@@ -4191,21 +3714,15 @@ class _SiteTimelineEntry {
 
   int get invitationCount => mySite?.latestStatus?.invitation ?? 0;
 
-  String get uploadedText =>
-      uploadedBytes > 0 ? formatBytes(uploadedBytes) : '-';
+  String get uploadedText => uploadedBytes > 0 ? formatBytes(uploadedBytes) : '-';
 
-  String get downloadedText =>
-      downloadedBytes > 0 ? formatBytes(downloadedBytes) : '-';
+  String get downloadedText => downloadedBytes > 0 ? formatBytes(downloadedBytes) : '-';
 
-  String get usernameText => mySite?.username?.trim().isNotEmpty == true
-      ? mySite!.username!.trim()
-      : '-';
+  String get usernameText => mySite?.username?.trim().isNotEmpty == true ? mySite!.username!.trim() : '-';
 
-  String get emailText =>
-      mySite?.email?.trim().isNotEmpty == true ? mySite!.email!.trim() : '-';
+  String get emailText => mySite?.email?.trim().isNotEmpty == true ? mySite!.email!.trim() : '-';
 
-  String get uidText =>
-      mySite?.userId?.trim().isNotEmpty == true ? mySite!.userId!.trim() : '-';
+  String get uidText => mySite?.userId?.trim().isNotEmpty == true ? mySite!.userId!.trim() : '-';
 }
 
 class _UserAgentPreset {
@@ -4214,12 +3731,7 @@ class _UserAgentPreset {
   final String description;
   final String? userAgent;
 
-  const _UserAgentPreset({
-    required this.id,
-    required this.label,
-    required this.description,
-    required this.userAgent,
-  });
+  const _UserAgentPreset({required this.id, required this.label, required this.description, required this.userAgent});
 }
 
 class _BrowserUserProfileRule {
@@ -4294,22 +3806,23 @@ class _BrowserExtractedTorrent {
   });
 
   String get primaryUrl => magnetUrl.isNotEmpty ? magnetUrl : detailUrl;
-  bool get hasPushableUrl =>
-      primaryUrl.trim().isNotEmpty || detailUrl.trim().isNotEmpty;
-  String get titleSortValue =>
-      (title.isNotEmpty ? title : primaryUrl).toLowerCase();
+
+  bool get hasPushableUrl => primaryUrl.trim().isNotEmpty || detailUrl.trim().isNotEmpty;
+
+  String get titleSortValue => (title.isNotEmpty ? title : primaryUrl).toLowerCase();
+
   int get seedersValue => _parseCompactInt(seeders);
+
   int get sizeBytes => _parseSizeToBytes(size);
+
   String get displaySize => _normalizeSizeText(size, sizeBytes);
+
   String get formattedCategory => _formatCategory(category);
 
   factory _BrowserExtractedTorrent.fromMap(Map<String, dynamic> map) {
     List<String> parseTags(dynamic value) {
       if (value is Iterable) {
-        return value
-            .map((item) => item?.toString().trim() ?? '')
-            .where((item) => item.isNotEmpty)
-            .toList();
+        return value.map((item) => item?.toString().trim() ?? '').where((item) => item.isNotEmpty).toList();
       }
       final text = value?.toString().trim() ?? '';
       return text.isEmpty ? const [] : <String>[text];
@@ -4393,10 +3906,7 @@ class _BrowserExtractedTorrent {
     if (text.isEmpty) return bytes > 0 ? formatBytes(bytes) : '';
     if (RegExp(r'[a-zA-Z\u4e00-\u9fa5]').hasMatch(text)) {
       return text.replaceAll(RegExp(r'\s+'), ' ').replaceAllMapped(
-        RegExp(
-          r'([0-9]+(?:\.[0-9]+)?)\s*([kmgtpe]?i?b?|bytes?)',
-          caseSensitive: false,
-        ),
+        RegExp(r'([0-9]+(?:\.[0-9]+)?)\s*([kmgtpe]?i?b?|bytes?)', caseSensitive: false),
         (match) {
           final number = match.group(1) ?? '';
           var unit = (match.group(2) ?? '').toUpperCase();
