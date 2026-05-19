@@ -8,7 +8,7 @@ abstract class CrontabItem with _$CrontabItem {
   const CrontabItem._();
 
   const factory CrontabItem({
-    required int id,
+    required int? id,
     required String express,
     required String minute,
     required String hour,

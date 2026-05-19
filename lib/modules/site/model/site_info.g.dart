@@ -79,7 +79,7 @@ Map<String, dynamic> _$SiteInfoToJson(_SiteInfo instance) => <String, dynamic>{
   'mail': instance.mail,
   'notice': instance.notice,
   'sign_info': instance.signInfo,
-  'status': instance.status?.map((k, e) => MapEntry(k, e.toJson())),
+  'status': instance.status,
   'updated_at': instance.updatedAt,
 };
 

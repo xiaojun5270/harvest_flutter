@@ -7,7 +7,7 @@ part of 'crontab.dart';
 // **************************************************************************
 
 _CrontabItem _$CrontabItemFromJson(Map<String, dynamic> json) => _CrontabItem(
-  id: (json['id'] as num).toInt(),
+  id: (json['id'] as num?)?.toInt(),
   express: json['express'] as String,
   minute: json['minute'] as String,
   hour: json['hour'] as String,

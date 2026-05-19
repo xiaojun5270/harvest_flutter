@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$CrontabItem {
 
- int get id; String get express; String get minute; String get hour;@JsonKey(name: 'day_of_month') String get dayOfMonth;@JsonKey(name: 'month_of_year') String get monthOfYear;@JsonKey(name: 'day_of_week') String get dayOfWeek;
+ int? get id; String get express; String get minute; String get hour;@JsonKey(name: 'day_of_month') String get dayOfMonth;@JsonKey(name: 'month_of_year') String get monthOfYear;@JsonKey(name: 'day_of_week') String get dayOfWeek;
 /// Create a copy of CrontabItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $CrontabItemCopyWith<$Res>  {
   factory $CrontabItemCopyWith(CrontabItem value, $Res Function(CrontabItem) _then) = _$CrontabItemCopyWithImpl;
 @useResult
 $Res call({
- int id, String express, String minute, String hour,@JsonKey(name: 'day_of_month') String dayOfMonth,@JsonKey(name: 'month_of_year') String monthOfYear,@JsonKey(name: 'day_of_week') String dayOfWeek
+ int? id, String express, String minute, String hour,@JsonKey(name: 'day_of_month') String dayOfMonth,@JsonKey(name: 'month_of_year') String monthOfYear,@JsonKey(name: 'day_of_week') String dayOfWeek
 });
 
 
@@ -65,10 +65,10 @@ class _$CrontabItemCopyWithImpl<$Res>
 
 /// Create a copy of CrontabItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? express = null,Object? minute = null,Object? hour = null,Object? dayOfMonth = null,Object? monthOfYear = null,Object? dayOfWeek = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? express = null,Object? minute = null,Object? hour = null,Object? dayOfMonth = null,Object? monthOfYear = null,Object? dayOfWeek = null,}) {
   return _then(_self.copyWith(
-id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as int,express: null == express ? _self.express : express // ignore: cast_nullable_to_non_nullable
+id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int?,express: null == express ? _self.express : express // ignore: cast_nullable_to_non_nullable
 as String,minute: null == minute ? _self.minute : minute // ignore: cast_nullable_to_non_nullable
 as String,hour: null == hour ? _self.hour : hour // ignore: cast_nullable_to_non_nullable
 as String,dayOfMonth: null == dayOfMonth ? _self.dayOfMonth : dayOfMonth // ignore: cast_nullable_to_non_nullable
@@ -159,7 +159,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String express,  String minute,  String hour, @JsonKey(name: 'day_of_month')  String dayOfMonth, @JsonKey(name: 'month_of_year')  String monthOfYear, @JsonKey(name: 'day_of_week')  String dayOfWeek)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? id,  String express,  String minute,  String hour, @JsonKey(name: 'day_of_month')  String dayOfMonth, @JsonKey(name: 'month_of_year')  String monthOfYear, @JsonKey(name: 'day_of_week')  String dayOfWeek)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CrontabItem() when $default != null:
 return $default(_that.id,_that.express,_that.minute,_that.hour,_that.dayOfMonth,_that.monthOfYear,_that.dayOfWeek);case _:
@@ -180,7 +180,7 @@ return $default(_that.id,_that.express,_that.minute,_that.hour,_that.dayOfMonth,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String express,  String minute,  String hour, @JsonKey(name: 'day_of_month')  String dayOfMonth, @JsonKey(name: 'month_of_year')  String monthOfYear, @JsonKey(name: 'day_of_week')  String dayOfWeek)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? id,  String express,  String minute,  String hour, @JsonKey(name: 'day_of_month')  String dayOfMonth, @JsonKey(name: 'month_of_year')  String monthOfYear, @JsonKey(name: 'day_of_week')  String dayOfWeek)  $default,) {final _that = this;
 switch (_that) {
 case _CrontabItem():
 return $default(_that.id,_that.express,_that.minute,_that.hour,_that.dayOfMonth,_that.monthOfYear,_that.dayOfWeek);case _:
@@ -200,7 +200,7 @@ return $default(_that.id,_that.express,_that.minute,_that.hour,_that.dayOfMonth,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String express,  String minute,  String hour, @JsonKey(name: 'day_of_month')  String dayOfMonth, @JsonKey(name: 'month_of_year')  String monthOfYear, @JsonKey(name: 'day_of_week')  String dayOfWeek)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? id,  String express,  String minute,  String hour, @JsonKey(name: 'day_of_month')  String dayOfMonth, @JsonKey(name: 'month_of_year')  String monthOfYear, @JsonKey(name: 'day_of_week')  String dayOfWeek)?  $default,) {final _that = this;
 switch (_that) {
 case _CrontabItem() when $default != null:
 return $default(_that.id,_that.express,_that.minute,_that.hour,_that.dayOfMonth,_that.monthOfYear,_that.dayOfWeek);case _:
@@ -218,7 +218,7 @@ class _CrontabItem extends CrontabItem {
   const _CrontabItem({required this.id, required this.express, required this.minute, required this.hour, @JsonKey(name: 'day_of_month') this.dayOfMonth = '*', @JsonKey(name: 'month_of_year') this.monthOfYear = '*', @JsonKey(name: 'day_of_week') this.dayOfWeek = '*'}): super._();
   factory _CrontabItem.fromJson(Map<String, dynamic> json) => _$CrontabItemFromJson(json);
 
-@override final  int id;
+@override final  int? id;
 @override final  String express;
 @override final  String minute;
 @override final  String hour;
@@ -259,7 +259,7 @@ abstract mixin class _$CrontabItemCopyWith<$Res> implements $CrontabItemCopyWith
   factory _$CrontabItemCopyWith(_CrontabItem value, $Res Function(_CrontabItem) _then) = __$CrontabItemCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String express, String minute, String hour,@JsonKey(name: 'day_of_month') String dayOfMonth,@JsonKey(name: 'month_of_year') String monthOfYear,@JsonKey(name: 'day_of_week') String dayOfWeek
+ int? id, String express, String minute, String hour,@JsonKey(name: 'day_of_month') String dayOfMonth,@JsonKey(name: 'month_of_year') String monthOfYear,@JsonKey(name: 'day_of_week') String dayOfWeek
 });
 
 
@@ -276,10 +276,10 @@ class __$CrontabItemCopyWithImpl<$Res>
 
 /// Create a copy of CrontabItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? express = null,Object? minute = null,Object? hour = null,Object? dayOfMonth = null,Object? monthOfYear = null,Object? dayOfWeek = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? express = null,Object? minute = null,Object? hour = null,Object? dayOfMonth = null,Object? monthOfYear = null,Object? dayOfWeek = null,}) {
   return _then(_CrontabItem(
-id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as int,express: null == express ? _self.express : express // ignore: cast_nullable_to_non_nullable
+id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int?,express: null == express ? _self.express : express // ignore: cast_nullable_to_non_nullable
 as String,minute: null == minute ? _self.minute : minute // ignore: cast_nullable_to_non_nullable
 as String,hour: null == hour ? _self.hour : hour // ignore: cast_nullable_to_non_nullable
 as String,dayOfMonth: null == dayOfMonth ? _self.dayOfMonth : dayOfMonth // ignore: cast_nullable_to_non_nullable

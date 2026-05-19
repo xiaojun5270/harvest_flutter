@@ -59,40 +59,35 @@ _MovieDetail _$MovieDetailFromJson(Map<String, dynamic> json) => _MovieDetail(
   voteCount: (json['vote_count'] as num?)?.toInt() ?? 0,
 );
 
-Map<String, dynamic> _$MovieDetailToJson(
-  _MovieDetail instance,
-) => <String, dynamic>{
-  'adult': instance.adult,
-  'backdrop_path': instance.backdropPath,
-  'belongs_to_collection': instance.belongsToCollection?.toJson(),
-  'budget': instance.budget,
-  'genres': instance.genres.map((e) => e.toJson()).toList(),
-  'homepage': instance.homepage,
-  'id': instance.id,
-  'imdb_id': instance.imdbId,
-  'origin_country': instance.originCountry,
-  'original_language': instance.originalLanguage,
-  'original_title': instance.originalTitle,
-  'overview': instance.overview,
-  'popularity': instance.popularity,
-  'poster_path': instance.posterPath,
-  'production_companies': instance.productionCompanies
-      .map((e) => e.toJson())
-      .toList(),
-  'production_countries': instance.productionCountries
-      .map((e) => e.toJson())
-      .toList(),
-  'release_date': instance.releaseDate,
-  'revenue': instance.revenue,
-  'runtime': instance.runtime,
-  'spoken_languages': instance.spokenLanguages.map((e) => e.toJson()).toList(),
-  'status': instance.status,
-  'tagline': instance.tagline,
-  'title': instance.title,
-  'video': instance.video,
-  'vote_average': instance.voteAverage,
-  'vote_count': instance.voteCount,
-};
+Map<String, dynamic> _$MovieDetailToJson(_MovieDetail instance) =>
+    <String, dynamic>{
+      'adult': instance.adult,
+      'backdrop_path': instance.backdropPath,
+      'belongs_to_collection': instance.belongsToCollection,
+      'budget': instance.budget,
+      'genres': instance.genres,
+      'homepage': instance.homepage,
+      'id': instance.id,
+      'imdb_id': instance.imdbId,
+      'origin_country': instance.originCountry,
+      'original_language': instance.originalLanguage,
+      'original_title': instance.originalTitle,
+      'overview': instance.overview,
+      'popularity': instance.popularity,
+      'poster_path': instance.posterPath,
+      'production_companies': instance.productionCompanies,
+      'production_countries': instance.productionCountries,
+      'release_date': instance.releaseDate,
+      'revenue': instance.revenue,
+      'runtime': instance.runtime,
+      'spoken_languages': instance.spokenLanguages,
+      'status': instance.status,
+      'tagline': instance.tagline,
+      'title': instance.title,
+      'video': instance.video,
+      'vote_average': instance.voteAverage,
+      'vote_count': instance.voteCount,
+    };
 
 _BelongsToCollection _$BelongsToCollectionFromJson(Map<String, dynamic> json) =>
     _BelongsToCollection(

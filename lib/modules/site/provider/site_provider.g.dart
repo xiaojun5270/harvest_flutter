@@ -39,7 +39,7 @@ final websiteListProvider =
     );
 
 typedef _$WebsiteList = AutoDisposeAsyncNotifier<List<WebSite>>;
-String _$siteInfoListHash() => r'd34a155671b4f9169f6b5d0e4adc48d6d7e8e87e';
+String _$siteInfoListHash() => r'46ffdad23a255646f3f1a5ed162ca8b74cedf3c5';
 
 /// See also [SiteInfoList].
 @ProviderFor(SiteInfoList)

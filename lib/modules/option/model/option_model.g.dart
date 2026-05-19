@@ -132,7 +132,7 @@ _Option _$OptionFromJson(Map<String, dynamic> json) => _Option(
 Map<String, dynamic> _$OptionToJson(_Option instance) => <String, dynamic>{
   'id': instance.id,
   'name': instance.name,
-  'value': instance.value.toJson(),
+  'value': instance.value,
   'is_active': instance.isActive,
 };
 

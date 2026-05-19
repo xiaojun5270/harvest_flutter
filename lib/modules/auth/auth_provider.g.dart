@@ -22,14 +22,14 @@ Map<String, dynamic> _$AuthStateToJson(_AuthState instance) =>
       'loggedIn': instance.loggedIn,
       'accessToken': instance.accessToken,
       'refreshToken': instance.refreshToken,
-      'user': instance.user?.toJson(),
+      'user': instance.user,
     };
 
 // **************************************************************************
 // RiverpodGenerator
 // **************************************************************************
 
-String _$authNotifierHash() => r'6092b814aa8d2aeda9421565036e62df6e7fda08';
+String _$authNotifierHash() => r'3e13a6c8e5925e8372f332b1943bfddd3fc388c5';
 
 /// See also [AuthNotifier].
 @ProviderFor(AuthNotifier)

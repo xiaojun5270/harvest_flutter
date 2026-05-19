@@ -63,10 +63,7 @@ _MonthSiteData _$MonthSiteDataFromJson(Map<String, dynamic> json) =>
     );
 
 Map<String, dynamic> _$MonthSiteDataToJson(_MonthSiteData instance) =>
-    <String, dynamic>{
-      'name': instance.name,
-      'value': instance.value.map((e) => e.toJson()).toList(),
-    };
+    <String, dynamic>{'name': instance.name, 'value': instance.value};
 
 _SiteStatusData _$SiteStatusDataFromJson(Map<String, dynamic> json) =>
     _SiteStatusData(
@@ -75,7 +72,7 @@ _SiteStatusData _$SiteStatusDataFromJson(Map<String, dynamic> json) =>
     );
 
 Map<String, dynamic> _$SiteStatusDataToJson(_SiteStatusData instance) =>
-    <String, dynamic>{'name': instance.name, 'value': instance.value.toJson()};
+    <String, dynamic>{'name': instance.name, 'value': instance.value};
 
 _StackSiteData _$StackSiteDataFromJson(Map<String, dynamic> json) =>
     _StackSiteData(
@@ -88,10 +85,7 @@ _StackSiteData _$StackSiteDataFromJson(Map<String, dynamic> json) =>
     );
 
 Map<String, dynamic> _$StackSiteDataToJson(_StackSiteData instance) =>
-    <String, dynamic>{
-      'name': instance.name,
-      'value': instance.value.map((e) => e.toJson()).toList(),
-    };
+    <String, dynamic>{'name': instance.name, 'value': instance.value};
 
 _DashboardData _$DashboardDataFromJson(Map<String, dynamic> json) =>
     _DashboardData(
@@ -152,8 +146,8 @@ _DashboardData _$DashboardDataFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$DashboardDataToJson(_DashboardData instance) =>
     <String, dynamic>{
-      'emailCount': instance.emailCount.map((e) => e.toJson()).toList(),
-      'usernameCount': instance.usernameCount.map((e) => e.toJson()).toList(),
+      'emailCount': instance.emailCount,
+      'usernameCount': instance.usernameCount,
       'totalUploaded': instance.totalUploaded,
       'totalDownloaded': instance.totalDownloaded,
       'totalSeedVol': instance.totalSeedVol,
@@ -162,21 +156,13 @@ Map<String, dynamic> _$DashboardDataToJson(_DashboardData instance) =>
       'todayUploadIncrement': instance.todayUploadIncrement,
       'todayDownloadIncrement': instance.todayDownloadIncrement,
       'totalPublished': instance.totalPublished,
-      'uploadIncrementDataList': instance.uploadIncrementDataList
-          .map((e) => e.toJson())
-          .toList(),
-      'downloadIncrementDataList': instance.downloadIncrementDataList
-          .map((e) => e.toJson())
-          .toList(),
-      'uploadMonthIncrementDataList': instance.uploadMonthIncrementDataList
-          .map((e) => e.toJson())
-          .toList(),
-      'statusList': instance.statusList.map((e) => e.toJson()).toList(),
-      'stackChartDataList': instance.stackChartDataList
-          .map((e) => e.toJson())
-          .toList(),
-      'seedDataList': instance.seedDataList.map((e) => e.toJson()).toList(),
+      'uploadIncrementDataList': instance.uploadIncrementDataList,
+      'downloadIncrementDataList': instance.downloadIncrementDataList,
+      'uploadMonthIncrementDataList': instance.uploadMonthIncrementDataList,
+      'statusList': instance.statusList,
+      'stackChartDataList': instance.stackChartDataList,
+      'seedDataList': instance.seedDataList,
       'siteCount': instance.siteCount,
       'updatedAt': instance.updatedAt,
-      'earliestSite': instance.earliestSite?.toJson(),
+      'earliestSite': instance.earliestSite,
     };

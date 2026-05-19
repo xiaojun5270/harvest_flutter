@@ -26,7 +26,7 @@ Map<String, dynamic> _$ScheduleToJson(_Schedule instance) => <String, dynamic>{
   'task': instance.task,
   'description': instance.description,
   'crontab_id': instance.crontabId,
-  'crontab': instance.crontab?.toJson(),
+  'crontab': instance.crontab,
   'args': instance.args,
   'kwargs': instance.kwargs,
   'enabled': instance.enabled,

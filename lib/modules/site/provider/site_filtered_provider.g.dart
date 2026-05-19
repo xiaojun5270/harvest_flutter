@@ -23,7 +23,7 @@ final availableTagsProvider = AutoDisposeProvider<List<String>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AvailableTagsRef = AutoDisposeProviderRef<List<String>>;
-String _$filteredSiteListHash() => r'f51c820b2ecadabc97fb9a90b5eddcb3db60d89a';
+String _$filteredSiteListHash() => r'14ac8bfbe62bc4727491e80b9d631abc4217bdfb';
 
 /// See also [filteredSiteList].
 @ProviderFor(filteredSiteList)

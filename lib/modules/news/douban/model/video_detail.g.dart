@@ -104,7 +104,7 @@ _Linewatch _$LinewatchFromJson(Map<String, dynamic> json) => _Linewatch(
 Map<String, dynamic> _$LinewatchToJson(_Linewatch instance) =>
     <String, dynamic>{
       'free': instance.free,
-      'source': instance.source.toJson(),
+      'source': instance.source,
       'url': instance.url,
     };
 
@@ -210,11 +210,11 @@ Map<String, dynamic> _$VideoDetailToJson(_VideoDetail instance) =>
       'original_title': instance.originalTitle,
       'year': instance.year,
       'cover_url': instance.coverUrl,
-      'pic': instance.pic.toJson(),
-      'rating': instance.rating.toJson(),
+      'pic': instance.pic,
+      'rating': instance.rating,
       'null_rating_reason': instance.nullRatingReason,
-      'actors': instance.actors.map((e) => e.toJson()).toList(),
-      'directors': instance.directors.map((e) => e.toJson()).toList(),
+      'actors': instance.actors,
+      'directors': instance.directors,
       'aka': instance.aka,
       'countries': instance.countries,
       'languages': instance.languages,
@@ -228,12 +228,10 @@ Map<String, dynamic> _$VideoDetailToJson(_VideoDetail instance) =>
       'has_linewatch': instance.hasLinewatch,
       'episodes_count': instance.episodesCount,
       'episodes_info': instance.episodesInfo,
-      'trailers': instance.trailers.map((e) => e.toJson()).toList(),
-      'vendors': instance.vendors.map((e) => e.toJson()).toList(),
-      'linewatches': instance.linewatches.map((e) => e.toJson()).toList(),
-      'realtime_hot_honor_infos': instance.realtimeHonorInfos
-          .map((e) => e.toJson())
-          .toList(),
+      'trailers': instance.trailers,
+      'vendors': instance.vendors,
+      'linewatches': instance.linewatches,
+      'realtime_hot_honor_infos': instance.realtimeHonorInfos,
       'comment_count': instance.commentCount,
       'review_count': instance.reviewCount,
       'forum_topic_count': instance.forumTopicCount,

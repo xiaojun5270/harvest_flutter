@@ -225,7 +225,7 @@ Map<String, dynamic> _$WebSiteToJson(_WebSite instance) => <String, dynamic>{
   'my_username_rule': instance.myUsernameRule,
   'buy_page': instance.buyPage,
   'buy_action': instance.buyAction,
-  'level': instance.level.map((k, e) => MapEntry(k, e.toJson())),
+  'level': instance.level,
 };
 
 _SiteLevel _$SiteLevelFromJson(Map<String, dynamic> json) => _SiteLevel(

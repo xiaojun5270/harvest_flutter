@@ -57,7 +57,7 @@ Map<String, dynamic> _$PersonToJson(_Person instance) => <String, dynamic>{
   'original_name': instance.originalName,
   'media_type': instance.mediaType,
   'profile_path': instance.profilePath,
-  'known_for': instance.knownFor.map((e) => e.toJson()).toList(),
+  'known_for': instance.knownFor,
   'known_for_department': instance.knownForDepartment,
   'gender': instance.gender,
 };

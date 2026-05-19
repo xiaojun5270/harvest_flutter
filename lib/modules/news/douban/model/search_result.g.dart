@@ -48,7 +48,7 @@ Map<String, dynamic> _$SearchTargetToJson(_SearchTarget instance) =>
       'has_linewatch': instance.hasLinewatch,
       'id': instance.id,
       'null_rating_reason': instance.nullRatingReason,
-      'rating': instance.rating.toJson(),
+      'rating': instance.rating,
       'title': instance.title,
       'uri': instance.uri,
       'year': instance.year,
@@ -68,7 +68,7 @@ _DoubanSearchResult _$DoubanSearchResultFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$DoubanSearchResultToJson(_DoubanSearchResult instance) =>
     <String, dynamic>{
       'layout': instance.layout,
-      'target': instance.target.toJson(),
+      'target': instance.target,
       'target_id': instance.targetId,
       'target_type': instance.targetType,
       'type_name': instance.typeName,
