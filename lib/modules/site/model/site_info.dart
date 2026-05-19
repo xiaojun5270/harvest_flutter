@@ -62,11 +62,7 @@ abstract class SiteInfo with _$SiteInfo {
 
   String? get latestStatusUpdatedAt {
     final statusUpdatedAt = latestStatus?.updated_at.trim();
-    if (statusUpdatedAt != null && statusUpdatedAt.isNotEmpty) {
-      return statusUpdatedAt;
-    }
-    final siteUpdatedAt = updatedAt?.trim();
-    return siteUpdatedAt == null || siteUpdatedAt.isEmpty ? null : siteUpdatedAt;
+    return (statusUpdatedAt == null || statusUpdatedAt.isEmpty) ? null : statusUpdatedAt;
   }
 
   String? get signInText {
