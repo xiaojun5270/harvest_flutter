@@ -310,7 +310,7 @@ abstract class Torrent with _$Torrent {
     return Torrent(
       id: _safeInt(_pick(json, ['id'])),
       name: (_pick(json, ['name']) ?? '').toString(),
-      hashString: (_pick(json, ['hashString', 'hash', 'infohash_v1']) ?? '')
+      hashString: (_pick(json, ['hashString', 'hash_string', 'hash', 'infohash_v1', 'infoHash', 'info_hash', 'torrent_hash']) ?? '')
           .toString(),
       percentDone: _safeDouble(
         _pick(json, ['percentDone', 'progress', 'percent_done']),
@@ -611,9 +611,22 @@ abstract class DownloaderData with _$DownloaderData {
           .map((t) => Torrent.fromJson(t as Map<String, dynamic>))
           .toList();
     } else if (raw is Map) {
-      torrentList = raw.values
-          .map((t) => Torrent.fromJson(t as Map<String, dynamic>))
-          .toList();
+      torrentList = [];
+      for (final entry in raw.entries) {
+        final value = entry.value;
+        if (value is! Map) continue;
+        final torrentJson = Map<String, dynamic>.from(value);
+        final key = entry.key.toString();
+        final hasHash = _pick(torrentJson, ['hashString', 'hash_string', 'hash', 'infohash_v1', 'infoHash', 'info_hash', 'torrent_hash']) != null;
+        if (!hasHash && _looksLikeTorrentHash(key)) {
+          torrentJson['hashString'] = key;
+        }
+        if (!torrentJson.containsKey('id')) {
+          final id = int.tryParse(key);
+          if (id != null) torrentJson['id'] = id;
+        }
+        torrentList.add(Torrent.fromJson(torrentJson));
+      }
     }
 
     DownloaderStatus? status;
@@ -624,6 +637,12 @@ abstract class DownloaderData with _$DownloaderData {
 
     return DownloaderData(torrents: torrentList, status: status);
   }
+}
+
+bool _looksLikeTorrentHash(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length < 32) return false;
+  return RegExp(r'^[a-fA-F0-9]+$').hasMatch(trimmed);
 }
 
 // ══════════════════════════════════════════════════════

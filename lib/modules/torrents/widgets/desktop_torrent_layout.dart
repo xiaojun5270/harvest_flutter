@@ -47,7 +47,8 @@ class DesktopTorrentLayout extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<DesktopTorrentLayout> createState() => _DesktopTorrentLayoutState();
+  ConsumerState<DesktopTorrentLayout> createState() =>
+      _DesktopTorrentLayoutState();
 }
 
 class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
@@ -79,7 +80,9 @@ class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
             child: Row(
               children: [
                 if (_sidebarCollapsed)
-                  CollapsedDesktopSidebar(onExpand: () => setState(() => _sidebarCollapsed = false))
+                  CollapsedDesktopSidebar(
+                    onExpand: () => setState(() => _sidebarCollapsed = false),
+                  )
                 else
                   DesktopTorrentSidebar(
                     key: ValueKey('desktop-sidebar-${widget.downloaderId}'),
@@ -96,7 +99,8 @@ class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
                       behavior: HitTestBehavior.translucent,
                       onHorizontalDragUpdate: (details) {
                         setState(() {
-                          _sidebarWidth = (_sidebarWidth + details.delta.dx).clamp(_minSidebarWidth, _maxSidebarWidth);
+                          _sidebarWidth = (_sidebarWidth + details.delta.dx)
+                              .clamp(_minSidebarWidth, _maxSidebarWidth);
                         });
                       },
                       child: SizedBox(

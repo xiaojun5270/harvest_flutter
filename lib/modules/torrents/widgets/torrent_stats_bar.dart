@@ -57,8 +57,16 @@ class StatsBar extends ConsumerWidget {
         status?.pausedTorrentCount ?? liveInfo?.pausedTorrentCount ?? 0;
     final totalCount =
         status?.torrentCount ?? liveInfo?.totalTorrentCount ?? torrents.length;
-    final downloadSpeed = liveInfo?.downloadSpeed ?? status?.downloadSpeed ?? 0;
-    final uploadSpeed = liveInfo?.uploadSpeed ?? status?.uploadSpeed ?? 0;
+    final downloadSpeed = _firstPositive([
+      liveInfo?.downloadSpeed ?? 0,
+      status?.downloadSpeed ?? 0,
+      _sumDownloadSpeed(torrents),
+    ]);
+    final uploadSpeed = _firstPositive([
+      liveInfo?.uploadSpeed ?? 0,
+      status?.uploadSpeed ?? 0,
+      _sumUploadSpeed(torrents),
+    ]);
     final sessionUploaded = _firstPositive([
       liveInfo?.uploadedSession ?? 0,
       status?.currentStats.uploadedBytes ?? 0,
@@ -181,6 +189,22 @@ int _sumDownloadedEver(List<Torrent> torrents) {
   var sum = 0;
   for (final t in torrents) {
     sum += t.downloadedEver;
+  }
+  return sum;
+}
+
+int _sumDownloadSpeed(List<Torrent> torrents) {
+  var sum = 0;
+  for (final t in torrents) {
+    sum += t.rateDownload;
+  }
+  return sum;
+}
+
+int _sumUploadSpeed(List<Torrent> torrents) {
+  var sum = 0;
+  for (final t in torrents) {
+    sum += t.rateUpload;
   }
   return sum;
 }

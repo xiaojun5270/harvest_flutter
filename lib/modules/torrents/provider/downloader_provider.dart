@@ -42,7 +42,7 @@ Future<DownloaderData> fetchMainData(int downloaderId) async {
       '[MainData] 成功, torrents=${data?.torrents.length ?? 0}, '
       'status=${data?.status?.torrentCount ?? 0}',
     );
-    AppLogger.info('[MainData] 成功, torrents=${data?.torrents[0]}');
+    AppLogger.info('[MainData] 成功, torrents=${data?.torrents.length ?? 0}');
     return data ?? const DownloaderData(torrents: []);
   } catch (e, st) {
     debugPrint('[MainData] 失败: $e');
@@ -91,13 +91,19 @@ class TorrentListNotifier extends StateNotifier<AsyncValue<DownloaderData>> {
         'torrents=${data.torrents.length}',
       );
       if (!_disposed) {
-        if (data.torrents.isNotEmpty || !preservePrevious || previous == null) {
-          state = AsyncValue.data(data);
-          debugPrint('[TorrentList] maindata 已设置到 state');
-        } else {
-          state = AsyncValue.data(previous);
-          debugPrint('[TorrentList] maindata 为空, 保留现有 state');
-        }
+        final nextData = preservePrevious && previous != null
+            ? _mergeDataOnExisting(
+                previous,
+                data,
+              )
+            : data;
+        state = AsyncValue.data(nextData);
+        debugPrint(
+          '[TorrentList] maindata 已合并到 state: '
+          'previous=${previous?.torrents.length ?? 0}, '
+          'incoming=${data.torrents.length}, '
+          'current=${nextData.torrents.length}',
+        );
       } else {
         debugPrint('[TorrentList] 已 disposed, 跳过 maindata');
       }
@@ -160,7 +166,20 @@ class TorrentListNotifier extends StateNotifier<AsyncValue<DownloaderData>> {
                 debugPrint('[WS] 第一个: name=${first.toJson()}, ');
               }
 
-              state = AsyncValue.data(parsed);
+              final previous = state.valueOrNull;
+              final nextData = previous == null
+                  ? parsed
+                  : _mergeDataOnExisting(
+                      previous,
+                      parsed,
+                    );
+              state = AsyncValue.data(nextData);
+              debugPrint(
+                '[WS] 已合并到 state: '
+                'previous=${previous?.torrents.length ?? 0}, '
+                'incoming=${parsed.torrents.length}, '
+                'current=${nextData.torrents.length}',
+              );
             }
           } catch (e, st) {
             debugPrint('[WS] 解析失败: $e\n$st');
@@ -237,6 +256,91 @@ class TorrentListNotifier extends StateNotifier<AsyncValue<DownloaderData>> {
     _disconnectWs();
     super.dispose();
   }
+
+  DownloaderData _mergeStatus(DownloaderData previous, DownloaderData next) {
+    final status = next.status;
+    if (status == null) return previous;
+    if (previous.torrents.isNotEmpty && status.torrentCount == 0) {
+      return previous;
+    }
+    return previous.copyWith(status: status);
+  }
+
+  DownloaderData _mergeDataOnExisting(
+    DownloaderData previous,
+    DownloaderData next,
+  ) {
+    if (next.torrents.isEmpty) return _mergeStatus(previous, next);
+
+    final previousByHash = <String, Torrent>{
+      for (final torrent in previous.torrents)
+        if (torrent.hashString.isNotEmpty) torrent.hashString: torrent,
+    };
+    final previousById = <int, Torrent>{
+      for (final torrent in previous.torrents)
+        if (torrent.id != 0) torrent.id: torrent,
+    };
+
+    final mergedTorrents = <Torrent>[];
+    final emittedHashes = <String>{};
+    final emittedIds = <int>{};
+
+    for (final incoming in next.torrents) {
+      final hash = incoming.hashString;
+      if (hash.isNotEmpty && emittedHashes.contains(hash)) continue;
+      if (hash.isEmpty && incoming.id != 0 && emittedIds.contains(incoming.id)) {
+        continue;
+      }
+      final previousTorrent = hash.isNotEmpty
+          ? previousByHash[hash] ?? previousById[incoming.id]
+          : previousById[incoming.id];
+      mergedTorrents.add(_mergeTorrentMetadata(previousTorrent, incoming));
+      if (hash.isNotEmpty) emittedHashes.add(hash);
+      if (incoming.id != 0) emittedIds.add(incoming.id);
+    }
+
+    return next.copyWith(
+      torrents: mergedTorrents,
+      status: _mergeStatus(previous, next).status,
+    );
+  }
+
+  Torrent _mergeTorrentMetadata(Torrent? previous, Torrent next) {
+    if (previous == null) return next;
+    return next.copyWith(
+      id: next.id != 0 ? next.id : previous.id,
+      name: next.name.isNotEmpty ? next.name : previous.name,
+      category: next.category.isNotEmpty ? next.category : previous.category,
+      hashString: next.hashString.isNotEmpty
+          ? next.hashString
+          : previous.hashString,
+      contentPath: next.contentPath.isNotEmpty
+          ? next.contentPath
+          : previous.contentPath,
+      downloadDir: next.downloadDir.isNotEmpty
+          ? next.downloadDir
+          : previous.downloadDir,
+      comment: next.comment.isNotEmpty ? next.comment : previous.comment,
+      magnetLink: next.magnetLink.isNotEmpty
+          ? next.magnetLink
+          : previous.magnetLink,
+      torrentFile: next.torrentFile.isNotEmpty
+          ? next.torrentFile
+          : previous.torrentFile,
+      labels: next.labels.isNotEmpty ? next.labels : previous.labels,
+      trackerStats: next.trackerStats.isNotEmpty
+          ? next.trackerStats
+          : previous.trackerStats,
+      trackerUrl: next.trackerUrl.isNotEmpty
+          ? next.trackerUrl
+          : previous.trackerUrl,
+      error: next.error != 0 ? next.error : previous.error,
+      errorString: next.errorString.isNotEmpty
+          ? next.errorString
+          : previous.errorString,
+    );
+  }
+
 }
 
 // ────────────────────── Providers ──────────────────────

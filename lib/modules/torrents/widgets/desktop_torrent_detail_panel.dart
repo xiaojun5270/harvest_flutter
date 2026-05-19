@@ -145,7 +145,6 @@ class DesktopTorrentDetailPanel extends ConsumerWidget {
   }
 
   Torrent? _selectedTorrent(List<Torrent> torrents) {
-    if (torrents.isEmpty) return null;
     if (selectedHash != null && selectedHash!.isNotEmpty) {
       for (final t in torrents) {
         if (t.hashString == selectedHash) return t;
