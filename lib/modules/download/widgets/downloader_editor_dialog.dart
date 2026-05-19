@@ -11,19 +11,13 @@ class DownloaderEditorDialog extends ConsumerStatefulWidget {
   final Downloader? downloader;
   final void Function(Downloader) onSaved;
 
-  const DownloaderEditorDialog({
-    super.key,
-    this.downloader,
-    required this.onSaved,
-  });
+  const DownloaderEditorDialog({super.key, this.downloader, required this.onSaved});
 
   @override
-  ConsumerState<DownloaderEditorDialog> createState() =>
-      _DownloaderEditorDialogState();
+  ConsumerState<DownloaderEditorDialog> createState() => _DownloaderEditorDialogState();
 }
 
-class _DownloaderEditorDialogState
-    extends ConsumerState<DownloaderEditorDialog> {
+class _DownloaderEditorDialogState extends ConsumerState<DownloaderEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _hostCtrl;
@@ -123,14 +117,10 @@ class _DownloaderEditorDialogState
         behavior: HitTestBehavior.translucent,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: Dialog(
-          insetPadding: EdgeInsets.symmetric(
-            horizontal: isMobile ? 8 : 16,
-            vertical: isMobile ? 6 : 24,
-          ),
+          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 16, vertical: isMobile ? 6 : 24),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight:
-                  MediaQuery.of(context).size.height * (isMobile ? 0.92 : 0.8),
+              maxHeight: MediaQuery.of(context).size.height * (isMobile ? 0.92 : 0.8),
               maxWidth: isMobile ? double.infinity : 420,
             ),
             child: Column(
@@ -142,18 +132,13 @@ class _DownloaderEditorDialogState
                     children: [
                       shadcn.IconButton.ghost(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(
-                          shadcn.LucideIcons.arrowLeft,
-                          size: 16,
-                        ),
+                        icon: const Icon(shadcn.LucideIcons.arrowLeft, size: 16),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           _isEdit ? '编辑下载器' : '添加下载器',
-                          style: theme.typography.large.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: theme.typography.large.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],
@@ -178,20 +163,15 @@ class _DownloaderEditorDialogState
                           _dropdown(
                             label: '客户端类型',
                             value: _category,
-                            items: const {
-                              'Qb': 'Qbittorrent',
-                              'Tr': 'Transmission',
-                            },
-                            onChanged: (v) =>
-                                setState(() => _category = v ?? 'Qb'),
+                            items: const {'Qb': 'Qbittorrent', 'Tr': 'Transmission'},
+                            onChanged: (v) => setState(() => _category = v ?? 'Qb'),
                           ),
                           const SizedBox(height: 8),
                           _dropdown(
                             label: '协议',
                             value: _protocol,
                             items: const {'http': 'HTTP', 'https': 'HTTPS'},
-                            onChanged: (v) =>
-                                setState(() => _protocol = v ?? 'http'),
+                            onChanged: (v) => setState(() => _protocol = v ?? 'http'),
                           ),
                           const SizedBox(height: 8),
                           _textField(
@@ -230,18 +210,14 @@ class _DownloaderEditorDialogState
                           const SizedBox(height: 8),
                           pathsAsync.when(
                             loading: () => _textField(
-                              controller: TextEditingController(
-                                text: widget.downloader?.torrentPath ?? '',
-                              ),
+                              controller: TextEditingController(text: widget.downloader?.torrentPath ?? ''),
                               label: '种子路径',
                               hintText: '加载中...',
                               enabled: false,
                             ),
                             error: (e, _) {
                               _path ??= widget.downloader?.torrentPath;
-                              final items =
-                                  widget.downloader != null &&
-                                      widget.downloader!.torrentPath.isNotEmpty
+                              final items = widget.downloader != null && widget.downloader!.torrentPath.isNotEmpty
                                   ? <String>[widget.downloader!.torrentPath]
                                   : <String>[];
                               return _pathDropdown(items);
@@ -249,16 +225,10 @@ class _DownloaderEditorDialogState
                             data: (paths) {
                               if (widget.downloader != null &&
                                   widget.downloader!.torrentPath.isNotEmpty &&
-                                  !paths.contains(
-                                    widget.downloader!.torrentPath,
-                                  )) {
-                                paths = [
-                                  widget.downloader!.torrentPath,
-                                  ...paths,
-                                ];
+                                  !paths.contains(widget.downloader!.torrentPath)) {
+                                paths = [widget.downloader!.torrentPath, ...paths];
                               }
-                              _path ??=
-                                  paths.contains(widget.downloader?.torrentPath)
+                              _path ??= paths.contains(widget.downloader?.torrentPath)
                                   ? widget.downloader!.torrentPath
                                   : (paths.isNotEmpty ? paths.first : null);
                               return _pathDropdown(paths);
@@ -277,22 +247,16 @@ class _DownloaderEditorDialogState
                                     icon: shadcn.LucideIcons.power,
                                     title: '启用',
                                     value: _isActive,
-                                    onChanged: (v) =>
-                                        setState(() => _isActive = v),
+                                    onChanged: (v) => setState(() => _isActive = v),
                                   ),
                                 ),
-                                Container(
-                                  width: 1,
-                                  height: 56,
-                                  color: cs.border,
-                                ),
+                                Container(width: 1, height: 56, color: cs.border),
                                 Expanded(
                                   child: _switchRow(
                                     icon: shadcn.LucideIcons.zap,
                                     title: '辅种',
                                     value: !_brush,
-                                    onChanged: (v) =>
-                                        setState(() => _brush = !v),
+                                    onChanged: (v) => setState(() => _brush = !v),
                                   ),
                                 ),
                               ],
@@ -347,6 +311,7 @@ class _DownloaderEditorDialogState
       keyboardType: keyboardType,
       obscureText: obscureText,
       enabled: enabled,
+      maxLines: 1,
       validator: validator,
     );
   }
@@ -364,10 +329,7 @@ class _DownloaderEditorDialogState
       children: [
         Text(
           label,
-          style: theme.typography.small.copyWith(
-            color: cs.foreground,
-            fontWeight: FontWeight.w600,
-          ),
+          style: theme.typography.small.copyWith(color: cs.foreground, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 6),
         SizedBox(
@@ -381,10 +343,7 @@ class _DownloaderEditorDialogState
               items: shadcn.SelectItemList(
                 children: [
                   for (final entry in items.entries)
-                    shadcn.SelectItemButton<String>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
+                    shadcn.SelectItemButton<String>(value: entry.key, child: Text(entry.value)),
                 ],
               ),
             ).call,
@@ -404,10 +363,7 @@ class _DownloaderEditorDialogState
       children: [
         Text(
           '种子路径',
-          style: theme.typography.small.copyWith(
-            color: cs.foreground,
-            fontWeight: FontWeight.w600,
-          ),
+          style: theme.typography.small.copyWith(color: cs.foreground, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 6),
         SizedBox(
@@ -419,13 +375,7 @@ class _DownloaderEditorDialogState
             popupConstraints: const BoxConstraints(maxHeight: 300),
             popup: shadcn.SelectPopup<String>(
               items: shadcn.SelectItemList(
-                children: [
-                  for (final path in paths)
-                    shadcn.SelectItemButton<String>(
-                      value: path,
-                      child: Text(path),
-                    ),
-                ],
+                children: [for (final path in paths) shadcn.SelectItemButton<String>(value: path, child: Text(path))],
               ),
             ).call,
             onChanged: (value) {
@@ -439,10 +389,7 @@ class _DownloaderEditorDialogState
         if (_pathTouched && selected == null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              '请选择路径',
-              style: theme.typography.xSmall.copyWith(color: cs.destructive),
-            ),
+            child: Text('请选择路径', style: theme.typography.xSmall.copyWith(color: cs.destructive)),
           ),
       ],
     );
