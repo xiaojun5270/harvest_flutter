@@ -111,27 +111,10 @@ class _SitePageState extends ConsumerState<SitePage> {
                 error: (e, _) => SiteErrorView(error: e, onRetry: _refresh),
                 data: (_) {
                   if (filteredSites.isEmpty) {
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.only(
-                        bottom: ShellBottomSpacing.value(context),
-                      ),
-                      children: [
-                        SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.3,
-                        ),
-                        Center(
-                          child: Text(
-                            hasFilters ? '没有符合筛选条件的站点' : '暂无站点数据',
-                            style: shadcn.Theme.of(context).typography.small
-                                .copyWith(
-                                  color: shadcn.Theme.of(
-                                    context,
-                                  ).colorScheme.mutedForeground,
-                                ),
-                          ),
-                        ),
-                      ],
+                    return _buildEmptyState(
+                      context,
+                      hasFilters: hasFilters,
+                      mobile: mobile,
                     );
                   }
                   return SiteListView(
@@ -173,6 +156,108 @@ class _SitePageState extends ConsumerState<SitePage> {
                 style: TextStyle(color: cs.mutedForeground, fontSize: 13),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required bool hasFilters,
+    required bool mobile,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final title = hasFilters ? '没有符合筛选条件的站点' : '暂无站点数据';
+    final subtitle = hasFilters
+        ? '当前筛选条件没有匹配结果，可以清除筛选后重新查看。'
+        : '还没有添加站点。可以从内置配置添加站点，或上传自定义 TOML 配置。';
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 16 : 24,
+        MediaQuery.sizeOf(context).height * 0.16,
+        mobile ? 16 : 24,
+        ShellBottomSpacing.value(context) + 24,
+      ),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: AppSurfaceContainer(
+              padding: const EdgeInsets.all(18),
+              borderRadius: BorderRadius.circular(12),
+              color: appSurfaceColor(context, cs.card),
+              borderColor: cs.border.withValues(alpha: 0.7),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      hasFilters
+                          ? shadcn.LucideIcons.searchX
+                          : shadcn.LucideIcons.panelTopOpen,
+                      size: 22,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: theme.typography.large.copyWith(
+                      color: cs.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: theme.typography.small.copyWith(
+                      color: cs.mutedForeground,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (hasFilters)
+                    shadcn.Button.primary(
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        ref.read(siteFilterStateProvider).clearAll();
+                      },
+                      alignment: Alignment.center,
+                      child: const Text('清除筛选'),
+                    )
+                  else
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        shadcn.Button.primary(
+                          onPressed: () => _openAdd(context),
+                          alignment: Alignment.center,
+                          child: const Text('添加站点'),
+                        ),
+                        shadcn.Button.outline(
+                          onPressed: () => _openImportTomlDialog(context),
+                          alignment: Alignment.center,
+                          child: const Text('上传配置'),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ],

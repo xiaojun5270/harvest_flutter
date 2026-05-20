@@ -172,6 +172,7 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
   bool _refreshingSites = false;
   bool _signingIn = false;
   bool _showWeeks = false;
+  bool _initialLoading = true;
   late int _treemapCount;
   late Map<String, bool> _chartVisibility;
   _ChartTooltipData? _trendTooltip;
@@ -195,13 +196,21 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
     _treemapCount = DashboardChartConfig.getDesktopTreemapCount();
     _chartVisibility = DashboardChartConfig.getVisibility();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(dashboardNotifierProvider.notifier).refresh();
+      _loadInitialDashboard();
       _syncDesktopMonitorCards(_chartVisibility);
       if (mounted) {
         ref.read(activeScrollControllerProvider.notifier).state =
             _scrollController;
       }
     });
+  }
+
+  Future<void> _loadInitialDashboard() async {
+    try {
+      await ref.read(dashboardNotifierProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _initialLoading = false);
+    }
   }
 
   @override
@@ -431,11 +440,13 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
             children: [
               Positioned.fill(
                 child: data == null
-                    ? Center(
+                    ? _initialLoading
+                        ? Center(
                         child: shadcn.CircularProgressIndicator(
                           size: tokens.size(18),
                         ),
                       )
+                        : _buildDashboardEmptyState(context)
                     : _buildBoard(
                         context,
                         data,
@@ -499,6 +510,101 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
                   ),
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardEmptyState(BuildContext context) {
+    final tokens = _tokens;
+    return EasyRefresh(
+      controller: _refreshController,
+      onRefresh: _onRefresh,
+      header: appRefreshHeader(context),
+      child: ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          tokens.size(24),
+          MediaQuery.sizeOf(context).height * 0.20,
+          tokens.size(24),
+          _bottomGap + ShellBottomSpacing.value(context),
+        ),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: tokens.size(440)),
+              child: Container(
+                padding: EdgeInsets.all(tokens.size(22)),
+                decoration: BoxDecoration(
+                  color: _panel,
+                  borderRadius: BorderRadius.circular(tokens.size(18)),
+                  border: Border.all(color: _line),
+                  boxShadow: [
+                    BoxShadow(
+                      color: tokens.panelShadow,
+                      blurRadius: tokens.size(24),
+                      offset: Offset(0, tokens.size(12)),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: tokens.size(48),
+                      height: tokens.size(48),
+                      decoration: BoxDecoration(
+                        color: _cyan.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(tokens.size(14)),
+                      ),
+                      child: Icon(
+                        shadcn.LucideIcons.chartNoAxesCombined,
+                        size: tokens.size(23),
+                        color: _cyan,
+                      ),
+                    ),
+                    SizedBox(height: tokens.size(14)),
+                    Text(
+                      '暂无首页数据',
+                      style: tokens.theme.typography.large.copyWith(
+                        fontSize: tokens.font(20),
+                        color: _text,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: tokens.size(6)),
+                    Text(
+                      '当前还没有可展示的统计数据。可以先刷新首页，或执行一次站点数据任务后再查看。',
+                      textAlign: TextAlign.center,
+                      style: tokens.theme.typography.small.copyWith(
+                        color: _muted,
+                        height: 1.45,
+                      ),
+                    ),
+                    SizedBox(height: tokens.size(18)),
+                    Wrap(
+                      spacing: tokens.size(10),
+                      runSpacing: tokens.size(10),
+                      alignment: WrapAlignment.center,
+                      children: [
+                        shadcn.Button.primary(
+                          onPressed: _busy ? null : _refreshDashboard,
+                          alignment: Alignment.center,
+                          child: Text(_refreshingDashboard ? '刷新中' : '刷新首页'),
+                        ),
+                        shadcn.Button.outline(
+                          onPressed: _busy ? null : _refreshSiteData,
+                          alignment: Alignment.center,
+                          child: Text(_refreshingSites ? '执行中' : '站点数据'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

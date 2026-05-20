@@ -11,7 +11,6 @@ import 'package:harvest/core/provider/app_auto_refresh_provider.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
 import 'package:harvest/core/theme/app_surface.dart';
-import 'package:harvest/core/theme/theme_provider.dart';
 import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/widgets/cache_status_banner.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
@@ -271,6 +270,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _isRefreshingDashboardData = false;
   bool _isRefreshingSiteData = false;
   bool _isSigningInSites = false;
+  bool _isDashboardInitialLoading = true;
 
   bool get _hasRunningSummaryAction =>
       _isRefreshingDashboardData || _isRefreshingSiteData || _isSigningInSites;
@@ -285,15 +285,23 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     _treemapCount = DashboardChartConfig.getTreemapCount();
     _phoneTrendDays = DashboardChartConfig.getPhoneTrendDays();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref
-          .read(dashboardNotifierProvider.notifier)
-          .refresh(days: _phoneDashboardFetchDays);
+      _loadInitialDashboardData();
       _syncPhoneMonitorCards(_chartVisibility);
       if (mounted) {
         ref.read(activeScrollControllerProvider.notifier).state =
             _scrollController;
       }
     });
+  }
+
+  Future<void> _loadInitialDashboardData() async {
+    try {
+      await ref
+          .read(dashboardNotifierProvider.notifier)
+          .refresh(days: _phoneDashboardFetchDays);
+    } finally {
+      if (mounted) setState(() => _isDashboardInitialLoading = false);
+    }
   }
 
   void _showChartSettings(
@@ -518,7 +526,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       return AppBackground(
         child: shadcn.Scaffold(
           backgroundColor: pageBackground,
-          child: Center(child: shadcn.CircularProgressIndicator(size: 18)),
+          child: _isDashboardInitialLoading
+              ? Center(child: shadcn.CircularProgressIndicator(size: 18))
+              : _buildDashboardEmptyState(context),
         ),
       );
     }
@@ -586,6 +596,99 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final parts = email.split('@');
     if (parts.length != 2) return _mask(email, privacy);
     return '${_mask(parts.first, privacy)}@${_maskServerInfo(parts.last, privacy)}';
+  }
+
+  Widget _buildDashboardEmptyState(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    return EasyRefresh(
+      controller: _refreshController,
+      onRefresh: _onRefresh,
+      header: appRefreshHeader(context),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          18,
+          MediaQuery.sizeOf(context).height * 0.18,
+          18,
+          _bottomSafeGap + ShellBottomSpacing.value(context),
+        ),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: AppSurfaceContainer(
+                padding: const EdgeInsets.all(18),
+                borderRadius: BorderRadius.circular(14),
+                color: appSurfaceColor(context, cs.card),
+                borderColor: cs.border.withValues(alpha: 0.7),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        shadcn.LucideIcons.chartNoAxesCombined,
+                        size: 23,
+                        color: cs.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '暂无首页数据',
+                      style: theme.typography.large.copyWith(
+                        color: cs.foreground,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '当前还没有可展示的统计数据。可以先刷新首页，或执行一次站点数据任务后再查看。',
+                      textAlign: TextAlign.center,
+                      style: theme.typography.small.copyWith(
+                        color: cs.mutedForeground,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        shadcn.Button.primary(
+                          onPressed: _hasRunningSummaryAction
+                              ? null
+                              : _refreshDashboardData,
+                          alignment: Alignment.center,
+                          child: Text(
+                            _isRefreshingDashboardData ? '刷新中' : '刷新首页',
+                          ),
+                        ),
+                        shadcn.Button.outline(
+                          onPressed: _hasRunningSummaryAction
+                              ? null
+                              : _refreshSiteData,
+                          alignment: Alignment.center,
+                          child: Text(
+                            _isRefreshingSiteData ? '执行中' : '站点数据',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _dashboardAuthLabel(String key) {
@@ -713,14 +816,18 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final invite = _findDashboardAuthValue(data, const ['invite']);
 
     final parts = <String>[];
-    if (active != null)
+    if (active != null) {
       parts.add('状态 ${_dashboardAuthValue('active', active, privacy)}');
-    if (expire != null)
+    }
+    if (expire != null) {
       parts.add('到期时间 ${_dashboardAuthValue('expire', expire, privacy)}');
-    if (pay != null)
+    }
+    if (pay != null) {
       parts.add('额度 ${_dashboardAuthValue('pay', pay, privacy)}');
-    if (invite != null)
+    }
+    if (invite != null) {
       parts.add('邀请 ${_dashboardAuthValue('invite', invite, privacy)}');
+    }
     if (parts.isNotEmpty) return parts.join(' · ');
 
     final entries = _dashboardAuthEntries(data, privacy).take(2).toList();
