@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +20,7 @@ import 'package:harvest/widgets/app_menu.dart';
 import 'package:harvest/widgets/app_sheet.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ══════════════════════════════════════════════════════════
 //  内置浏览器
@@ -766,12 +768,175 @@ class _BrowserPageState extends State<BrowserPage> {
           _bottomBtn(cs, shadcn.LucideIcons.refreshCw, '刷新', true, () => _controller?.reload()),
           _bottomBtn(cs, shadcn.LucideIcons.copy, '复制', true, () => _showCopyMenu()),
           _bottomBtn(cs, shadcn.LucideIcons.globe, 'UA', true, _showUserAgentPicker),
-          _bottomBtn(cs, shadcn.LucideIcons.share2, '分享', true, () {
-            SharePlus.instance.share(ShareParams(text: _currentUrl, subject: _currentTitle));
-          }),
+          _bottomBtn(cs, shadcn.LucideIcons.ellipsisVertical, '操作', true, _showBrowserActionMenu),
         ],
       ),
     );
+  }
+
+  Future<void> _showBrowserActionMenu() async {
+    if (!mounted) return;
+    shadcn.showDropdown<void>(
+      context: context,
+      alignment: Alignment.bottomCenter,
+      offset: const Offset(0, -8),
+      widthConstraint: shadcn.PopoverConstraint.intrinsic,
+      heightConstraint: shadcn.PopoverConstraint.intrinsic,
+      consumeOutsideTaps: true,
+      builder: (_) => AppDropdownMenu(
+        children: [
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.share2),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              SharePlus.instance.share(ShareParams(text: _currentUrl, subject: _currentTitle));
+            },
+            child: const Text('分享链接'),
+          ),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.camera),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              unawaited(_captureBrowserLongScreenshot());
+            },
+            child: const Text('长截图'),
+          ),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.externalLink),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              unawaited(_openCurrentUrlExternally());
+            },
+            child: const Text('浏览器打开'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openCurrentUrlExternally() async {
+    final uri = Uri.tryParse(_currentUrl.trim());
+    if (uri == null || !uri.hasScheme) {
+      Toast.warning('当前链接无效');
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) Toast.warning('无法打开系统浏览器');
+  }
+
+  Future<void> _captureBrowserLongScreenshot() async {
+    final controller = _controller;
+    if (controller == null || _closing) {
+      Toast.warning('页面尚未加载完成');
+      return;
+    }
+
+    Toast.info('正在生成长截图');
+    try {
+      final bytes = await _captureWebViewLongScreenshot(controller);
+      if (bytes == null || bytes.isEmpty) {
+        Toast.warning('截图失败');
+        return;
+      }
+      await ScreenshotSaver.saveAndShare(bytes);
+    } catch (e, st) {
+      AppLogger.error('内置浏览器长截图失败', e, st);
+      Toast.error('截图失败: $e');
+    }
+  }
+
+  Future<Uint8List?> _captureWebViewLongScreenshot(InAppWebViewController controller) async {
+    final metrics = await _readWebViewMetrics(controller);
+    final viewportHeight = parseDouble(metrics['viewportHeight']);
+    final contentHeight = parseDouble(metrics['contentHeight']);
+    final originalY = parseDouble(metrics['scrollY']);
+    if (viewportHeight <= 0 || contentHeight <= 0) {
+      return controller.takeScreenshot();
+    }
+
+    final maxScroll = contentHeight > viewportHeight ? contentHeight - viewportHeight : 0.0;
+    final offsets = <double>[0];
+    if (maxScroll > 0) {
+      final step = viewportHeight * 0.85;
+      var next = 0.0;
+      while (next < maxScroll) {
+        next = (next + step).clamp(0.0, maxScroll);
+        if (offsets.isNotEmpty && (offsets.last - next).abs() < 1) break;
+        offsets.add(next);
+      }
+      if ((offsets.last - maxScroll).abs() > 1) offsets.add(maxScroll);
+    }
+
+    final pieces = <_BrowserScreenshotPiece>[];
+    double? scale;
+    for (final offset in offsets) {
+      await controller.evaluateJavascript(source: 'window.scrollTo(0, ${offset.round()});');
+      await Future.delayed(const Duration(milliseconds: 320));
+      final bytes = await controller.takeScreenshot();
+      if (bytes == null || bytes.isEmpty) continue;
+      final image = await _decodeImage(bytes);
+      scale ??= image.height / viewportHeight;
+      pieces.add(_BrowserScreenshotPiece(image: image, offset: offset));
+    }
+
+    await controller.evaluateJavascript(source: 'window.scrollTo(0, ${originalY.round()});');
+
+    if (pieces.isEmpty) return controller.takeScreenshot();
+    return _stitchBrowserScreenshots(
+      pieces: pieces,
+      contentHeight: contentHeight,
+      scale: scale ?? 1,
+    );
+  }
+
+  Future<Map<String, dynamic>> _readWebViewMetrics(InAppWebViewController controller) async {
+    final raw = await controller.evaluateJavascript(source: '''
+JSON.stringify({
+  scrollY: window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0,
+  viewportHeight: window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0,
+  contentHeight: Math.max(
+    document.body ? document.body.scrollHeight : 0,
+    document.documentElement ? document.documentElement.scrollHeight : 0,
+    document.body ? document.body.offsetHeight : 0,
+    document.documentElement ? document.documentElement.offsetHeight : 0
+  )
+})
+''');
+    final data = raw is String ? jsonDecode(raw) : raw;
+    return data is Map ? Map<String, dynamic>.from(data) : const <String, dynamic>{};
+  }
+
+  Future<ui.Image> _decodeImage(Uint8List bytes) async {
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    return frame.image;
+  }
+
+  Future<Uint8List?> _stitchBrowserScreenshots({
+    required List<_BrowserScreenshotPiece> pieces,
+    required double contentHeight,
+    required double scale,
+  }) async {
+    final width = pieces.first.image.width;
+    final totalHeight = (contentHeight * scale).round().clamp(1, 60000);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    for (final piece in pieces) {
+      final image = piece.image;
+      final dstY = (piece.offset * scale).round();
+      final remaining = totalHeight - dstY;
+      if (remaining <= 0) continue;
+      final srcHeight = remaining < image.height ? remaining : image.height;
+      final src = Rect.fromLTWH(0, 0, image.width.toDouble(), srcHeight.toDouble());
+      final dst = Rect.fromLTWH(0, dstY.toDouble(), width.toDouble(), srcHeight.toDouble());
+      canvas.drawImageRect(image, src, dst, Paint());
+    }
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width, totalHeight);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData?.buffer.asUint8List();
   }
 
   Widget _bottomBtn(shadcn.ColorScheme cs, IconData icon, String label, bool enabled, VoidCallback onTap) {
@@ -2302,7 +2467,7 @@ class _BrowserPageState extends State<BrowserPage> {
     };
     String saleFilter = '';
     String categoryFilter = '';
-    String tagFilter = '';
+    final tagFilters = <String>{};
     _BrowserTorrentSortKey sortKey = _BrowserTorrentSortKey.seeders;
     bool sortAscending = false;
     bool panelExpanded = !context.isMobile;
@@ -2318,7 +2483,7 @@ class _BrowserPageState extends State<BrowserPage> {
       bool matchesCurrentFilters(_BrowserExtractedTorrent item) {
         final saleOk = saleFilter.isEmpty || item.sale.trim() == saleFilter;
         final categoryOk = categoryFilter.isEmpty || item.category.trim() == categoryFilter;
-        final tagOk = tagFilter.isEmpty || item.tags.any((tag) => tag.trim() == tagFilter);
+        final tagOk = tagFilters.isEmpty || item.tags.any((tag) => tagFilters.contains(tag.trim()));
         return saleOk && categoryOk && tagOk;
       }
 
@@ -2351,7 +2516,7 @@ class _BrowserPageState extends State<BrowserPage> {
       ];
       final visibleKeys = matchingPushableKeys();
       final allVisibleSelected = visibleKeys.isNotEmpty && visibleKeys.every((key) => selected.contains(key));
-      final hasActiveFilter = saleFilter.isNotEmpty || categoryFilter.isNotEmpty || tagFilter.isNotEmpty;
+      final hasActiveFilter = saleFilter.isNotEmpty || categoryFilter.isNotEmpty || tagFilters.isNotEmpty;
       selected.removeWhere((index) => !allKeys.contains(index));
 
       void syncSelectionToCurrentFilter() {
@@ -2395,7 +2560,7 @@ class _BrowserPageState extends State<BrowserPage> {
       void clearFilters() {
         saleFilter = '';
         categoryFilter = '';
-        tagFilter = '';
+        tagFilters.clear();
         selected
           ..clear()
           ..addAll(allKeys);
@@ -2472,7 +2637,7 @@ class _BrowserPageState extends State<BrowserPage> {
         '排序: ${sortLabel()}${sortAscending ? '↑' : '↓'}',
         if (saleFilter.isNotEmpty) '优惠: $saleFilter',
         if (categoryFilter.isNotEmpty) '分类: $categoryFilter',
-        if (tagFilter.isNotEmpty) '标签: $tagFilter',
+        if (tagFilters.isNotEmpty) '标签: ${tagFilters.join(', ')}',
       ].join('  ·  ');
 
       Future<void> pushPicked(List<_BrowserExtractedTorrent> picked) async {
@@ -3022,15 +3187,19 @@ class _BrowserPageState extends State<BrowserPage> {
                                 children: [
                                   filterChip(
                                     label: '全部',
-                                    selectedValue: tagFilter.isEmpty,
-                                    onTap: () => setDialogState(() => updateFilters(() => tagFilter = '')),
+                                    selectedValue: tagFilters.isEmpty,
+                                    onTap: () => setDialogState(() => updateFilters(tagFilters.clear)),
                                   ),
                                   for (final tag in tagOptions)
                                     filterChip(
                                       label: tag,
-                                      selectedValue: tagFilter == tag,
+                                      selectedValue: tagFilters.contains(tag),
                                       onTap: () => setDialogState(
-                                        () => updateFilters(() => tagFilter = tagFilter == tag ? '' : tag),
+                                        () => updateFilters(() {
+                                          if (!tagFilters.remove(tag)) {
+                                            tagFilters.add(tag);
+                                          }
+                                        }),
                                       ),
                                       accent: const Color(0xFF8B5CF6),
                                     ),
@@ -3097,6 +3266,11 @@ class _BrowserPageState extends State<BrowserPage> {
             Toast.warning('所选种子缺少可用链接');
             return;
           }
+          final ids = <String>[];
+          for (final torrent in torrents) {
+            final id = _torrentIdForExtractedTorrent(torrent);
+            if (id.isNotEmpty && !ids.contains(id)) ids.add(id);
+          }
           final cookie = await _cookieHeaderFor(urls.first);
           if (!mounted || _closing) return;
           final singleTorrent = torrents.length == 1 ? _toSearchTorrentInfo(torrents.first, cookie: cookie) : null;
@@ -3110,6 +3284,7 @@ class _BrowserPageState extends State<BrowserPage> {
                 downloader: downloader,
                 torrent: singleTorrent,
                 initialUrl: urls.join('\n'),
+                initialIds: ids,
                 initialCookie: cookie,
                 initialSiteId: widget.siteId,
               ),
@@ -3125,6 +3300,7 @@ class _BrowserPageState extends State<BrowserPage> {
                     downloader: downloader,
                     torrent: singleTorrent,
                     initialUrl: urls.join('\n'),
+                    initialIds: ids,
                     initialCookie: cookie,
                     initialSiteId: widget.siteId,
                     embedded: true,
@@ -3142,9 +3318,12 @@ class _BrowserPageState extends State<BrowserPage> {
     final primaryUrl = (overrideUrl?.trim().isNotEmpty == true ? overrideUrl!.trim() : item.primaryUrl.trim());
     final detailUrl = item.detailUrl.trim();
     final siteId = widget.siteId?.trim() ?? '';
+    final torrentId = item.id.trim().isNotEmpty
+        ? item.id.trim()
+        : _extractTorrentIdFromBrowserUrl(primaryUrl.isNotEmpty ? primaryUrl : detailUrl);
     return SearchTorrentInfo(
       siteId: siteId,
-      tid: _extractTorrentIdFromBrowserUrl(primaryUrl.isNotEmpty ? primaryUrl : detailUrl),
+      tid: torrentId,
       poster: item.poster,
       category: item.formattedCategory.isNotEmpty ? item.formattedCategory : item.category,
       magnetUrl: primaryUrl,
@@ -3162,6 +3341,16 @@ class _BrowserPageState extends State<BrowserPage> {
       leechers: _BrowserExtractedTorrent._parseCompactInt(item.leechers),
       completers: _BrowserExtractedTorrent._parseCompactInt(item.completers),
     );
+  }
+
+  String _torrentIdForExtractedTorrent(_BrowserExtractedTorrent item) {
+    final direct = item.id.trim();
+    if (direct.isNotEmpty) return direct;
+    for (final value in [item.magnetUrl, item.detailUrl, item.primaryUrl]) {
+      final id = _extractTorrentIdFromBrowserUrl(value);
+      if (id.isNotEmpty) return id;
+    }
+    return '';
   }
 
   Future<SearchTorrentInfo?> _extractInterceptedTorrentInfo(String torrentUrl, {String? cookie}) async {
@@ -3328,6 +3517,9 @@ class _BrowserPageState extends State<BrowserPage> {
           if (!mounted || _closing) return;
           final torrent = await _extractInterceptedTorrentInfo(torrentUrl, cookie: cookie);
           if (!mounted || _closing) return;
+          final torrentId = torrent?.tid.trim().isNotEmpty == true
+              ? torrent!.tid.trim()
+              : _extractTorrentIdFromBrowserUrl(torrentUrl);
 
           await showAppSheet<void>(
             context: context,
@@ -3338,6 +3530,7 @@ class _BrowserPageState extends State<BrowserPage> {
               downloader: downloader,
               torrent: torrent,
               initialUrl: torrentUrl,
+              initialIds: torrentId.isEmpty ? const <String>[] : <String>[torrentId],
               initialCookie: cookie,
               initialSiteId: widget.siteId,
             ),
@@ -3804,7 +3997,15 @@ class _BrowserUserProfileDisplay {
 
 enum _BrowserTorrentSortKey { name, seeders, size }
 
+class _BrowserScreenshotPiece {
+  final ui.Image image;
+  final double offset;
+
+  const _BrowserScreenshotPiece({required this.image, required this.offset});
+}
+
 class _BrowserExtractedTorrent {
+  final String id;
   final String title;
   final String subtitle;
   final String detailUrl;
@@ -3823,6 +4024,7 @@ class _BrowserExtractedTorrent {
   final List<String> tags;
 
   const _BrowserExtractedTorrent({
+    required this.id,
     required this.title,
     required this.subtitle,
     required this.detailUrl,
@@ -3867,6 +4069,7 @@ class _BrowserExtractedTorrent {
     String text(dynamic value) => value?.toString().trim() ?? '';
 
     return _BrowserExtractedTorrent(
+      id: text(map['id'] ?? map['tid'] ?? map['torrentId'] ?? map['torrent_id']),
       title: text(map['title']),
       subtitle: text(map['subtitle']),
       detailUrl: text(map['detailUrl']),

@@ -26,6 +26,7 @@ class PushTorrentSheet extends ConsumerStatefulWidget {
   final SearchTorrentInfo? torrent;
   final Downloader downloader;
   final String? initialUrl;
+  final List<String>? initialIds;
   final String? initialCookie;
   final String? initialSiteId;
   final VoidCallback? onSuccess;
@@ -36,6 +37,7 @@ class PushTorrentSheet extends ConsumerStatefulWidget {
     this.torrent,
     required this.downloader,
     this.initialUrl,
+    this.initialIds,
     this.initialCookie,
     this.initialSiteId,
     this.onSuccess,
@@ -1293,6 +1295,22 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     return '';
   }
 
+  List<String> _torrentIdsForManualUrls(List<String> urls) {
+    final ids = <String>[];
+    void addId(String id) {
+      final value = id.trim();
+      if (value.isNotEmpty && !ids.contains(value)) ids.add(value);
+    }
+
+    for (final id in widget.initialIds ?? const <String>[]) {
+      addId(id);
+    }
+    for (final url in urls) {
+      addId(_extractTorrentIdFromInput(url));
+    }
+    return ids;
+  }
+
   Future<void> _submit() async {
     final manualUrls = _hasTorrent
         ? const <String>[]
@@ -1314,7 +1332,21 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       if (_hasTorrent) {
         final t = widget.torrent!;
         params['urls'] = t.magnetUrl.trim().isNotEmpty ? t.magnetUrl : t.detailUrl;
-        params['tid'] = t.tid;
+        final torrentIds = <String>[];
+        void addId(String id) {
+          final value = id.trim();
+          if (value.isNotEmpty && !torrentIds.contains(value)) torrentIds.add(value);
+        }
+        addId(t.tid);
+        for (final id in widget.initialIds ?? const <String>[]) {
+          addId(id);
+        }
+        if (torrentIds.isNotEmpty) {
+          params['tid'] = torrentIds.first;
+          params['ids'] = torrentIds.length == 1 ? torrentIds.first : torrentIds;
+        } else {
+          params['tid'] = '';
+        }
         if (_genTorrentUrl) {
           final siteId = _siteIdCtrl.text.trim();
           if (siteId.isNotEmpty) {
@@ -1327,6 +1359,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         }
       } else {
         params['urls'] = manualUrls.length == 1 ? manualUrls.first : manualUrls;
+        final torrentIds = _torrentIdsForManualUrls(manualUrls);
+        if (torrentIds.isNotEmpty) {
+          params['ids'] = torrentIds.length == 1 ? torrentIds.first : torrentIds;
+        }
         final siteId = _siteIdCtrl.text.trim();
         if (_genTorrentUrl && siteId.isNotEmpty) {
           params['site_id'] = siteId;
@@ -1404,14 +1440,11 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         }
 
         final monkeyParams = Map<String, dynamic>.from(params);
-        final torrentIds = manualUrls
-            .map(_extractTorrentIdFromInput)
-            .where((id) => id.isNotEmpty)
-            .toList();
+        final torrentIds = _torrentIdsForManualUrls(manualUrls);
         if (torrentIds.isEmpty) {
           throw Exception('批量推送未解析到种子 ID，请输入 tid/id 或详情链接');
         }
-        monkeyParams['urls'] = torrentIds.length == 1
+        monkeyParams['ids'] = torrentIds.length == 1
             ? torrentIds.first
             : torrentIds;
         monkeyParams['tags'] = jsonEncode(_selectedTags.toList());
