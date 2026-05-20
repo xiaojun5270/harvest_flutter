@@ -109,6 +109,28 @@ class OptionNotifier extends StateNotifier<OptionState> {
     }
   }
 
+  Future<bool> importLegacyHarvestData({
+    required String baseUrl,
+    required String legacyToken,
+  }) async {
+    try {
+      final service = ref.read(optionServiceProvider);
+      await service.importLegacyHarvestData(
+        baseUrl: baseUrl,
+        legacyToken: legacyToken,
+      );
+      if (!mounted) return false;
+
+      final options = await service.fetchOptions();
+      if (!mounted) return false;
+
+      state = state.copyWith(options: options);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<bool> speedTest() async {
     try {
       await ref.read(optionServiceProvider).speedTest();

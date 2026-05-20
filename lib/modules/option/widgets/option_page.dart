@@ -463,6 +463,7 @@ class OptionPage extends ConsumerWidget {
                             if (!kIsWeb) _buildAppUpgradeCard(context),
                             _buildUpdateCard(context),
                             const _CookieBackupImportCard(),
+                            const _HarvestDataImportCard(),
                             const _AppAutoRefreshIntervalCard(),
                             const _MediaInfoSettingsCard(),
                             _buildSpeedTest(context, ref),
@@ -957,6 +958,123 @@ class _CookieBackupImportCardState extends ConsumerState<_CookieBackupImportCard
       subtitle: '直接从 CookieCloud 同步站点',
       trailing: Icon(shadcn.LucideIcons.refreshCw, size: 17, color: color),
     );
+  }
+}
+
+class _HarvestDataImportCard extends ConsumerStatefulWidget {
+  const _HarvestDataImportCard();
+
+  @override
+  ConsumerState<_HarvestDataImportCard> createState() => _HarvestDataImportCardState();
+}
+
+class _HarvestDataImportCardState extends ConsumerState<_HarvestDataImportCard> {
+  final _baseUrlCtrl = TextEditingController();
+  final _tokenCtrl = TextEditingController();
+  bool _importing = false;
+
+  @override
+  void dispose() {
+    _baseUrlCtrl.dispose();
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = _optionColors(context);
+    final typo = shadcn.Theme.of(context).typography;
+
+    return ExpandableCard(
+      title: '数据迁移',
+      icon: shadcn.LucideIcons.databaseBackup,
+      builder: (_) => OptionLoadingOverlay(
+        loading: _importing,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '从另一台收割机服务器导入配置与数据。',
+              style: typo.small.copyWith(color: cs.mutedForeground, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            ShadTextField(
+              controller: _baseUrlCtrl,
+              placeholder: const Text('收割机服务器地址，例如 https://example.com'),
+              keyboardType: TextInputType.url,
+              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            ),
+            const SizedBox(height: 10),
+            ShadTextField(
+              controller: _tokenCtrl,
+              placeholder: const Text('安全 Token'),
+              obscureText: true,
+              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            ),
+            const SizedBox(height: 10),
+            _ActionButtonFrame(
+              minWidth: 190,
+              maxWidth: 260,
+              child: shadcn.Button.destructive(
+                onPressed: _importing ? null : _submit,
+                alignment: Alignment.center,
+                child: const Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(shadcn.LucideIcons.databaseBackup, size: 15),
+                      SizedBox(width: 6),
+                      Text('开始导入'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final baseUrl = _baseUrlCtrl.text.trim();
+    final token = _tokenCtrl.text.trim();
+    if (baseUrl.isEmpty) {
+      Toast.error('请输入收割机服务器地址');
+      return;
+    }
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      Toast.error('服务器地址必须以 http:// 或 https:// 开头');
+      return;
+    }
+    final uri = Uri.tryParse(baseUrl);
+    if (uri == null || uri.host.isEmpty) {
+      Toast.error('请输入有效的收割机服务器地址');
+      return;
+    }
+    if (token.isEmpty) {
+      Toast.error('请输入安全 Token');
+      return;
+    }
+
+    setState(() => _importing = true);
+    try {
+      final success = await ref
+          .read(optionProvider.notifier)
+          .importLegacyHarvestData(baseUrl: baseUrl, legacyToken: token);
+      if (success) {
+        Toast.success('收割机数据导入任务已提交');
+      } else {
+        Toast.error('收割机数据导入失败');
+      }
+    } catch (e, st) {
+      AppLogger.error('收割机数据导入失败', e, st);
+      Toast.error('收割机数据导入失败');
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
   }
 }
 

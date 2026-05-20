@@ -106,6 +106,18 @@ class OptionService {
     AppLogger.info('CookieCloud 同步任务已提交');
   }
 
+  /// 从旧收割机服务器导入数据
+  Future<void> importLegacyHarvestData({
+    required String baseUrl,
+    required String legacyToken,
+  }) async {
+    await Http.post<dynamic>(
+      API.setupImport,
+      data: {'base_url': baseUrl, 'legacy_token': legacyToken},
+    );
+    AppLogger.info('[Option] 收割机数据导入已提交 baseUrl=$baseUrl');
+  }
+
   /// 生成测速任务
   Future<void> speedTest() async {
     await fetchBasic(API.SPEED_TEST);
