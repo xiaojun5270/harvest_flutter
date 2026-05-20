@@ -23,12 +23,12 @@ final unaddedSitesProvider = FutureProvider<List<String>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UnaddedSitesRef = FutureProviderRef<List<String>>;
-String _$websiteListHash() => r'1e022b3dca4ae1db1fb487102f11c2a562f7af52';
+String _$websiteListHash() => r'a0296e87522e94aef2b10e5e275448652f121e2b';
 
 /// See also [WebsiteList].
 @ProviderFor(WebsiteList)
 final websiteListProvider =
-    AutoDisposeAsyncNotifierProvider<WebsiteList, List<WebSite>>.internal(
+    AsyncNotifierProvider<WebsiteList, List<WebSite>>.internal(
       WebsiteList.new,
       name: r'websiteListProvider',
       debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -38,7 +38,7 @@ final websiteListProvider =
       allTransitiveDependencies: null,
     );
 
-typedef _$WebsiteList = AutoDisposeAsyncNotifier<List<WebSite>>;
+typedef _$WebsiteList = AsyncNotifier<List<WebSite>>;
 String _$siteInfoListHash() => r'46ffdad23a255646f3f1a5ed162ca8b74cedf3c5';
 
 /// See also [SiteInfoList].

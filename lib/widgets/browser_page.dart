@@ -225,6 +225,9 @@ class _BrowserPageState extends State<BrowserPage> {
   String? _error;
   bool _extractingTorrentList = false;
   bool _extractingUserProfile = false;
+  bool _websiteConfigsLoadingStarted = false;
+  List<WebSite> _websiteConfigs = const <WebSite>[];
+  List<SiteInfo> _siteInfos = const <SiteInfo>[];
 
   @override
   void initState() {
@@ -245,6 +248,44 @@ class _BrowserPageState extends State<BrowserPage> {
       unawaited(_stopLoadingSafely(controller));
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_websiteConfigsLoadingStarted) return;
+    _websiteConfigsLoadingStarted = true;
+    _loadWebsiteConfigs();
+  }
+
+  Future<void> _loadWebsiteConfigs() async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final currentConfigs = container.read(websiteListProvider).valueOrNull;
+    final currentSites = container.read(siteInfoListProvider).valueOrNull;
+    if (currentConfigs != null && currentSites != null) {
+      _websiteConfigs = currentConfigs;
+      _siteInfos = currentSites;
+      return;
+    }
+
+    try {
+      final configsFuture = currentConfigs != null
+          ? Future<List<WebSite>>.value(currentConfigs)
+          : container.read(websiteListProvider.future);
+      final sitesFuture = currentSites != null
+          ? Future<List<SiteInfo>>.value(currentSites)
+          : container.read(siteInfoListProvider.future);
+      final configs = await configsFuture;
+      final sites = await sitesFuture;
+      if (mounted && !_closing) {
+        setState(() {
+          _websiteConfigs = configs;
+          _siteInfos = sites;
+        });
+      }
+    } catch (e, st) {
+      AppLogger.warn('读取站点数据失败: $e\n$st');
+    }
   }
 
   Future<void> _closeBrowser() async {
@@ -437,7 +478,7 @@ class _BrowserPageState extends State<BrowserPage> {
                         if (showUserProfileFab) ...[
                           FloatingActionButton.small(
                             heroTag: 'browser_user_profile_fab',
-                            onPressed: _extractingUserProfile ? null : () => _extractUserProfile(userWebsite!),
+                            onPressed: _extractingUserProfile ? null : () => _extractUserProfile(userWebsite),
                             backgroundColor: cs.primary,
                             foregroundColor: cs.primaryForeground,
                             child: _extractingUserProfile
@@ -578,6 +619,7 @@ class _BrowserPageState extends State<BrowserPage> {
     }
 
     AppLogger.info('开始提取 Cookie: site=${siteInfo.site}, url=$_currentUrl');
+    final notifier = ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider.notifier);
     final cookie = await _cookieHeaderFor(_currentUrl);
 
     if (cookie == null || cookie.isEmpty) {
@@ -590,8 +632,6 @@ class _BrowserPageState extends State<BrowserPage> {
     AppLogger.info('Cookie 内容预览: ${cookie.substring(0, cookie.length > 200 ? 200 : cookie.length)}...');
 
     try {
-      final notifier = ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider.notifier);
-
       final updated = siteInfo.copyWith(cookie: cookie);
       await notifier.updateSite(updated);
 
@@ -616,8 +656,7 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   SiteInfo? _currentSiteInfoForQuickLinks(WebSite? website) {
-    final sites =
-        ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
+    final sites = _siteInfos;
     if (sites.isEmpty) return null;
 
     final siteId = widget.siteId?.trim().toLowerCase() ?? '';
@@ -663,9 +702,8 @@ class _BrowserPageState extends State<BrowserPage> {
 
   Future<void> _showCopyMenu() async {
     if (!mounted) return;
-    final cs = shadcn.Theme.of(context).colorScheme;
 
-    await shadcn.showDropdown<void>(
+    shadcn.showDropdown<void>(
       context: context,
       alignment: Alignment.bottomCenter,
       offset: const Offset(0, -8),
@@ -1047,19 +1085,17 @@ class _BrowserPageState extends State<BrowserPage> {
     final currentUrl = _currentUrl.trim();
     if ((siteId == null || siteId.isEmpty) && currentUrl.isEmpty) return null;
 
-    final container = ProviderScope.containerOf(context, listen: false);
-    final configs = container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
     final siteKey = siteId?.toLowerCase() ?? '';
     final currentHost = _uriHost(currentUrl);
 
-    for (final config in configs) {
+    for (final config in _websiteConfigs) {
       if (config.name.toLowerCase() == siteKey || config.nickname.toLowerCase() == siteKey) {
         return config;
       }
     }
 
     if (currentHost == null) return null;
-    for (final config in configs) {
+    for (final config in _websiteConfigs) {
       for (final url in config.url) {
         if (_uriHost(url) == currentHost) return config;
       }

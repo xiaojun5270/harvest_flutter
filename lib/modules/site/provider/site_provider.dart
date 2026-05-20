@@ -18,7 +18,7 @@ final siteInfoCacheInfoProvider = StateProvider<DataCacheInfo>((_) => const Data
 
 final siteRefreshingIdsProvider = StateProvider<Set<int>>((_) => const <int>{});
 
-@riverpod
+@Riverpod(keepAlive: true)
 class WebsiteList extends _$WebsiteList {
   @override
   Future<List<WebSite>> build() {

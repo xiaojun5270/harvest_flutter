@@ -2084,7 +2084,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
   }
 
   SiteInfo? _siteFor(String siteId) {
-    final sites = ref.watch(siteInfoListProvider).valueOrNull ?? [];
+    final sites = ref.read(siteInfoListProvider).valueOrNull ?? [];
     for (final site in sites) {
       if (site.id.toString() == siteId || site.site == siteId) return site;
     }
