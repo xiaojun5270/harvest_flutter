@@ -134,6 +134,9 @@ class API {
 
   static const String SYSTEM_CONFIG = "/api/auth/config";
   static const String SYSTEM_LOGGING = "/api/logging";
+  static const String setupStatus = "/api/setup/status";
+  static const String setupInit = "/api/setup/init";
+  static const String setupImport = "/api/setup/import";
 
   /// 订阅相关
   static const String SUB_RSS = "/api/option/rss";
