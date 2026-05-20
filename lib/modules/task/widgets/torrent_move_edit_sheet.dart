@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:harvest/widgets/shad_text_field.dart';
 
@@ -10,6 +11,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../../download/model/downloader.dart';
 import '../../download/provider/downloader_provider.dart';
+import '../../download/service/downloader_service.dart';
 import '../model/crontab.dart';
 import '../model/schedule.dart';
 import '../provider/schedule_provider.dart';
@@ -106,41 +108,113 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
     _distDownloader = downloaders.firstWhereOrNull(
       (d) => d.id == _kwargs['dist_downloader_id'],
     );
+    if (_folderMapCtrl.text.trim().isEmpty &&
+        (_sourceDownloader != null || _distDownloader != null)) {
+      unawaited(_fillInitialFolderMap());
+    }
   }
 
-  void _onSourceChanged(List<Downloader> all, Downloader? item) {
+  Future<void> _fillInitialFolderMap() async {
+    final sourceId = _sourceDownloader?.id;
+    final distId = _distDownloader?.id;
+    final sourcePath = await _resolveDefaultSavePath(_sourceDownloader);
+    final distPath = await _resolveDefaultSavePath(_distDownloader);
+    if (!mounted ||
+        sourceId != _sourceDownloader?.id ||
+        distId != _distDownloader?.id ||
+        _folderMapCtrl.text.trim().isNotEmpty) {
+      return;
+    }
+    setState(() => _setFolderMapPaths(sourcePath: sourcePath, targetPath: distPath));
+  }
+
+  Future<void> _onSourceChanged(List<Downloader> all, Downloader? item) async {
+    final nextDist = item == null
+        ? null
+        : (_distDownloader == null ||
+              _distDownloader?.host != item.host ||
+              _distDownloader?.id == item.id)
+            ? all.firstWhereOrNull(
+                (d) => d.id != item.id && d.host == item.host,
+              )
+            : _distDownloader;
+
     setState(() {
       _sourceDownloader = item;
-      if (_distDownloader == null || _distDownloader?.host != item?.host) {
-        _distDownloader = all.firstWhereOrNull(
-          (d) => d.id != item?.id && d.host == item?.host,
-        );
-      }
-      final savePath = item != null ? _getSavePath(item) : '';
-      if (_folderMapCtrl.text.isEmpty) {
-        _folderMapCtrl.text = '$savePath->';
-      } else {
-        final parts = _folderMapCtrl.text.split('->');
-        parts.removeAt(0);
-        parts.insert(0, savePath);
-        _folderMapCtrl.text = parts.join('->');
-      }
+      _distDownloader = nextDist;
     });
+
+    final sourceId = item?.id;
+    final distId = nextDist?.id;
+    final sourcePath = await _resolveDefaultSavePath(item);
+    final distPath = await _resolveDefaultSavePath(nextDist);
+    if (!mounted ||
+        _sourceDownloader?.id != sourceId ||
+        _distDownloader?.id != distId) {
+      return;
+    }
+    setState(() => _setFolderMapPaths(sourcePath: sourcePath, targetPath: distPath));
   }
 
-  void _onDistChanged(Downloader? item) {
+  Future<void> _onDistChanged(Downloader? item) async {
     setState(() {
       _distDownloader = item;
-      final savePath = item != null ? _getSavePath(item) : '';
-      if (_folderMapCtrl.text.endsWith('->')) {
-        _folderMapCtrl.text = '${_folderMapCtrl.text}$savePath';
-      } else {
-        final parts = _folderMapCtrl.text.split('->');
-        parts.removeLast();
-        parts.add(savePath);
-        _folderMapCtrl.text = parts.join('->');
-      }
     });
+
+    final distId = item?.id;
+    final savePath = await _resolveDefaultSavePath(item);
+    if (!mounted || _distDownloader?.id != distId) return;
+    setState(() => _setFolderMapPaths(targetPath: savePath));
+  }
+
+  Future<String> _resolveDefaultSavePath(Downloader? downloader) async {
+    if (downloader == null) return '';
+    final embeddedPath = _getSavePath(downloader).trim();
+    if (embeddedPath.isNotEmpty) return embeddedPath;
+
+    try {
+      final prefs = await DownloaderService.fetchPrefs(downloader.id);
+      return _pathFromPrefs(prefs).trim();
+    } catch (e) {
+      AppLogger.warn('获取下载器默认路径失败: id=${downloader.id} err=$e');
+      return '';
+    }
+  }
+
+  String _pathFromPrefs(Map<String, dynamic>? prefs) {
+    if (prefs == null) return '';
+    for (final key in const [
+      'save_path',
+      'savePath',
+      'download-dir',
+      'download_dir',
+      'downloadDir',
+    ]) {
+      final value = prefs[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    for (final key in const ['preferences', 'prefs', 'data']) {
+      final value = prefs[key];
+      if (value is Map) {
+        final path = _pathFromPrefs(Map<String, dynamic>.from(value));
+        if (path.isNotEmpty) return path;
+      }
+    }
+    return '';
+  }
+
+  void _setFolderMapPaths({String? sourcePath, String? targetPath}) {
+    final lines = _folderMapCtrl.text.split('\n');
+    final firstLine = lines.isEmpty ? '' : lines.first;
+    final arrowIndex = firstLine.indexOf('->');
+    final currentSource = arrowIndex >= 0
+        ? firstLine.substring(0, arrowIndex)
+        : firstLine;
+    final currentTarget = arrowIndex >= 0
+        ? firstLine.substring(arrowIndex + 2)
+        : '';
+    lines[0] = '${sourcePath ?? currentSource}->${targetPath ?? currentTarget}';
+    _folderMapCtrl.text = lines.join('\n');
   }
 
   bool _validate() {
@@ -374,7 +448,8 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
                       options: downloaders,
                       selected: _sourceDownloader,
                       labelBuilder: (d) => d.name,
-                      onSelected: (v) => _onSourceChanged(downloaders, v),
+                      onSelected: (v) =>
+                          unawaited(_onSourceChanged(downloaders, v)),
                     ),
                   ),
                   _SheetTile(
@@ -390,7 +465,7 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
                       options: distOptions,
                       selected: _distDownloader,
                       labelBuilder: (d) => d.name,
-                      onSelected: _onDistChanged,
+                      onSelected: (v) => unawaited(_onDistChanged(v)),
                     ),
                   ),
                 ],
