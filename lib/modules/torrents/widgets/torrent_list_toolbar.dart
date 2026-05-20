@@ -105,7 +105,7 @@ class _TorrentListToolbarState extends ConsumerState<TorrentListToolbar> {
     final sites = ref.read(availableTorrentSitesProvider(widget.downloaderId));
     var currentStatus = ref.read(torrentFilterProvider);
     var currentCat = ref.read(torrentCategoryProvider);
-    var currentTag = ref.read(torrentTagProvider);
+    var currentTags = Set<String>.of(ref.read(torrentTagProvider));
     var currentSite = ref.read(torrentSiteFilterProvider);
     var currentSort = ref.read(torrentSortProvider);
     var sortAsc = ref.read(torrentSortAscProvider);
@@ -120,14 +120,14 @@ class _TorrentListToolbarState extends ConsumerState<TorrentListToolbar> {
             setSheetState(() {
               currentStatus = TorrentFilter.all;
               currentCat = '';
-              currentTag = '';
+              currentTags = <String>{};
               currentSite = '';
               currentSort = TorrentSort.queuePosition;
               sortAsc = true;
             });
             ref.read(torrentFilterProvider.notifier).state = TorrentFilter.all;
             ref.read(torrentCategoryProvider.notifier).state = '';
-            ref.read(torrentTagProvider.notifier).state = '';
+            ref.read(torrentTagProvider.notifier).state = const <String>{};
             ref.read(torrentSiteFilterProvider.notifier).state = '';
             ref.read(torrentSortProvider.notifier).state =
                 TorrentSort.queuePosition;
@@ -267,21 +267,30 @@ class _TorrentListToolbarState extends ConsumerState<TorrentListToolbar> {
                           _sheetChoiceChip(
                             sheetContext,
                             label: '全部',
-                            selected: currentTag.isEmpty,
+                            selected: currentTags.isEmpty,
                             onTap: () {
-                              setSheetState(() => currentTag = '');
-                              ref.read(torrentTagProvider.notifier).state = '';
+                              setSheetState(() => currentTags = <String>{});
+                              ref.read(torrentTagProvider.notifier).state =
+                                  const <String>{};
                             },
                           ),
                           for (final tag in tags)
                             _sheetChoiceChip(
                               sheetContext,
                               label: tag,
-                              selected: currentTag == tag,
+                              selected: currentTags.contains(tag),
                               onTap: () {
-                                setSheetState(() => currentTag = tag);
+                                setSheetState(() {
+                                  final next = Set<String>.of(currentTags);
+                                  if (next.contains(tag)) {
+                                    next.remove(tag);
+                                  } else {
+                                    next.add(tag);
+                                  }
+                                  currentTags = next;
+                                });
                                 ref.read(torrentTagProvider.notifier).state =
-                                    tag;
+                                    currentTags;
                               },
                             ),
                         ],

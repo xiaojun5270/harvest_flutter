@@ -385,7 +385,9 @@ final downloaderStatusProvider = Provider.autoDispose
 final torrentCategoryProvider = StateProvider.autoDispose<String>((_) => '');
 
 // ── 新增：标签筛选 ──
-final torrentTagProvider = StateProvider.autoDispose<String>((_) => '');
+final torrentTagProvider = StateProvider.autoDispose<Set<String>>(
+  (_) => const <String>{},
+);
 
 // ── 新增：站点筛选 ──
 final torrentSiteFilterProvider = StateProvider.autoDispose<String>((_) => '');
@@ -502,7 +504,7 @@ final filteredTorrentsProvider = Provider.autoDispose
       final desktopStatusFilter = ref.watch(desktopTorrentStatusFilterProvider);
       final search = ref.watch(torrentSearchProvider).toLowerCase();
       final category = ref.watch(torrentCategoryProvider);
-      final tag = ref.watch(torrentTagProvider);
+      final tags = ref.watch(torrentTagProvider);
       final site = ref.watch(torrentSiteFilterProvider);
       final errorDetail = ref.watch(torrentErrorDetailFilterProvider);
       final sort = ref.watch(torrentSortProvider);
@@ -546,8 +548,8 @@ final filteredTorrentsProvider = Provider.autoDispose
       }
 
       // ── 标签过滤 ──
-      if (tag.isNotEmpty) {
-        list = list.where((t) => t.labels.contains(tag)).toList();
+      if (tags.isNotEmpty) {
+        list = list.where((t) => t.labels.any(tags.contains)).toList();
       }
 
       // ── 站点过滤 ──

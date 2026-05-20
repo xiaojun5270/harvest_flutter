@@ -510,7 +510,7 @@ class _TorrentListPageState extends ConsumerState<TorrentListPage>
 
     ref.read(torrentSearchProvider.notifier).state = '';
     ref.read(torrentCategoryProvider.notifier).state = '';
-    ref.read(torrentTagProvider.notifier).state = '';
+    ref.read(torrentTagProvider.notifier).state = const <String>{};
     ref.read(torrentSiteFilterProvider.notifier).state = '';
     ref.read(torrentErrorDetailFilterProvider.notifier).state = '';
     ref.read(torrentFilterProvider.notifier).state = TorrentFilter.all;

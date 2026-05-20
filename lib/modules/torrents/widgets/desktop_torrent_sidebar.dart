@@ -113,7 +113,7 @@ class _DesktopTorrentSidebarState extends ConsumerState<DesktopTorrentSidebar> {
     final cs = shadcn.Theme.of(context).colorScheme;
     final desktopStatus = ref.watch(desktopTorrentStatusFilterProvider);
     final category = ref.watch(torrentCategoryProvider);
-    final tag = ref.watch(torrentTagProvider);
+    final selectedTags = ref.watch(torrentTagProvider);
     final site = ref.watch(torrentSiteFilterProvider);
     final errorDetail = ref.watch(torrentErrorDetailFilterProvider);
     final categories = ref.watch(
@@ -532,20 +532,27 @@ class _DesktopTorrentSidebarState extends ConsumerState<DesktopTorrentSidebar> {
                             icon: shadcn.LucideIcons.tags,
                             label: '全部标签',
                             count: allTorrents.length,
-                            selected: tag.isEmpty,
+                            selected: selectedTags.isEmpty,
                             onTap: () =>
                                 ref.read(torrentTagProvider.notifier).state =
-                                    '',
+                                    const <String>{},
                           ),
                           for (final item in sortedTags)
                             DesktopFilterItem(
                               icon: shadcn.LucideIcons.tag,
                               label: item,
                               count: tagCounts[item] ?? 0,
-                              selected: tag == item,
-                              onTap: () =>
-                                  ref.read(torrentTagProvider.notifier).state =
-                                      item,
+                              selected: selectedTags.contains(item),
+                              onTap: () {
+                                final next = Set<String>.of(selectedTags);
+                                if (next.contains(item)) {
+                                  next.remove(item);
+                                } else {
+                                  next.add(item);
+                                }
+                                ref.read(torrentTagProvider.notifier).state =
+                                    next;
+                              },
                               trailingActions: isQb && downloader != null
                                   ? [
                                       DesktopInlineActionButton(
@@ -739,7 +746,7 @@ class _DesktopTorrentSidebarState extends ConsumerState<DesktopTorrentSidebar> {
     ref.read(desktopTorrentStatusFilterProvider.notifier).state =
         DesktopTorrentStatusFilter.all;
     ref.read(torrentCategoryProvider.notifier).state = '';
-    ref.read(torrentTagProvider.notifier).state = '';
+    ref.read(torrentTagProvider.notifier).state = const <String>{};
     ref.read(torrentSiteFilterProvider.notifier).state = '';
     ref.read(torrentErrorDetailFilterProvider.notifier).state = '';
   }
@@ -914,8 +921,12 @@ class _DesktopTorrentSidebarState extends ConsumerState<DesktopTorrentSidebar> {
             ref.invalidate(
               download_providers.downloaderTagsProvider(downloader.id),
             );
-            if (ref.read(torrentTagProvider) == oldTag) {
-              ref.read(torrentTagProvider.notifier).state = tag;
+            final selectedTags = ref.read(torrentTagProvider);
+            if (oldTag != null && selectedTags.contains(oldTag)) {
+              final next = Set<String>.of(selectedTags)
+                ..remove(oldTag)
+                ..add(tag);
+              ref.read(torrentTagProvider.notifier).state = next;
             }
             unawaited(
               ref
@@ -976,8 +987,10 @@ class _DesktopTorrentSidebarState extends ConsumerState<DesktopTorrentSidebar> {
           ref.invalidate(
             download_providers.downloaderTagsProvider(downloader.id),
           );
-          if (ref.read(torrentTagProvider) == tag) {
-            ref.read(torrentTagProvider.notifier).state = '';
+          final selectedTags = ref.read(torrentTagProvider);
+          if (selectedTags.contains(tag)) {
+            final next = Set<String>.of(selectedTags)..remove(tag);
+            ref.read(torrentTagProvider.notifier).state = next;
           }
           unawaited(
             ref
