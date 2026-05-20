@@ -675,112 +675,19 @@ class OptionPage extends ConsumerWidget {
     return ExpandableCard(
       title: 'Telegram Webhook',
       icon: shadcn.LucideIcons.send,
-      builder: (collapse) {
-        final urlCtrl = TextEditingController();
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ShadTextField(
-              controller: urlCtrl,
-              hintText: 'WebHook地址 (https://...)',
-              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '请仅输入域名部分，端口必须是【80、443、8080、8443】之一',
-              style: shadcn.Theme.of(context).typography.xSmall.copyWith(
-                color: shadcn.Theme.of(context).colorScheme.mutedForeground,
-              ),
-            ),
-            const SizedBox(height: 10),
-            _ActionButtonFrame(
-              child: shadcn.Button.destructive(
-                onPressed: () async {
-                  final raw = urlCtrl.text.trim();
-
-                  // 基础校验
-                  if (raw.isEmpty) {
-                    Toast.error('请输入 WebHook 地址');
-                    return;
-                  }
-                  if (!raw.startsWith('https://')) {
-                    Toast.error('必须使用 https 协议');
-                    return;
-                  }
-
-                  // 补全尾部斜杠
-                  final normalized = raw.endsWith('/') ? raw : '$raw/';
-
-                  // 解析
-                  Uri? uri;
-                  try {
-                    uri = Uri.parse(normalized);
-                  } catch (_) {
-                    Toast.error('地址格式不正确');
-                    return;
-                  }
-
-                  // 协议二次确认
-                  if (uri.scheme != 'https') {
-                    Toast.error('必须使用 https 协议');
-                    return;
-                  }
-
-                  // 不允许携带认证信息
-                  if (uri.userInfo.isNotEmpty) {
-                    Toast.error('地址中不允许包含用户名或密码');
-                    return;
-                  }
-
-                  // 必须有合法域名
-                  final host = uri.host;
-                  if (host.isEmpty) {
-                    Toast.error('请输入有效的域名');
-                    return;
-                  }
-                  if (host.contains(' ') || host.contains('..')) {
-                    Toast.error('域名格式不正确');
-                    return;
-                  }
-                  // 域名必须包含 . 且不能以 . 开头或结尾
-                  if (!host.contains('.') ||
-                      host.startsWith('.') ||
-                      host.endsWith('.')) {
-                    Toast.error('请输入有效的域名，如 example.com');
-                    return;
-                  }
-
-                  // 不允许携带 query 或 fragment
-                  if (uri.query.isNotEmpty || uri.fragment.isNotEmpty) {
-                    Toast.error('地址中不允许包含查询参数或锚点');
-                    return;
-                  }
-
-                  // 端口校验
-                  const allowedPorts = [0, 80, 443, 8080, 8443];
-                  if (!allowedPorts.contains(uri.port)) {
-                    Toast.error('端口必须是 80、443、8080、8443 之一');
-                    return;
-                  }
-
-                  // 全部通过，发送请求
-                  final success = await ref
-                      .read(optionProvider.notifier)
-                      .setTelegramWebhook(normalized);
-                  if (success) {
-                    Toast.success('设置成功');
-                    collapse();
-                  } else {
-                    Toast.error('设置失败');
-                  }
-                },
-                alignment: Alignment.center,
-                child: const _ButtonText('保存'),
-              ),
-            ),
-          ],
-        );
-      },
+      builder: (collapse) => _TelegramWebhookForm(
+        onSubmit: (normalized) async {
+          final success = await ref
+              .read(optionProvider.notifier)
+              .setTelegramWebhook(normalized);
+          if (success) {
+            Toast.success('设置成功');
+            collapse();
+          } else {
+            Toast.error('设置失败');
+          }
+        },
+      ),
     );
   }
 
@@ -813,6 +720,119 @@ class OptionPage extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+class _TelegramWebhookForm extends StatefulWidget {
+  final Future<void> Function(String normalized) onSubmit;
+
+  const _TelegramWebhookForm({required this.onSubmit});
+
+  @override
+  State<_TelegramWebhookForm> createState() => _TelegramWebhookFormState();
+}
+
+class _TelegramWebhookFormState extends State<_TelegramWebhookForm> {
+  final _urlCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OptionLoadingOverlay(
+      loading: _saving,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ShadTextField(
+            controller: _urlCtrl,
+            hintText: 'WebHook地址 (https://...)',
+            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '请仅输入域名部分，端口必须是【80、443、8080、8443】之一',
+            style: shadcn.Theme.of(context).typography.xSmall.copyWith(
+              color: shadcn.Theme.of(context).colorScheme.mutedForeground,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _ActionButtonFrame(
+            child: shadcn.Button.destructive(
+              onPressed: _saving ? null : _submit,
+              alignment: Alignment.center,
+              child: const _ButtonText('保存'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final raw = _urlCtrl.text.trim();
+    if (raw.isEmpty) {
+      Toast.error('请输入 WebHook 地址');
+      return;
+    }
+    if (!raw.startsWith('https://')) {
+      Toast.error('必须使用 https 协议');
+      return;
+    }
+
+    final normalized = raw.endsWith('/') ? raw : '$raw/';
+    Uri uri;
+    try {
+      uri = Uri.parse(normalized);
+    } catch (_) {
+      Toast.error('地址格式不正确');
+      return;
+    }
+
+    if (uri.scheme != 'https') {
+      Toast.error('必须使用 https 协议');
+      return;
+    }
+    if (uri.userInfo.isNotEmpty) {
+      Toast.error('地址中不允许包含用户名或密码');
+      return;
+    }
+
+    final host = uri.host;
+    if (host.isEmpty) {
+      Toast.error('请输入有效的域名');
+      return;
+    }
+    if (host.contains(' ') || host.contains('..')) {
+      Toast.error('域名格式不正确');
+      return;
+    }
+    if (!host.contains('.') || host.startsWith('.') || host.endsWith('.')) {
+      Toast.error('请输入有效的域名，如 example.com');
+      return;
+    }
+    if (uri.query.isNotEmpty || uri.fragment.isNotEmpty) {
+      Toast.error('地址中不允许包含查询参数或锚点');
+      return;
+    }
+
+    const allowedPorts = [0, 80, 443, 8080, 8443];
+    if (!allowedPorts.contains(uri.port)) {
+      Toast.error('端口必须是 80、443、8080、8443 之一');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await widget.onSubmit(normalized);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }
 
@@ -988,15 +1008,18 @@ class _CookieBackupImportCardState
     return ExpandableCard(
       title: '站点导入',
       icon: shadcn.LucideIcons.fileUp,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildSourceTile(context, CookieBackupSource.ptpp),
-          const SizedBox(height: 8),
-          _buildSourceTile(context, CookieBackupSource.ptd),
-          const SizedBox(height: 8),
-          _buildCookieCloudTile(context),
-        ],
+      builder: (_) => OptionLoadingOverlay(
+        loading: _busy,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildSourceTile(context, CookieBackupSource.ptpp),
+            const SizedBox(height: 8),
+            _buildSourceTile(context, CookieBackupSource.ptd),
+            const SizedBox(height: 8),
+            _buildCookieCloudTile(context),
+          ],
+        ),
       ),
     );
   }
@@ -1017,13 +1040,7 @@ class _CookieBackupImportCardState
       leading: Icon(shadcn.LucideIcons.cookie, size: 18, color: color),
       title: '${source.label} 导入',
       subtitle: '从备份文件导入站点',
-      trailing: isUploading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: shadcn.CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(shadcn.LucideIcons.fileUp, size: 17, color: color),
+      trailing: Icon(shadcn.LucideIcons.fileUp, size: 17, color: color),
     );
   }
 
@@ -1042,13 +1059,7 @@ class _CookieBackupImportCardState
       leading: Icon(shadcn.LucideIcons.cloud, size: 18, color: color),
       title: 'CookieCloud 同步',
       subtitle: '直接从 CookieCloud 同步站点',
-      trailing: _syncingCookieCloud
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: shadcn.CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Icon(shadcn.LucideIcons.refreshCw, size: 17, color: color),
+      trailing: Icon(shadcn.LucideIcons.refreshCw, size: 17, color: color),
     );
   }
 }
@@ -1131,6 +1142,7 @@ class _AppAutoRefreshIntervalCardState
 
   late final TextEditingController _minutesCtrl;
   final FocusNode _minutesFocus = FocusNode();
+  bool _updating = false;
 
   @override
   void initState() {
@@ -1148,9 +1160,15 @@ class _AppAutoRefreshIntervalCardState
   }
 
   Future<void> _setMinutes(int value) async {
+    if (_updating) return;
     final next = normalizeAppAutoRefreshMinutes(value);
     _minutesCtrl.text = '$next';
-    await ref.read(appAutoRefreshIntervalProvider.notifier).update(next);
+    setState(() => _updating = true);
+    try {
+      await ref.read(appAutoRefreshIntervalProvider.notifier).update(next);
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
   }
 
   Future<void> _commitInput() async {
@@ -1177,110 +1195,112 @@ class _AppAutoRefreshIntervalCardState
     return ExpandableCard(
       title: '自动刷新频率',
       icon: shadcn.LucideIcons.timerReset,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'APP 在前台每隔设定时间自动刷新一次数据；从后台回到前台时也会按同一间隔节流刷新。',
-            style: typo.small.copyWith(color: cs.mutedForeground, height: 1.35),
-          ),
-          const SizedBox(height: 12),
-          AppSurfaceContainer(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            borderRadius: _optionRadius(context),
-            color: appSurfaceColor(context, cs.card),
-            borderColor: cs.border.withValues(alpha: 0.7),
-            child: Row(
-              children: [
-                Icon(
-                  shadcn.LucideIcons.clock,
-                  size: 18,
-                  color: cs.foreground.withValues(alpha: 0.62),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '刷新间隔',
-                        style: typo.small.copyWith(
-                          color: cs.foreground,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        minutes == kDefaultAppAutoRefreshMinutes
-                            ? '当前 $minutes 分钟，默认频率'
-                            : '当前 $minutes 分钟',
-                        style: typo.xSmall.copyWith(color: cs.mutedForeground),
-                      ),
-                    ],
+      builder: (_) => OptionLoadingOverlay(
+        loading: _updating,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'APP 在前台每隔设定时间自动刷新一次数据；从后台回到前台时也会按同一间隔节流刷新。',
+              style: typo.small.copyWith(color: cs.mutedForeground, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            AppSurfaceContainer(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              borderRadius: _optionRadius(context),
+              color: appSurfaceColor(context, cs.card),
+              borderColor: cs.border.withValues(alpha: 0.7),
+              child: Row(
+                children: [
+                  Icon(
+                    shadcn.LucideIcons.clock,
+                    size: 18,
+                    color: cs.foreground.withValues(alpha: 0.62),
                   ),
-                ),
-                shadcn.IconButton.outline(
-                  onPressed: minutes <= kMinAppAutoRefreshMinutes
-                      ? null
-                      : () => _setMinutes(minutes - 1),
-                  icon: const Icon(shadcn.LucideIcons.minus, size: 16),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 78,
-                  child: ShadTextField(
-                    controller: _minutesCtrl,
-                    focusNode: _minutesFocus,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onSubmitted: (_) => _commitInput(),
-                    features: [
-                      shadcn.InputFeature.trailing(
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          '分',
-                          style: typo.xSmall.copyWith(
-                            color: cs.mutedForeground,
+                          '刷新间隔',
+                          style: typo.small.copyWith(
+                            color: cs.foreground,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                    ],
+                        Text(
+                          minutes == kDefaultAppAutoRefreshMinutes
+                              ? '当前 $minutes 分钟，默认频率'
+                              : '当前 $minutes 分钟',
+                          style: typo.xSmall.copyWith(color: cs.mutedForeground),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                shadcn.IconButton.outline(
-                  onPressed: minutes >= kMaxAppAutoRefreshMinutes
+                  shadcn.IconButton.outline(
+                    onPressed: minutes <= kMinAppAutoRefreshMinutes || _updating
+                        ? null
+                        : () => _setMinutes(minutes - 1),
+                    icon: const Icon(shadcn.LucideIcons.minus, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 78,
+                    child: ShadTextField(
+                      controller: _minutesCtrl,
+                      focusNode: _minutesFocus,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onSubmitted: (_) => _commitInput(),
+                      features: [
+                        shadcn.InputFeature.trailing(
+                          Text(
+                            '分',
+                            style: typo.xSmall.copyWith(
+                              color: cs.mutedForeground,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  shadcn.IconButton.outline(
+                    onPressed: minutes >= kMaxAppAutoRefreshMinutes || _updating
+                        ? null
+                        : () => _setMinutes(minutes + 1),
+                    icon: const Icon(shadcn.LucideIcons.plus, size: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final preset in _presets)
+                  shadcn.Button.outline(
+                    onPressed: minutes == preset || _updating
+                        ? null
+                        : () => _setMinutes(preset),
+                    alignment: Alignment.center,
+                    child: _ButtonText('$preset 分钟'),
+                  ),
+                shadcn.Button.outline(
+                  onPressed: minutes == kDefaultAppAutoRefreshMinutes || _updating
                       ? null
-                      : () => _setMinutes(minutes + 1),
-                  icon: const Icon(shadcn.LucideIcons.plus, size: 16),
+                      : () => _setMinutes(kDefaultAppAutoRefreshMinutes),
+                  alignment: Alignment.center,
+                  child: const _ButtonText('恢复默认'),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final preset in _presets)
-                shadcn.Button.outline(
-                  onPressed: minutes == preset
-                      ? null
-                      : () => _setMinutes(preset),
-                  alignment: Alignment.center,
-                  child: _ButtonText('$preset 分钟'),
-                ),
-              shadcn.Button.outline(
-                onPressed: minutes == kDefaultAppAutoRefreshMinutes
-                    ? null
-                    : () => _setMinutes(kDefaultAppAutoRefreshMinutes),
-                alignment: Alignment.center,
-                child: const _ButtonText('恢复默认'),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1316,88 +1336,83 @@ class _BulkUpgradeCardState extends ConsumerState<_BulkUpgradeCard> {
     return ExpandableCard(
       title: '批量替换',
       icon: shadcn.LucideIcons.replace,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '选择要批量更新的字段，并输入新的配置值。值会优先按 JSON 解析，解析失败时按普通字符串提交。',
-            style: shadcn.Theme.of(context).typography.small.copyWith(
-              color: cs.mutedForeground,
-              height: 1.35,
+      builder: (_) => OptionLoadingOverlay(
+        loading: _submitting,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '选择要批量更新的字段，并输入新的配置值。值会优先按 JSON 解析，解析失败时按普通字符串提交。',
+              style: shadcn.Theme.of(context).typography.small.copyWith(
+                color: cs.mutedForeground,
+                height: 1.35,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          shadcn.OverlayManagerLayer(
-            popoverHandler: const shadcn.PopoverOverlayHandler(),
-            tooltipHandler: const shadcn.FixedTooltipOverlayHandler(),
-            menuHandler: const shadcn.PopoverOverlayHandler(),
-            child: SizedBox(
-              width: double.infinity,
-              child: shadcn.Select<String>(
-                value: _selectedKey,
-                placeholder: const Text('选择字段'),
-                itemBuilder: (_, value) => Text(_fieldOptions[value] ?? value),
-                popup: shadcn.SelectPopup<String>(
-                  items: shadcn.SelectItemList(
+            const SizedBox(height: 12),
+            shadcn.OverlayManagerLayer(
+              popoverHandler: const shadcn.PopoverOverlayHandler(),
+              tooltipHandler: const shadcn.FixedTooltipOverlayHandler(),
+              menuHandler: const shadcn.PopoverOverlayHandler(),
+              child: SizedBox(
+                width: double.infinity,
+                child: shadcn.Select<String>(
+                  value: _selectedKey,
+                  placeholder: const Text('选择字段'),
+                  itemBuilder: (_, value) =>
+                      Text(_fieldOptions[value] ?? value),
+                  popup: shadcn.SelectPopup<String>(
+                    items: shadcn.SelectItemList(
+                      children: [
+                        for (final entry in _fieldOptions.entries)
+                          shadcn.SelectItemButton<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                    ),
+                  ).call,
+                  onChanged: _submitting
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() => _selectedKey = value);
+                        },
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ShadTextField(
+              controller: _valueCtrl,
+              enabled: !_submitting,
+              hintText: _selectedKey == 'user_agent'
+                  ? 'Mozilla/5.0 ...'
+                  : 'http://127.0.0.1:7890 或 {"http":"..."}',
+              maxLines: _selectedKey == 'user_agent' ? 3 : 2,
+              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            ),
+            const SizedBox(height: 10),
+            _ActionButtonFrame(
+              minWidth: 210,
+              maxWidth: 260,
+              child: shadcn.Button.destructive(
+                onPressed: _submitting ? null : _submit,
+                alignment: Alignment.center,
+                child: const Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (final entry in _fieldOptions.entries)
-                        shadcn.SelectItemButton<String>(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
+                      Icon(shadcn.LucideIcons.replace, size: 15),
+                      SizedBox(width: 6),
+                      Text('提交批量替换'),
                     ],
                   ),
-                ).call,
-                onChanged: _submitting
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() => _selectedKey = value);
-                      },
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          ShadTextField(
-            controller: _valueCtrl,
-            enabled: !_submitting,
-            hintText: _selectedKey == 'user_agent'
-                ? 'Mozilla/5.0 ...'
-                : 'http://127.0.0.1:7890 或 {"http":"..."}',
-            maxLines: _selectedKey == 'user_agent' ? 3 : 2,
-            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-          ),
-          const SizedBox(height: 10),
-          _ActionButtonFrame(
-            minWidth: 210,
-            maxWidth: 260,
-            child: shadcn.Button.destructive(
-              onPressed: _submitting ? null : _submit,
-              alignment: Alignment.center,
-              child: Center(
-                child: _submitting
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: shadcn.CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.primaryForeground,
-                        ),
-                      )
-                    : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(shadcn.LucideIcons.replace, size: 15),
-                          SizedBox(width: 6),
-                          Text('提交批量替换'),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1452,54 +1467,48 @@ class _SpeedTestActionState extends State<_SpeedTestAction> {
   Widget build(BuildContext context) {
     final cs = _optionColors(context);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '提交后端网络测速任务，任务完成后请留意通知。',
-          style: shadcn.Theme.of(context).typography.small.copyWith(
-            color: cs.foreground.withValues(alpha: 0.52),
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 10),
-        _ActionButtonFrame(
-          child: shadcn.Button.primary(
-            onPressed: _running
-                ? null
-                : () async {
-                    setState(() => _running = true);
-                    try {
-                      await widget.onStart();
-                    } finally {
-                      if (mounted) setState(() => _running = false);
-                    }
-                  },
-            alignment: Alignment.center,
-            child: Center(
-              child: _running
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: shadcn.CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _optionColors(context).primaryForeground,
-                      ),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(shadcn.LucideIcons.gauge, size: 15),
-                        SizedBox(width: 6),
-                        Text('开始测速'),
-                      ],
-                    ),
+    return OptionLoadingOverlay(
+      loading: _running,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '提交后端网络测速任务，任务完成后请留意通知。',
+            style: shadcn.Theme.of(context).typography.small.copyWith(
+              color: cs.foreground.withValues(alpha: 0.52),
+              height: 1.35,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 10),
+          _ActionButtonFrame(
+            child: shadcn.Button.primary(
+              onPressed: _running
+                  ? null
+                  : () async {
+                      setState(() => _running = true);
+                      try {
+                        await widget.onStart();
+                      } finally {
+                        if (mounted) setState(() => _running = false);
+                      }
+                    },
+              alignment: Alignment.center,
+              child: const Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(shadcn.LucideIcons.gauge, size: 15),
+                    SizedBox(width: 6),
+                    Text('开始测速'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1511,7 +1520,7 @@ class _SpeedTestActionState extends State<_SpeedTestAction> {
 class _TestNoticeForm extends StatefulWidget {
   final TextEditingController titleCtrl;
   final TextEditingController msgCtrl;
-  final VoidCallback onSend;
+  final Future<void> Function() onSend;
 
   const _TestNoticeForm({
     required this.titleCtrl,
@@ -1535,47 +1544,39 @@ class _TestNoticeFormState extends State<_TestNoticeForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ShadTextField(
-          controller: widget.titleCtrl,
-          hintText: '消息标题',
-          onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-        ),
-        const SizedBox(height: 10),
-        ShadTextField(
-          controller: widget.msgCtrl,
-          hintText: '消息内容',
-          maxLines: 5,
-          onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-        ),
-        const SizedBox(height: 10),
-        _ActionButtonFrame(
-          child: shadcn.Button.destructive(
-            onPressed: _sending
-                ? null
-                : () async {
-                    setState(() => _sending = true);
-                    widget.onSend();
-                    if (mounted) setState(() => _sending = false);
-                  },
-            alignment: Alignment.center,
-            child: Center(
-              child: _sending
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: shadcn.CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _optionColors(context).primaryForeground,
-                      ),
-                    )
-                  : const _ButtonText('发送'),
+    return OptionLoadingOverlay(
+      loading: _sending,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ShadTextField(
+            controller: widget.titleCtrl,
+            hintText: '消息标题',
+            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+          ),
+          const SizedBox(height: 10),
+          ShadTextField(
+            controller: widget.msgCtrl,
+            hintText: '消息内容',
+            maxLines: 5,
+            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+          ),
+          const SizedBox(height: 10),
+          _ActionButtonFrame(
+            child: shadcn.Button.destructive(
+              onPressed: _sending
+                  ? null
+                  : () async {
+                      setState(() => _sending = true);
+                      await widget.onSend();
+                      if (mounted) setState(() => _sending = false);
+                    },
+              alignment: Alignment.center,
+              child: const Center(child: _ButtonText('发送')),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -97,6 +97,67 @@ class _ActionButtonFrame extends StatelessWidget {
   }
 }
 
+class OptionLoadingOverlay extends StatelessWidget {
+  final bool loading;
+  final Widget child;
+  final String label;
+
+  const OptionLoadingOverlay({
+    super.key,
+    required this.loading,
+    required this.child,
+    this.label = '处理中...',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = shadcn.Theme.of(context).colorScheme;
+    return Stack(
+      children: [
+        AbsorbPointer(absorbing: loading, child: child),
+        if (loading)
+          Positioned.fill(
+            child: Container(
+              color: appSurfaceColor(context, cs.card).withValues(alpha: 0.72),
+              child: Center(
+                child: AppSurfaceContainer(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  borderRadius: _optionCardRadius(context, size: 'lg'),
+                  color: appSurfaceColor(context, cs.card),
+                  borderColor: cs.border.withValues(alpha: 0.72),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: shadcn.CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: shadcn.Theme.of(context).typography.small
+                            .copyWith(
+                              color: cs.foreground,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class OptionFormCard extends StatefulWidget {
   final String title;
   final String optionName;
@@ -140,6 +201,8 @@ class _OptionFormCardState extends State<OptionFormCard> {
   late bool _isActive;
   late bool _expanded;
   bool _saving = false;
+  bool _toggling = false;
+  bool get _busy => _saving || _toggling;
 
   @override
   void initState() {
@@ -173,25 +236,28 @@ class _OptionFormCardState extends State<OptionFormCard> {
       borderRadius: _optionCardRadius(context),
       child: ClipRRect(
         borderRadius: _optionCardRadius(context),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context, cs, typography),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              alignment: Alignment.topCenter,
-              child: _expanded
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(height: 0.5, color: cs.border),
-                        _buildBody(context, cs, typography),
-                      ],
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
+        child: OptionLoadingOverlay(
+          loading: _busy,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(context, cs, typography),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: _expanded
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(height: 0.5, color: cs.border),
+                          _buildBody(context, cs, typography),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -328,20 +394,9 @@ class _OptionFormCardState extends State<OptionFormCard> {
           const SizedBox(height: 6),
           _ActionButtonFrame(
             child: shadcn.Button.primary(
-              onPressed: _saving ? null : _handleSave,
+              onPressed: _busy ? null : _handleSave,
               alignment: Alignment.center,
-              child: Center(
-                child: _saving
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: shadcn.CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.primaryForeground,
-                        ),
-                      )
-                    : const Text('保存', textAlign: TextAlign.center),
-              ),
+              child: const Center(child: Text('保存', textAlign: TextAlign.center)),
             ),
           ),
         ],
@@ -350,19 +405,35 @@ class _OptionFormCardState extends State<OptionFormCard> {
   }
 
   Future<void> _handleToggleActive() async {
-    if (widget.option == null || widget.onToggleActive == null) return;
-    setState(() => _isActive = !_isActive);
-    await widget.onToggleActive!(
-      Option(
-        id: widget.option!.id,
-        name: widget.option!.name,
-        value: widget.option!.value,
-        isActive: _isActive,
-      ),
-    );
+    if (_busy || widget.option == null || widget.onToggleActive == null) {
+      return;
+    }
+    final previous = _isActive;
+    setState(() {
+      _isActive = !_isActive;
+      _toggling = true;
+    });
+    try {
+      await widget.onToggleActive!(
+        Option(
+          id: widget.option!.id,
+          name: widget.option!.name,
+          value: widget.option!.value,
+          isActive: _isActive,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isActive = previous);
+        Toast.error('保存失败: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _toggling = false);
+    }
   }
 
   Future<void> _handleSave() async {
+    if (_busy) return;
     setState(() => _saving = true);
     try {
       final current = widget.option?.value ?? const OptionValue();
