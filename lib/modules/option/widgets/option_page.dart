@@ -836,11 +836,20 @@ class _TelegramWebhookFormState extends State<_TelegramWebhookForm> {
   }
 }
 
-class _MediaInfoSettingsCard extends ConsumerWidget {
+class _MediaInfoSettingsCard extends ConsumerStatefulWidget {
   const _MediaInfoSettingsCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MediaInfoSettingsCard> createState() =>
+      _MediaInfoSettingsCardState();
+}
+
+class _MediaInfoSettingsCardState
+    extends ConsumerState<_MediaInfoSettingsCard> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(mediaInfoSettingsProvider);
     final notifier = ref.read(mediaInfoSettingsProvider.notifier);
     final theme = shadcn.Theme.of(context);
@@ -851,7 +860,7 @@ class _MediaInfoSettingsCard extends ConsumerWidget {
       required String title,
       required String subtitle,
       required bool value,
-      required ValueChanged<bool> onChanged,
+      required Future<void> Function(bool value) onChanged,
     }) {
       return AppSurfaceContainer(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -879,7 +888,19 @@ class _MediaInfoSettingsCard extends ConsumerWidget {
                 ],
               ),
             ),
-            shadcn.Switch(value: value, onChanged: onChanged),
+            shadcn.Switch(
+              value: value,
+              onChanged: _saving
+                  ? null
+                  : (next) async {
+                      setState(() => _saving = true);
+                      try {
+                        await onChanged(next);
+                      } finally {
+                        if (mounted) setState(() => _saving = false);
+                      }
+                    },
+            ),
           ],
         ),
       );
@@ -888,23 +909,26 @@ class _MediaInfoSettingsCard extends ConsumerWidget {
     return ExpandableCard(
       title: '影视资讯',
       icon: shadcn.LucideIcons.newspaper,
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          row(
-            title: 'TMDB',
-            subtitle: '开启后显示 TMDB 影视资讯入口与内容',
-            value: settings.tmdbEnabled,
-            onChanged: notifier.setTmdbEnabled,
-          ),
-          const SizedBox(height: 8),
-          row(
-            title: '豆瓣',
-            subtitle: '开启后显示豆瓣影视资讯入口与内容',
-            value: settings.doubanEnabled,
-            onChanged: notifier.setDoubanEnabled,
-          ),
-        ],
+      builder: (_) => OptionLoadingOverlay(
+        loading: _saving,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            row(
+              title: 'TMDB',
+              subtitle: '开启后显示 TMDB 影视资讯入口与内容',
+              value: settings.tmdbEnabled,
+              onChanged: notifier.setTmdbEnabled,
+            ),
+            const SizedBox(height: 8),
+            row(
+              title: '豆瓣',
+              subtitle: '开启后显示豆瓣影视资讯入口与内容',
+              value: settings.doubanEnabled,
+              onChanged: notifier.setDoubanEnabled,
+            ),
+          ],
+        ),
       ),
     );
   }
