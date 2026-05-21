@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 
@@ -20,6 +22,7 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
   @override
   Future<List<NoticeHistory>> build() {
     if (!HiveManager.hasAccessToken) {
+      _syncBadgeFor(const <NoticeHistory>[]);
       return Future.value(const <NoticeHistory>[]);
     }
     return _fetchNoticeHistoryWithNotification();
@@ -28,6 +31,7 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
   Future<void> refresh() async {
     if (!HiveManager.hasAccessToken) {
       state = const AsyncValue.data(<NoticeHistory>[]);
+      _syncBadgeFor(const <NoticeHistory>[]);
       return;
     }
 
@@ -52,7 +56,10 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
     try {
       await NoticeService.markRead(notice.id);
     } catch (_) {
-      if (previous != null) state = AsyncValue.data(previous);
+      if (previous != null) {
+        state = AsyncValue.data(previous);
+        _syncBadgeFor(previous);
+      }
       rethrow;
     }
   }
@@ -67,11 +74,15 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       for (final item in notices)
         if (item.id != notice.id) item,
     ]);
+    _syncBadgeFor(state.valueOrNull ?? const <NoticeHistory>[]);
 
     try {
       await NoticeService.deleteNotice(notice.id);
     } catch (_) {
-      if (previous != null) state = AsyncValue.data(previous);
+      if (previous != null) {
+        state = AsyncValue.data(previous);
+        _syncBadgeFor(previous);
+      }
       rethrow;
     }
   }
@@ -93,6 +104,7 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       await NoticeService.markAllRead();
     } catch (_) {
       state = AsyncValue.data(previous);
+      _syncBadgeFor(previous);
       rethrow;
     }
   }
@@ -105,11 +117,15 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
     if (notices.isEmpty) return;
 
     state = const AsyncValue.data(<NoticeHistory>[]);
+    _syncBadgeFor(const <NoticeHistory>[]);
 
     try {
       await NoticeService.deleteAll();
     } catch (_) {
-      if (previous != null) state = AsyncValue.data(previous);
+      if (previous != null) {
+        state = AsyncValue.data(previous);
+        _syncBadgeFor(previous);
+      }
       rethrow;
     }
   }
@@ -122,6 +138,7 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       for (final notice in notices)
         ids.contains(notice.id) ? notice.copyWith(isRead: true) : notice,
     ]);
+    _syncBadgeFor(state.valueOrNull ?? const <NoticeHistory>[]);
   }
 
   Future<List<NoticeHistory>> _fetchNoticeHistoryWithNotification() async {
@@ -132,5 +149,12 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       // 系统通知失败不应影响站内通知列表刷新。
     }
     return notices;
+  }
+
+  void _syncBadgeFor(List<NoticeHistory> notices) {
+    final unreadCount = notices.where((notice) => !notice.isRead).length;
+    unawaited(
+      LocalNoticeNotificationService.instance.syncBadgeCount(unreadCount),
+    );
   }
 }

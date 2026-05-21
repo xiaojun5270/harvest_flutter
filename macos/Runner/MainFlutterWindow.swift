@@ -12,6 +12,20 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
+    FlutterMethodChannel(
+      name: "com.ptools.harvest/app_badge",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    ).setMethodCallHandler { call, result in
+      guard call.method == "setBadgeCount" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+
+      let count = max(call.arguments as? Int ?? 0, 0)
+      NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+      result(nil)
+    }
+
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()

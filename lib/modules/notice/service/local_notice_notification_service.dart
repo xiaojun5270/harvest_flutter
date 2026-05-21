@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
@@ -20,6 +21,9 @@ class LocalNoticeNotificationService {
   static const String _channelId = 'harvest_notice';
   static const String _channelName = 'Harvest 通知';
   static const String _channelDescription = 'Harvest 站内通知提醒';
+  static const MethodChannel _badgeChannel = MethodChannel(
+    'com.ptools.harvest/app_badge',
+  );
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -28,7 +32,12 @@ class LocalNoticeNotificationService {
   bool _initializationFailed = false;
 
   Future<void> initialize() async {
-    if (_initialized || _initializationFailed || kIsWeb || !_isSupportedPlatform) return;
+    if (_initialized ||
+        _initializationFailed ||
+        kIsWeb ||
+        !_isSupportedPlatform) {
+      return;
+    }
 
     const initializationSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -69,7 +78,11 @@ class LocalNoticeNotificationService {
   }
 
   Future<void> showNewNotices(List<NoticeHistory> notices) async {
-    if (kIsWeb || !_isSupportedPlatform || notices.isEmpty) return;
+    if (kIsWeb || !_isSupportedPlatform) return;
+
+    final unreadCount = notices.where((notice) => !notice.isRead).length;
+    await syncBadgeCount(unreadCount);
+    if (notices.isEmpty) return;
 
     final maxNoticeId = notices
         .map((notice) => notice.id)
@@ -91,7 +104,6 @@ class LocalNoticeNotificationService {
             .where((notice) => !notice.isRead && notice.id > lastNotifiedId)
             .toList()
           ..sort((a, b) => a.id.compareTo(b.id));
-    final unreadCount = notices.where((notice) => !notice.isRead).length;
 
     if (newUnreadNotices.isEmpty) {
       if (maxNoticeId > lastNotifiedId) {
@@ -110,6 +122,17 @@ class LocalNoticeNotificationService {
     }
 
     await HiveManager.set(StorageKeys.localNoticeLastNotifiedId, maxNoticeId);
+  }
+
+  Future<void> syncBadgeCount(int count) async {
+    if (kIsWeb || !_isBadgeSupportedPlatform) return;
+
+    final effectiveCount = count < 0 ? 0 : count;
+    try {
+      await _badgeChannel.invokeMethod<void>('setBadgeCount', effectiveCount);
+    } catch (e, st) {
+      AppLogger.error('同步应用角标失败', e, st);
+    }
   }
 
   Future<void> _showNotice(NoticeHistory notice, {required int badgeCount}) {
@@ -181,6 +204,13 @@ class LocalNoticeNotificationService {
       TargetPlatform.iOS ||
       TargetPlatform.macOS ||
       TargetPlatform.windows => true,
+      _ => false,
+    };
+  }
+
+  bool get _isBadgeSupportedPlatform {
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => true,
       _ => false,
     };
   }
