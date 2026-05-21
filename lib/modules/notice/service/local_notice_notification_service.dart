@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
+import 'package:harvest/core/utils/logging/logger.dart';
 import 'package:harvest/core/utils/navigation/navigator_key.dart';
 
 import '../model/notice_history.dart';
@@ -24,9 +25,10 @@ class LocalNoticeNotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  bool _initializationFailed = false;
 
   Future<void> initialize() async {
-    if (_initialized || kIsWeb || !_isSupportedPlatform) return;
+    if (_initialized || _initializationFailed || kIsWeb || !_isSupportedPlatform) return;
 
     const initializationSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -39,18 +41,24 @@ class LocalNoticeNotificationService {
       ),
     );
 
-    await _plugin.initialize(
-      settings: initializationSettings,
-      onDidReceiveNotificationResponse: _handleNotificationResponse,
-    );
+    try {
+      await _plugin.initialize(
+        settings: initializationSettings,
+        onDidReceiveNotificationResponse: _handleNotificationResponse,
+      );
 
-    await _requestPermissions();
-    _initialized = true;
+      await _requestPermissions();
+      _initialized = true;
+    } catch (e, st) {
+      _initializationFailed = true;
+      AppLogger.error('本地通知初始化失败', e, st);
+    }
   }
 
   Future<void> handleLaunchNotificationTap() async {
     if (kIsWeb || !_isSupportedPlatform) return;
     await initialize();
+    if (!_initialized) return;
 
     final details = await _plugin.getNotificationAppLaunchDetails();
     if (details?.didNotificationLaunchApp != true) return;
@@ -96,6 +104,7 @@ class LocalNoticeNotificationService {
     }
 
     await initialize();
+    if (!_initialized) return;
     for (final notice in newUnreadNotices) {
       await _showNotice(notice, badgeCount: unreadCount);
     }
