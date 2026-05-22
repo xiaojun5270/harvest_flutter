@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:harvest/core/theme/app_surface.dart';
+import 'package:harvest/widgets/browser_page.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart'
     show IconExtension, TextExtension;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
@@ -234,7 +236,7 @@ class _UpdateTargetCard extends ConsumerWidget {
                       Text(
                         current?.detailText ??
                             (isLoading ? '正在获取更新日志' : '还未获取更新日志'),
-                        maxLines: 2,
+                        maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                       ).xSmall.muted,
                     ],
@@ -584,7 +586,6 @@ class _CommitTimelineContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
-    final content = Text(message, maxLines: 3, overflow: TextOverflow.ellipsis);
     final successColor = cs.chart2;
 
     return shadcn.Card(
@@ -598,9 +599,25 @@ class _CommitTimelineContent extends StatelessWidget {
           : highlighted
           ? cs.primary.withValues(alpha: 0.25)
           : null,
-      child: highlighted
-          ? content.small.semiBold
-          : content.small.medium(color: successColor),
+      child: MarkdownBody(
+        data: message.trim().isEmpty ? '暂无更新日志' : message.trim(),
+        selectable: true,
+        fitContent: false,
+        softLineBreak: true,
+        styleSheet: _updateLogMarkdownStyleSheet(
+          context,
+          highlighted: highlighted,
+        ),
+        onTapLink: (text, href, title) {
+          final url = href?.trim();
+          if (url == null || url.isEmpty) return;
+          BrowserPage.open(
+            context,
+            url: url,
+            title: text.trim().isEmpty ? null : text.trim(),
+          );
+        },
+      ),
     );
   }
 }
@@ -689,14 +706,74 @@ class _RawLogBox extends StatelessWidget {
       width: double.infinity,
       child: AppSurfaceCard(
         padding: const EdgeInsets.all(8),
-        child: Text(
-          text.trim(),
-          maxLines: 8,
-          overflow: TextOverflow.ellipsis,
-        ).xSmall.muted,
+        child: MarkdownBody(
+          data: text.trim().isEmpty ? '暂无更新日志' : text.trim(),
+          selectable: true,
+          fitContent: false,
+          softLineBreak: true,
+          styleSheet: _updateLogMarkdownStyleSheet(context, highlighted: false),
+          onTapLink: (label, href, title) {
+            final url = href?.trim();
+            if (url == null || url.isEmpty) return;
+            BrowserPage.open(
+              context,
+              url: url,
+              title: label.trim().isEmpty ? null : label.trim(),
+            );
+          },
+        ),
       ),
     );
   }
+}
+
+MarkdownStyleSheet _updateLogMarkdownStyleSheet(
+  BuildContext context, {
+  required bool highlighted,
+}) {
+  final theme = shadcn.Theme.of(context);
+  final cs = theme.colorScheme;
+  final typography = theme.typography;
+  final body = typography.xSmall
+      .merge(typography.sans)
+      .copyWith(height: 1.45, color: highlighted ? cs.foreground : cs.chart2);
+  final code = typography.xSmall
+      .merge(typography.mono)
+      .copyWith(
+        height: 1.35,
+        color: cs.foreground,
+        backgroundColor: cs.muted.withValues(alpha: 0.65),
+      );
+
+  return MarkdownStyleSheet(
+    p: body,
+    pPadding: const EdgeInsets.only(bottom: 6),
+    h1: body.copyWith(fontWeight: FontWeight.w700),
+    h1Padding: const EdgeInsets.only(bottom: 8),
+    h2: body.copyWith(fontWeight: FontWeight.w700),
+    h2Padding: const EdgeInsets.only(bottom: 6),
+    h3: body.copyWith(fontWeight: FontWeight.w700),
+    h3Padding: const EdgeInsets.only(bottom: 6),
+    h4: body.copyWith(fontWeight: FontWeight.w700),
+    h4Padding: const EdgeInsets.only(bottom: 4),
+    h5: body.copyWith(fontWeight: FontWeight.w700),
+    h5Padding: const EdgeInsets.only(bottom: 4),
+    h6: body.copyWith(fontWeight: FontWeight.w700),
+    h6Padding: const EdgeInsets.only(bottom: 4),
+    a: body.copyWith(color: cs.primary),
+    listBullet: body.copyWith(color: cs.mutedForeground),
+    blockquote: body.copyWith(color: cs.mutedForeground),
+    blockquoteDecoration: BoxDecoration(
+      color: cs.muted.withValues(alpha: 0.5),
+      borderRadius: theme.borderRadiusSm,
+      border: Border(left: BorderSide(color: cs.border, width: 3)),
+    ),
+    code: code,
+    codeblockDecoration: BoxDecoration(
+      color: cs.muted.withValues(alpha: 0.65),
+      borderRadius: theme.borderRadiusSm,
+    ),
+  );
 }
 
 class _MessageBox extends StatelessWidget {
