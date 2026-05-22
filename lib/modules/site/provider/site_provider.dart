@@ -1,4 +1,6 @@
 // provider/site_provider.dart
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/cache/session_cache.dart';
@@ -14,7 +16,9 @@ part 'site_provider.g.dart';
 
 const _siteInfoCacheKey = 'site.info.list';
 
-final siteInfoCacheInfoProvider = StateProvider<DataCacheInfo>((_) => const DataCacheInfo.none());
+final siteInfoCacheInfoProvider = StateProvider<DataCacheInfo>(
+  (_) => const DataCacheInfo.none(),
+);
 
 final siteRefreshingIdsProvider = StateProvider<Set<int>>((_) => const <int>{});
 
@@ -35,11 +39,16 @@ class SiteInfoList extends _$SiteInfoList {
 
     final cached = SessionCache.read<List<SiteInfo>>(
       _siteInfoCacheKey,
-      (data) => (data as List).map((item) => SiteInfo.fromJson(Map<String, dynamic>.from(item as Map))).toList(),
+      (data) => (data as List)
+          .map(
+            (item) => SiteInfo.fromJson(Map<String, dynamic>.from(item as Map)),
+          )
+          .toList(),
     );
     if (cached != null) {
       Future<void>.delayed(Duration.zero, () {
-        ref.read(siteInfoCacheInfoProvider.notifier).state = DataCacheInfo.cached(cached.cachedAt);
+        ref.read(siteInfoCacheInfoProvider.notifier).state =
+            DataCacheInfo.cached(cached.cachedAt);
         if (HiveManager.hasAccessToken) refresh();
       });
       return cached.data;
@@ -57,15 +66,23 @@ class SiteInfoList extends _$SiteInfoList {
 
     final previous = state.valueOrNull;
     final next = await AsyncValue.guard(() => _fetchAndCache(cached: cached));
-    state = next.hasError && previous != null ? AsyncValue.data(previous) : next;
+    state = next.hasError && previous != null
+        ? AsyncValue.data(previous)
+        : next;
   }
 
   // ── 2. _fetchAndCache 加 cached 参数 ──
-  Future<List<SiteInfo>> _fetchAndCache({bool updateCacheInfo = true, bool cached = true}) async {
+  Future<List<SiteInfo>> _fetchAndCache({
+    bool updateCacheInfo = true,
+    bool cached = true,
+  }) async {
     if (!HiveManager.hasAccessToken) return const <SiteInfo>[];
 
     final list = await SiteService.fetchMySiteList(cached: cached);
-    final info = await SessionCache.write(_siteInfoCacheKey, list.map((e) => e.toJson()).toList());
+    final info = await SessionCache.write(
+      _siteInfoCacheKey,
+      list.map((e) => e.toJson()).toList(),
+    );
     if (updateCacheInfo) {
       ref.read(siteInfoCacheInfoProvider.notifier).state = info;
     }
@@ -77,7 +94,10 @@ class SiteInfoList extends _$SiteInfoList {
     await refresh(cached: false);
   }
 
-  Future<void> importCustomSiteToml(List<PlatformFile> files, {bool overwrite = false}) async {
+  Future<void> importCustomSiteToml(
+    List<PlatformFile> files, {
+    bool overwrite = false,
+  }) async {
     await SiteService.importCustomSiteToml(files, overwrite: overwrite);
     try {
       await refresh();
@@ -99,13 +119,21 @@ class SiteInfoList extends _$SiteInfoList {
     await refresh(cached: false);
   }
 
+  void _refreshInBackground({bool cached = true, String reason = '刷新站点列表'}) {
+    unawaited(
+      refresh(cached: cached).catchError((Object e, StackTrace st) {
+        AppLogger.error('$reason失败', e, st);
+      }),
+    );
+  }
+
   /// 刷新单个站点状态
   Future<String> refreshStatus(int siteId) async {
     final refreshingIds = ref.read(siteRefreshingIdsProvider.notifier);
     refreshingIds.state = {...refreshingIds.state, siteId};
     try {
       final message = await SiteService.refreshSiteStatus(siteId);
-      await refresh();
+      _refreshInBackground(reason: '刷新站点状态后刷新站点列表');
       return message;
     } finally {
       refreshingIds.state = {...refreshingIds.state}..remove(siteId);
@@ -115,14 +143,14 @@ class SiteInfoList extends _$SiteInfoList {
   /// 执行签到
   Future<String> signIn(int siteId) async {
     final message = await SiteService.signInSite(siteId);
-    await refresh();
+    _refreshInBackground(reason: '站点签到后刷新站点列表');
     return message;
   }
 
   /// 执行辅种
   Future<String> repeat(int siteId) async {
     final message = await SiteService.repeatTorrents(siteId);
-    await refresh();
+    _refreshInBackground(reason: '辅种任务后刷新站点列表');
     return message;
   }
 }
