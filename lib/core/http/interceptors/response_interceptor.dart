@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:harvest/core/utils/utils.dart';
 
+import '../http_error.dart';
+
 class ResponseInterceptor extends Interceptor {
   static const String responseMessageKey = '__response_message__';
 
@@ -40,7 +42,7 @@ class ResponseInterceptor extends Interceptor {
       '${response.requestOptions.path} status=${response.statusCode} '
       'code=${data is Map ? data['code'] : '-'} msg=${msg ?? '-'}',
     );
-    Toast.error(msg ?? '请求失败');
+    Toast.error(requestToastMessage(response.requestOptions, msg ?? '请求失败'));
 
     return handler.reject(
       DioException(

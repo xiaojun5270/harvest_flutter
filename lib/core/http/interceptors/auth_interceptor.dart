@@ -9,6 +9,7 @@ import '../../config/app_config.dart';
 import '../../storage/hive_manager.dart';
 import '../api.dart';
 import '../dio_client.dart';
+import '../http_error.dart';
 
 class AuthInterceptor extends Interceptor {
   bool _isRefreshing = false;
@@ -77,13 +78,20 @@ class AuthInterceptor extends Interceptor {
         err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.sendTimeout ||
         err.type == DioExceptionType.receiveTimeout) {
-      Toast.error("服务器连接失败，请检查网络或服务器地址");
+      Toast.error(
+        requestToastMessage(err.requestOptions, '请求超时或连接失败，请检查网络或服务器地址'),
+      );
       return handler.next(err);
     }
 
     // 非 401 → 直接提示
     if (status != 401) {
-      Toast.error(_extractMsg(status, responseData));
+      Toast.error(
+        requestToastMessage(
+          err.requestOptions,
+          _extractMsg(status, responseData),
+        ),
+      );
       return handler.next(err);
     }
 
