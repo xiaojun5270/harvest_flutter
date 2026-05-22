@@ -100,6 +100,22 @@ class OptionNotifier extends StateNotifier<OptionState> {
     }
   }
 
+  Future<BackupDownload?> exportBackup() async {
+    try {
+      return await ref.read(optionServiceProvider).exportBackup();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> importBackup({required PlatformFile file}) async {
+    try {
+      return await ref.read(optionServiceProvider).importBackup(file: file);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<bool> syncCookieCloud() async {
     try {
       await ref.read(optionServiceProvider).syncCookieCloud();

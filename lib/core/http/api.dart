@@ -137,6 +137,7 @@ class API {
   static const String setupStatus = "/api/setup/status";
   static const String setupInit = "/api/setup/init";
   static const String setupImport = "/api/setup/import";
+  static const String setupBackup = "/api/setup/backup";
 
   /// 订阅相关
   static const String SUB_RSS = "/api/option/rss";

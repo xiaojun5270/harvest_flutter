@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:harvest/core/http/api.dart';
 import 'package:harvest/core/http/dio_client.dart';
 import 'package:harvest/core/http/hooks.dart';
@@ -9,6 +10,13 @@ import 'package:harvest/core/utils/utils.dart';
 import '../model/option_model.dart';
 
 enum CookieBackupSource { ptpp, ptd }
+
+class BackupDownload {
+  final Uint8List bytes;
+  final String fileName;
+
+  const BackupDownload({required this.bytes, required this.fileName});
+}
 
 extension CookieBackupSourceX on CookieBackupSource {
   String get endpoint {
@@ -98,6 +106,107 @@ class OptionService {
       );
       rethrow;
     }
+  }
+
+  /// 导出完整数据备份
+  Future<BackupDownload> exportBackup() async {
+    try {
+      final response = await DioClient.dio.get<List<int>>(
+        API.setupBackup,
+        options: Options(
+          responseType: ResponseType.bytes,
+          extra: const {'allowAnySucceed': true},
+        ),
+      );
+
+      final data = response.data;
+      if (data == null || data.isEmpty) {
+        throw StateError('备份文件为空');
+      }
+
+      final fileName = _normalizeBackupFileName(
+        _backupFileNameFromHeaders(response.headers) ??
+            _defaultBackupFileName(),
+      );
+      AppLogger.info('数据备份导出完成: fileName=$fileName, size=${data.length}');
+      return BackupDownload(
+        bytes: Uint8List.fromList(data),
+        fileName: fileName,
+      );
+    } on DioException catch (e, st) {
+      AppLogger.error('数据备份导出失败: response=${e.response?.data}', e, st);
+      rethrow;
+    }
+  }
+
+  /// 导入完整数据备份
+  Future<String> importBackup({required PlatformFile file}) async {
+    if (file.path == null && file.bytes == null) {
+      throw StateError('无法读取文件: ${file.name}');
+    }
+
+    final formData = FormData();
+    final multipart = file.bytes != null
+        ? MultipartFile.fromBytes(file.bytes!, filename: file.name)
+        : await MultipartFile.fromFile(file.path!, filename: file.name);
+    formData.files.add(MapEntry('file', multipart));
+
+    try {
+      final response = await DioClient.dio.post(
+        API.setupBackup,
+        data: formData,
+        options: Options(extra: const {'allowAnySucceed': true}),
+      );
+      AppLogger.info('数据备份导入已提交: ${response.data}');
+
+      final data = response.data;
+      if (data is Map && data['msg'] != null) {
+        return data['msg'].toString();
+      }
+      return '数据备份导入任务已提交';
+    } on DioException catch (e, st) {
+      AppLogger.error('数据备份导入失败: response=${e.response?.data}', e, st);
+      rethrow;
+    }
+  }
+
+  String? _backupFileNameFromHeaders(Headers headers) {
+    final value = headers.value('content-disposition');
+    if (value == null || value.trim().isEmpty) return null;
+
+    final encodedMatch = RegExp(
+      r'''filename\*=UTF-8''([^;]+)''',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (encodedMatch != null) {
+      final encoded = encodedMatch.group(1)?.trim();
+      if (encoded != null && encoded.isNotEmpty) {
+        return Uri.decodeFull(encoded);
+      }
+    }
+
+    final quotedMatch = RegExp(
+      r'''filename="?([^";]+)"?''',
+      caseSensitive: false,
+    ).firstMatch(value);
+    return quotedMatch?.group(1)?.trim();
+  }
+
+  String _defaultBackupFileName() {
+    final now = DateTime.now();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final stamp =
+        '${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}${two(now.second)}';
+    return 'harvest_backup_$stamp.zip';
+  }
+
+  String _normalizeBackupFileName(String fileName) {
+    final trimmed = fileName.trim();
+    if (trimmed.toLowerCase().endsWith('.zip')) return trimmed;
+    if (trimmed.toLowerCase().endsWith('.gz')) {
+      return '${trimmed.substring(0, trimmed.length - 3)}.zip';
+    }
+    return '$trimmed.zip';
   }
 
   /// CookieCloud 同步
