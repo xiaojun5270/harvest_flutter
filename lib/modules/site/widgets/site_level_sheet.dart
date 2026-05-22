@@ -33,12 +33,31 @@ void openLevelInfo(BuildContext context, {required SiteInfo site}) {
   } else {
     showDialog<void>(
       context: context,
-      builder: (_) => shadcn.AlertDialog(
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 700),
-          child: _LevelInfoSheet(site: site),
-        ),
-      ),
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      builder: (dialogContext) {
+        final media = MediaQuery.of(dialogContext);
+        final availableHeight = media.size.height - media.padding.vertical - 64;
+        final maxHeight = availableHeight.clamp(360.0, 760.0).toDouble();
+        final cs = shadcn.Theme.of(dialogContext).colorScheme;
+
+        return Dialog(
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
+          backgroundColor: cs.background,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 32,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: siteRadius(dialogContext, size: "lg"),
+            side: BorderSide(color: cs.border.withValues(alpha: 0.65)),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 560, maxHeight: maxHeight),
+            child: _LevelInfoSheet(site: site),
+          ),
+        );
+      },
     );
   }
 }
