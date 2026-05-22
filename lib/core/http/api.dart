@@ -63,7 +63,7 @@ class API {
 
   // 通知测试
   static const String NOTIFY_TEST = "/api/option/test";
-  static const String TELEGRAM_WEBHOOK = 'option/tg/webhook';
+  static const String TELEGRAM_WEBHOOK = '/api/option/tg/webhook';
 
   // 更新 Docker
   static const String DOCKER_UPDATE = "/api/option/update/";
@@ -78,23 +78,18 @@ class API {
   // 下载器分类列表
   static const String DOWNLOADER_TORRENTS = "/api/ws/downloader";
   static const String DOWNLOADER_STATUS = "/api/ws/downloader/speed";
-  static const String DOWNLOADER_TOGGLE_SPEED_LIMIT_ENABLE =
-      "/api/option/downloaders/toggle_speed_limit/";
+  static const String DOWNLOADER_TOGGLE_SPEED_LIMIT_ENABLE = "/api/option/downloaders/toggle_speed_limit/";
   static const String DOWNLOADER_MAIN = "/api/option/downloaders/main/";
   static const String DOWNLOADER_TEST = "/api/option/downloaders/test/";
   static const String DOWNLOADER_TAGS = "/api/option/downloaders/tags/";
-  static const String DOWNLOADER_TRACKER_REPLACE =
-      "/api/option/downloaders/trackers/replace/";
+  static const String DOWNLOADER_TRACKER_REPLACE = "/api/option/downloaders/trackers/replace/";
   static const String DOWNLOADER_SET_TAGS = "/api/option/downloaders/tags/set/";
   static const String DOWNLOADER_CATEGORY = "/api/option/downloaders/category/";
-  static const String DOWNLOADER_SET_CATEGORY =
-      "/api/option/downloaders/category/set/";
+  static const String DOWNLOADER_SET_CATEGORY = "/api/option/downloaders/category/set/";
   static const String DOWNLOADER_CONTROL = "/api/option/downloaders/control/";
   static const String DOWNLOADER_PUSH_TORRENT = "/api/option/push_torrent";
-  static const String DOWNLOADER_PREFERENCES =
-      "/api/option/downloaders/preferences/";
-  static const String DOWNLOADER_TORRENT_DETAIL =
-      "/api/option/downloaders/torrent/detail/";
+  static const String DOWNLOADER_PREFERENCES = "/api/option/downloaders/preferences/";
+  static const String DOWNLOADER_TORRENT_DETAIL = "/api/option/downloaders/torrent/detail/";
 
   // 推送种子到下载器
   static const String PUSH_TORRENT_URL = "/api/option/push_torrent/";
@@ -170,8 +165,7 @@ class API {
   static const String TMDB_MOVIE_INFO = "/api/tmdb/movie/";
   static const String TMDB_TV_INFO = "/api/tmdb/tv/";
   static const String TMDB_SEASON = "/api/tmdb/season/{tv_id}/{season_id}";
-  static const String TMDB_EPISODE =
-      "/api/tmdb/episode/{tv_id}/{season_id}/{episode_id}";
+  static const String TMDB_EPISODE = "/api/tmdb/episode/{tv_id}/{season_id}/{episode_id}";
   static const String TMDB_ON_THE_AIR = "/api/tmdb/on_the_air/tvs";
   static const String TMDB_AIRING_TODAY = "/api/tmdb/airing_today/tvs";
   static const String TMDB_UPCOMING_MOVIES = "/api/tmdb/upcoming/movies";
@@ -254,7 +248,7 @@ const _apiEndpointNames = <String, String>{
   API.IMPORT_COOKIE_PTD: 'PT-depiler 站点导入接口',
   API.IMPORT_COOKIE_CLOUD: 'CookieCloud 同步接口',
   API.NOTIFY_TEST: '通知测试接口',
-  '/${API.TELEGRAM_WEBHOOK}': 'Telegram Webhook 接口',
+  API.TELEGRAM_WEBHOOK: 'Telegram Webhook 接口',
   API.DOWNLOADER_LIST: '下载器列表接口',
   API.DOWNLOADER_REAPEAT: '下载器辅种接口',
   API.DOWNLOADER_PATHS: '下载路径接口',
