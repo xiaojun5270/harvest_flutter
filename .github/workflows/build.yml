@@ -655,7 +655,12 @@ jobs:
         run: flutter pub get
 
       - name: 打包 Web 发行版
-        run: flutter build web --release --no-tree-shake-icons
+        run: flutter build web --release
+
+      - name: 清理 Web 调试符号
+        run: |
+          find build/web -name "*.symbols" -delete
+          find build/web -name "*.map" -delete
 
       - name: Deploy to web branch
         uses: peaceiris/actions-gh-pages@v4

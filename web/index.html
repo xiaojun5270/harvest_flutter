@@ -32,34 +32,8 @@
     <title>harvest</title>
     <link href="manifest.json" rel="manifest">
 
-    <script>
-        // The value below is injected by flutter build, do not touch.
-        const {{flutter_service_worker_version}} = null;
-    </script>
-    <script>
-        {{flutter_js}}
-        {{flutter_build_config}}
-
-        _flutter.loader.load({
-          serviceWorkerSettings: {
-            serviceWorkerVersion: {{flutter_service_worker_version}}
-          },
-          config: {
-            // 关键：指定 CanvasKit 从本地加载
-            canvasKitBaseUrl: "canvaskit/"
-          }
-        });
-    </script>
-    <!-- This script adds the flutter initialization JS code -->
-    <script async="" src="flutter_bootstrap.js"></script>
-
 
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-
-
-    <script defer="" src="/assets/packages/flutter_inappwebview_web/assets/web/web_support.js"
-            type="application/javascript"></script>
-
 
     <style id="splash-screen-style">
         html {
@@ -102,19 +76,22 @@
 </div>
 
 <script>
-    window.addEventListener('load', function(ev) {
-      // Download main.dart.js
-      _flutter.loader.load({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
-        onEntrypointLoaded: function(engineInitializer) {
-          engineInitializer.initializeEngine().then(function(appRunner) {
-            removeSplashFromWeb();
-            appRunner.runApp();
-          });
-        },
-      });
+    {{flutter_js}}
+    {{flutter_build_config}}
+
+    _flutter.loader.load({
+      serviceWorkerSettings: {
+        serviceWorkerVersion: {{flutter_service_worker_version}},
+      },
+      config: {
+        canvasKitBaseUrl: "canvaskit/",
+      },
+      onEntrypointLoaded: function(engineInitializer) {
+        engineInitializer.initializeEngine().then(function(appRunner) {
+          removeSplashFromWeb();
+          appRunner.runApp();
+        });
+      },
     });
 </script>
 
