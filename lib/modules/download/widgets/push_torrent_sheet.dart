@@ -107,6 +107,43 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     return (site?.site ?? torrent.siteId).trim();
   }
 
+  bool get _mustGenerateTorrentUrl {
+    final candidates = <String>[];
+    if (_hasTorrent) {
+      final torrent = widget.torrent!;
+      final site = _siteFor(torrent.siteId);
+      candidates.add(torrent.siteId);
+      if (site != null) {
+        candidates
+          ..add(site.site)
+          ..add(site.nickname);
+      }
+    } else {
+      final siteId = widget.initialSiteId?.trim();
+      if (siteId != null && siteId.isNotEmpty) {
+        final site = _siteFor(siteId);
+        candidates.add(siteId);
+        if (site != null) {
+          candidates
+            ..add(site.site)
+            ..add(site.nickname);
+        }
+      }
+    }
+
+    return candidates.any(_isMTeamSiteName);
+  }
+
+  bool get _effectiveGenTorrentUrl => _genTorrentUrl || _mustGenerateTorrentUrl;
+
+  bool _isMTeamSiteName(String value) {
+    final normalized = value.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]'),
+      '',
+    );
+    return normalized == 'mteam';
+  }
+
   String _defaultSiteId() {
     if (_hasTorrent) {
       return _resolvedSiteId(widget.torrent!);
@@ -115,9 +152,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
   }
 
   void _setGenTorrentUrl(bool value) {
+    if (!value && _mustGenerateTorrentUrl) return;
     setState(() {
-      _genTorrentUrl = value;
-      _siteIdCtrl.text = value ? _defaultSiteId() : '';
+      _genTorrentUrl = value || _mustGenerateTorrentUrl;
+      _siteIdCtrl.text = _genTorrentUrl ? _defaultSiteId() : '';
     });
   }
 
@@ -128,14 +166,16 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       final t = widget.torrent!;
       final site = _siteFor(t.siteId);
       _selectedTags.addAll(t.tags);
-      _genTorrentUrl = !t.magnetUrl.contains('passkey') && !t.magnetUrl.contains('sign');
+      _genTorrentUrl =
+          _mustGenerateTorrentUrl ||
+          (!t.magnetUrl.contains('passkey') && !t.magnetUrl.contains('sign'));
       _siteIdCtrl.text = _genTorrentUrl ? _resolvedSiteId(t) : '';
       _cookieCtrl.text = (site?.cookie ?? t.cookie ?? '').trim();
     } else {
       _manualUrlCtrl.text = widget.initialUrl?.trim() ?? '';
       _siteIdCtrl.text = widget.initialSiteId?.trim() ?? '';
       _cookieCtrl.text = widget.initialCookie?.trim() ?? '';
-      _genTorrentUrl = false;
+      _genTorrentUrl = _mustGenerateTorrentUrl;
     }
     _fetchData();
   }
@@ -175,7 +215,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     } catch (_) {}
 
     try {
-      categories = await DownloaderService.fetchCategories(widget.downloader.id);
+      categories = await DownloaderService.fetchCategories(
+        widget.downloader.id,
+      );
     } catch (_) {}
 
     // 去重
@@ -198,13 +240,16 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(siteInfoListProvider);
     final cs = shadcn.Theme.of(context).colorScheme;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
     final sheetHeight = context.isMobile
         ? screenHeight * 0.68
         : (screenHeight - 48).clamp(420.0, PushTorrentSheet.desktopHeight);
-    final sheetWidth = context.isMobile ? double.infinity : PushTorrentSheet.desktopWidth;
+    final sheetWidth = context.isMobile
+        ? double.infinity
+        : PushTorrentSheet.desktopWidth;
 
     final content = Container(
       decoration: BoxDecoration(
@@ -256,14 +301,14 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     );
 
     if (widget.embedded) {
-      return SizedBox(width: sheetWidth, height: double.infinity, child: content);
+      return SizedBox(
+        width: sheetWidth,
+        height: double.infinity,
+        child: content,
+      );
     }
 
-    return SizedBox(
-      width: sheetWidth,
-      height: sheetHeight,
-      child: content,
-    );
+    return SizedBox(width: sheetWidth, height: sheetHeight, child: content);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -280,12 +325,17 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         children: [
           Row(
             children: [
-              Text('添加种子', style: typo.large.copyWith(fontWeight: FontWeight.w700)),
+              Text(
+                '添加种子',
+                style: typo.large.copyWith(fontWeight: FontWeight.w700),
+              ),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: _isQb ? Colors.blue.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                  color: _isQb
+                      ? Colors.blue.withValues(alpha: 0.1)
+                      : Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -313,6 +363,8 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
   Widget _buildLinkSection() {
     final cs = shadcn.Theme.of(context).colorScheme;
     final typo = shadcn.Theme.of(context).typography;
+    final genTorrentUrl = _effectiveGenTorrentUrl;
+    final genTorrentUrlLocked = _mustGenerateTorrentUrl;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -346,10 +398,13 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                   ],
                 ),
               ),
-              Switch(value: _genTorrentUrl, onChanged: _setGenTorrentUrl),
+              Switch(
+                value: genTorrentUrl,
+                onChanged: genTorrentUrlLocked ? null : _setGenTorrentUrl,
+              ),
             ],
           ),
-          if (_genTorrentUrl) ...[
+          if (genTorrentUrl) ...[
             const SizedBox(height: 6),
             _buildInlineField('站点', _siteIdCtrl, hint: '站点标识'),
           ],
@@ -365,7 +420,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       if (torrent.size > 0)
         Text(
           formatBytes(torrent.size),
-          style: typo.xSmall.copyWith(fontWeight: FontWeight.w600, color: cs.foreground),
+          style: typo.xSmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: cs.foreground,
+          ),
         ),
       _buildTorrentSeedRow(torrent),
       _torrentBadge(_siteLabel(torrent.siteId), cs.primary),
@@ -377,7 +435,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       if (torrent.published.isNotEmpty)
         Text(
           formatMonthDay(torrent.published),
-          style: typo.xSmall.copyWith(color: cs.mutedForeground.withValues(alpha: 0.62), fontSize: 10),
+          style: typo.xSmall.copyWith(
+            color: cs.mutedForeground.withValues(alpha: 0.62),
+            fontSize: 10,
+          ),
         ),
     ];
 
@@ -450,21 +511,33 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         const SizedBox(width: 1),
         Text(
           '${torrent.seeders}',
-          style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.green,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(width: 4),
         const Icon(shadcn.LucideIcons.arrowDown, size: 10, color: Colors.red),
         const SizedBox(width: 1),
         Text(
           '${torrent.leechers}',
-          style: const TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.red,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(width: 4),
         const Icon(shadcn.LucideIcons.check, size: 10, color: Colors.grey),
         const SizedBox(width: 1),
         Text(
           '${torrent.completers}',
-          style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 10,
+            color: Colors.grey,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -481,7 +554,11 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -529,15 +606,23 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(10, 6, 10, 5),
                   decoration: BoxDecoration(
-                    color: selected ? cs.primary : cs.mutedForeground.withValues(alpha: 0.06),
+                    color: selected
+                        ? cs.primary
+                        : cs.mutedForeground.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: selected ? cs.primary : cs.border.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: selected
+                          ? cs.primary
+                          : cs.border.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Text(
                     cat.name,
                     style: typo.xSmall.copyWith(
                       color: selected ? Colors.white : cs.foreground,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                   ),
                 ),
@@ -575,7 +660,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
             GestureDetector(
               onTap: _showTagSheet,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(color: cs.border.withValues(alpha: 0.5)),
                   borderRadius: BorderRadius.circular(5),
@@ -583,9 +671,16 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(shadcn.LucideIcons.plus, size: 13, color: cs.mutedForeground),
+                    Icon(
+                      shadcn.LucideIcons.plus,
+                      size: 13,
+                      color: cs.mutedForeground,
+                    ),
                     const SizedBox(width: 4),
-                    Text('选择', style: typo.xSmall.copyWith(color: cs.mutedForeground)),
+                    Text(
+                      '选择',
+                      style: typo.xSmall.copyWith(color: cs.mutedForeground),
+                    ),
                   ],
                 ),
               ),
@@ -601,21 +696,33 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
               return GestureDetector(
                 onTap: () => setState(() => _selectedTags.remove(tag)),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: cs.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                    border: Border.all(
+                      color: cs.primary.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         tag,
-                        style: typo.xSmall.copyWith(color: cs.primary, fontWeight: FontWeight.w500),
+                        style: typo.xSmall.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       const SizedBox(width: 4),
-                      Icon(shadcn.LucideIcons.x, size: 11, color: cs.primary.withValues(alpha: 0.6)),
+                      Icon(
+                        shadcn.LucideIcons.x,
+                        size: 11,
+                        color: cs.primary.withValues(alpha: 0.6),
+                      ),
                     ],
                   ),
                 ),
@@ -625,7 +732,12 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         else
           GestureDetector(
             onTap: _showTagSheet,
-            child: Text('点击选择标签', style: typo.xSmall.copyWith(color: cs.mutedForeground.withValues(alpha: 0.4))),
+            child: Text(
+              '点击选择标签',
+              style: typo.xSmall.copyWith(
+                color: cs.mutedForeground.withValues(alpha: 0.4),
+              ),
+            ),
           ),
       ],
     );
@@ -648,14 +760,18 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
             return Align(
               alignment: Alignment.bottomCenter,
               child: SizedBox(
-                width: ctx.isMobile ? double.infinity : PushTorrentSheet.desktopWidth,
+                width: ctx.isMobile
+                    ? double.infinity
+                    : PushTorrentSheet.desktopWidth,
                 height: ctx.isMobile
                     ? MediaQuery.of(ctx).size.height * 0.55
                     : PushTorrentSheet.desktopTagHeight,
                 child: Container(
                   decoration: BoxDecoration(
                     color: cs.background,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
                   ),
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                   child: Column(
@@ -665,15 +781,28 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                         child: Container(
                           width: 36,
                           height: 4,
-                          decoration: BoxDecoration(color: cs.border, borderRadius: BorderRadius.circular(2)),
+                          decoration: BoxDecoration(
+                            color: cs.border,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Text('选择标签', style: typo.normal.copyWith(fontWeight: FontWeight.w600)),
+                          Text(
+                            '选择标签',
+                            style: typo.normal.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           const Spacer(),
-                          Text('${tempSelected.length} 项', style: typo.xSmall.copyWith(color: cs.mutedForeground)),
+                          Text(
+                            '${tempSelected.length} 项',
+                            style: typo.xSmall.copyWith(
+                              color: cs.mutedForeground,
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           GestureDetector(
                             onTap: () {
@@ -686,7 +815,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                             },
                             child: Text(
                               '确定',
-                              style: typo.small.copyWith(color: cs.primary, fontWeight: FontWeight.w600),
+                              style: typo.small.copyWith(
+                                color: cs.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -696,7 +828,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                         controller: customCtrl,
                         hintText: '自定义标签，多个用逗号分隔',
                         onSubmitted: (v) {
-                          final tags = v.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
+                          final tags = v
+                              .split(',')
+                              .map((e) => e.trim())
+                              .where((e) => e.isNotEmpty);
                           if (tags.isNotEmpty) {
                             setSheet(() {
                               for (final t in tags) {
@@ -712,7 +847,12 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                       Flexible(
                         child: allTags.isEmpty
                             ? Center(
-                                child: Text('暂无标签', style: typo.small.copyWith(color: cs.mutedForeground)),
+                                child: Text(
+                                  '暂无标签',
+                                  style: typo.small.copyWith(
+                                    color: cs.mutedForeground,
+                                  ),
+                                ),
                               )
                             : Wrap(
                                 spacing: 8,
@@ -722,18 +862,31 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                                   return GestureDetector(
                                     onTap: () {
                                       setSheet(() {
-                                        sel ? tempSelected.remove(tag) : tempSelected.add(tag);
+                                        sel
+                                            ? tempSelected.remove(tag)
+                                            : tempSelected.add(tag);
                                       });
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: sel
                                             ? cs.primary.withValues(alpha: 0.1)
-                                            : cs.mutedForeground.withValues(alpha: 0.04),
+                                            : cs.mutedForeground.withValues(
+                                                alpha: 0.04,
+                                              ),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: sel ? cs.primary.withValues(alpha: 0.3) : cs.border.withValues(alpha: 0.4),
+                                          color: sel
+                                              ? cs.primary.withValues(
+                                                  alpha: 0.3,
+                                                )
+                                              : cs.border.withValues(
+                                                  alpha: 0.4,
+                                                ),
                                         ),
                                       ),
                                       child: Row(
@@ -742,13 +895,21 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                                           Text(
                                             tag,
                                             style: typo.xSmall.copyWith(
-                                              color: sel ? cs.primary : cs.foreground,
-                                              fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                                              color: sel
+                                                  ? cs.primary
+                                                  : cs.foreground,
+                                              fontWeight: sel
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
                                             ),
                                           ),
                                           if (sel) ...[
                                             const SizedBox(width: 4),
-                                            Icon(shadcn.LucideIcons.check, size: 12, color: cs.primary),
+                                            Icon(
+                                              shadcn.LucideIcons.check,
+                                              size: 12,
+                                              color: cs.primary,
+                                            ),
                                           ],
                                         ],
                                       ),
@@ -778,7 +939,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     return Row(
       children: [
         Expanded(child: Text('暂停下载', style: typo.small)),
-        Switch(value: _isPaused, onChanged: (v) => setState(() => _isPaused = v)),
+        Switch(
+          value: _isPaused,
+          onChanged: (v) => setState(() => _isPaused = v),
+        ),
       ],
     );
   }
@@ -790,6 +954,8 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
   Widget _buildAdvancedOptions() {
     final cs = shadcn.Theme.of(context).colorScheme;
     final typo = shadcn.Theme.of(context).typography;
+    final genTorrentUrl = _effectiveGenTorrentUrl;
+    final genTorrentUrlLocked = _mustGenerateTorrentUrl;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -801,13 +967,20 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
             children: [
               Text(
                 '高级选项',
-                style: typo.small.copyWith(fontWeight: FontWeight.w600, color: cs.mutedForeground),
+                style: typo.small.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: cs.mutedForeground,
+                ),
               ),
               const SizedBox(width: 4),
               AnimatedRotation(
                 turns: _advancedExpanded ? 0.5 : 0,
                 duration: const Duration(milliseconds: 200),
-                child: Icon(shadcn.LucideIcons.chevronDown, size: 16, color: cs.mutedForeground),
+                child: Icon(
+                  shadcn.LucideIcons.chevronDown,
+                  size: 16,
+                  color: cs.mutedForeground,
+                ),
               ),
             ],
           ),
@@ -821,16 +994,29 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
               children: [
                 // 基础
                 _buildOptionGroup('基础', [
-                  _optionTile('跳过哈希检查', _skipChecking, (v) => setState(() => _skipChecking = v)),
-                  if (_isQb) _optionTile('强制下载', _forced, (v) => setState(() => _forced = v)),
+                  _optionTile(
+                    '跳过哈希检查',
+                    _skipChecking,
+                    (v) => setState(() => _skipChecking = v),
+                  ),
+                  if (_isQb)
+                    _optionTile(
+                      '强制下载',
+                      _forced,
+                      (v) => setState(() => _forced = v),
+                    ),
                 ]),
 
                 const SizedBox(height: 12),
 
                 if (_hasTorrent) ...[
                   _buildOptionGroup('下载链接', [
-                    _optionTile('自动生成下载链接', _genTorrentUrl, _setGenTorrentUrl),
-                    if (_genTorrentUrl) ...[
+                    _optionTile(
+                      '自动生成下载链接',
+                      genTorrentUrl,
+                      genTorrentUrlLocked ? null : _setGenTorrentUrl,
+                    ),
+                    if (genTorrentUrl) ...[
                       _buildInlineField('站点', _siteIdCtrl, hint: '站点标识'),
                       const SizedBox(height: 8),
                     ],
@@ -845,20 +1031,34 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                 ],
 
                 // 重命名
-                _buildOptionGroup('重命名', [_buildInlineField('任务名称', _renameCtrl, hint: '留空使用原始名称')]),
+                _buildOptionGroup('重命名', [
+                  _buildInlineField('任务名称', _renameCtrl, hint: '留空使用原始名称'),
+                ]),
 
                 const SizedBox(height: 12),
 
                 // 限速
                 _buildOptionGroup('速度限制', [
-                  _buildInlineField('上传限制 (KB/s)', _uploadLimitCtrl, hint: '不限'),
+                  _buildInlineField(
+                    '上传限制 (KB/s)',
+                    _uploadLimitCtrl,
+                    hint: '不限',
+                  ),
                   const SizedBox(height: 8),
-                  _buildInlineField('下载限制 (KB/s)', _downloadLimitCtrl, hint: '不限'),
+                  _buildInlineField(
+                    '下载限制 (KB/s)',
+                    _downloadLimitCtrl,
+                    hint: '不限',
+                  ),
                   const SizedBox(height: 8),
                   _buildInlineField('分享比率', _ratioLimitCtrl, hint: '默认'),
                   if (_isQb) ...[
                     const SizedBox(height: 8),
-                    _buildInlineField('做种时间 (分钟)', _seedingTimeLimitCtrl, hint: '不限'),
+                    _buildInlineField(
+                      '做种时间 (分钟)',
+                      _seedingTimeLimitCtrl,
+                      hint: '不限',
+                    ),
                   ],
                 ]),
 
@@ -866,11 +1066,31 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                 if (_isQb) ...[
                   const SizedBox(height: 12),
                   _buildOptionGroup('qBittorrent', [
-                    _optionTile('自动管理', _autoManagement, (v) => setState(() => _autoManagement = v)),
-                    _optionTile('创建子文件夹', _createSubfolder, (v) => setState(() => _createSubfolder = v)),
-                    _optionTile('顺序下载', _sequentialDownload, (v) => setState(() => _sequentialDownload = v)),
-                    _optionTile('优先首尾文件', _firstLastPiecePriority, (v) => setState(() => _firstLastPiecePriority = v)),
-                    _optionTile('添加到队列顶部', _addToTopOfQueue, (v) => setState(() => _addToTopOfQueue = v)),
+                    _optionTile(
+                      '自动管理',
+                      _autoManagement,
+                      (v) => setState(() => _autoManagement = v),
+                    ),
+                    _optionTile(
+                      '创建子文件夹',
+                      _createSubfolder,
+                      (v) => setState(() => _createSubfolder = v),
+                    ),
+                    _optionTile(
+                      '顺序下载',
+                      _sequentialDownload,
+                      (v) => setState(() => _sequentialDownload = v),
+                    ),
+                    _optionTile(
+                      '优先首尾文件',
+                      _firstLastPiecePriority,
+                      (v) => setState(() => _firstLastPiecePriority = v),
+                    ),
+                    _optionTile(
+                      '添加到队列顶部',
+                      _addToTopOfQueue,
+                      (v) => setState(() => _addToTopOfQueue = v),
+                    ),
                     const SizedBox(height: 8),
                     _buildContentLayoutPicker(),
                     const SizedBox(height: 8),
@@ -881,7 +1101,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
               ],
             ),
           ),
-          crossFadeState: _advancedExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          crossFadeState: _advancedExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 200),
         ),
       ],
@@ -907,7 +1129,11 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
             child: Text(
               title,
-              style: typo.xSmall.copyWith(color: cs.mutedForeground, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+              style: typo.xSmall.copyWith(
+                color: cs.mutedForeground,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -918,7 +1144,7 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     );
   }
 
-  Widget _optionTile(String label, bool value, ValueChanged<bool> onChanged) {
+  Widget _optionTile(String label, bool value, ValueChanged<bool>? onChanged) {
     final typo = shadcn.Theme.of(context).typography;
 
     return Padding(
@@ -932,7 +1158,11 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     );
   }
 
-  Widget _buildInlineField(String label, TextEditingController ctrl, {String? hint}) {
+  Widget _buildInlineField(
+    String label,
+    TextEditingController ctrl, {
+    String? hint,
+  }) {
     final cs = shadcn.Theme.of(context).colorScheme;
     final typo = shadcn.Theme.of(context).typography;
 
@@ -960,7 +1190,11 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
     final cs = shadcn.Theme.of(context).colorScheme;
     final typo = shadcn.Theme.of(context).typography;
 
-    const options = [('Original', '原始'), ('Subfolder', '子文件夹'), ('NoSubfolder', '无子文件夹')];
+    const options = [
+      ('Original', '原始'),
+      ('Subfolder', '子文件夹'),
+      ('NoSubfolder', '无子文件夹'),
+    ];
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -976,17 +1210,26 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
               return GestureDetector(
                 onTap: () => setState(() => _contentLayout = opt.$1),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: selected ? cs.primary : Colors.transparent,
                     borderRadius: BorderRadius.circular(5),
-                    border: Border.all(color: selected ? cs.primary : cs.border.withValues(alpha: 0.5)),
+                    border: Border.all(
+                      color: selected
+                          ? cs.primary
+                          : cs.border.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Text(
                     opt.$2,
                     style: typo.xSmall.copyWith(
                       color: selected ? Colors.white : cs.mutedForeground,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                       fontSize: 11,
                     ),
                   ),
@@ -1018,7 +1261,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       label: '停止条件',
       value: label,
       onTap: _showStopConditionSheet,
-      onClear: _stopCondition != null ? () => setState(() => _stopCondition = null) : null,
+      onClear: _stopCondition != null
+          ? () => setState(() => _stopCondition = null)
+          : null,
     );
   }
 
@@ -1047,7 +1292,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       label: '分享限制',
       value: label,
       onTap: _showShareLimitSheet,
-      onClear: _shareLimitAction != null ? () => setState(() => _shareLimitAction = null) : null,
+      onClear: _shareLimitAction != null
+          ? () => setState(() => _shareLimitAction = null)
+          : null,
     );
   }
 
@@ -1069,16 +1316,27 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
           children: [
             Text(label, style: typo.xSmall.copyWith(color: cs.mutedForeground)),
             const Spacer(),
-            Text(value, style: typo.xSmall.copyWith(color: cs.foreground, fontSize: 12)),
+            Text(
+              value,
+              style: typo.xSmall.copyWith(color: cs.foreground, fontSize: 12),
+            ),
             if (onClear != null) ...[
               const SizedBox(width: 6),
               GestureDetector(
                 onTap: onClear,
-                child: Icon(shadcn.LucideIcons.x, size: 13, color: cs.mutedForeground.withValues(alpha: 0.4)),
+                child: Icon(
+                  shadcn.LucideIcons.x,
+                  size: 13,
+                  color: cs.mutedForeground.withValues(alpha: 0.4),
+                ),
               ),
             ],
             const SizedBox(width: 4),
-            Icon(shadcn.LucideIcons.chevronRight, size: 14, color: cs.mutedForeground.withValues(alpha: 0.4)),
+            Icon(
+              shadcn.LucideIcons.chevronRight,
+              size: 14,
+              color: cs.mutedForeground.withValues(alpha: 0.4),
+            ),
           ],
         ),
       ),
@@ -1108,7 +1366,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: Center(child: shadcn.CircularProgressIndicator(strokeWidth: 2)),
+                      child: Center(
+                        child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     )
                   : Center(child: const Text('下载')),
             ),
@@ -1123,7 +1383,11 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
   // ═══════════════════════════════════════════════════════════════
 
   void _showStopConditionSheet() {
-    const options = [(null, '不自动停止'), ('MetadataReceived', '收到元数据后停止'), ('FilesChecked', '文件校验后停止')];
+    const options = [
+      (null, '不自动停止'),
+      ('MetadataReceived', '收到元数据后停止'),
+      ('FilesChecked', '文件校验后停止'),
+    ];
 
     _showPickerSheet(
       title: '停止条件',
@@ -1182,7 +1446,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         final cs = shadcn.Theme.of(ctx).colorScheme;
 
         return Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.5),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.5,
+          ),
           decoration: BoxDecoration(
             color: cs.background,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -1195,7 +1461,10 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                 child: Container(
                   width: 36,
                   height: 4,
-                  decoration: BoxDecoration(color: cs.border, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                    color: cs.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1205,7 +1474,9 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     title,
-                    style: shadcn.Theme.of(ctx).typography.normal.copyWith(fontWeight: FontWeight.w600),
+                    style: shadcn.Theme.of(
+                      ctx,
+                    ).typography.normal.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -1239,13 +1510,27 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: typo.small.copyWith(fontWeight: selected ? FontWeight.w600 : FontWeight.normal)),
+                  Text(
+                    title,
+                    style: typo.small.copyWith(
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
                   if (subtitle != null)
-                    Text(subtitle, style: typo.xSmall.copyWith(color: cs.mutedForeground, fontSize: 11)),
+                    Text(
+                      subtitle,
+                      style: typo.xSmall.copyWith(
+                        color: cs.mutedForeground,
+                        fontSize: 11,
+                      ),
+                    ),
                 ],
               ),
             ),
-            if (selected) Icon(shadcn.LucideIcons.check, size: 16, color: cs.primary),
+            if (selected)
+              Icon(shadcn.LucideIcons.check, size: 16, color: cs.primary),
           ],
         ),
       ),
@@ -1316,9 +1601,12 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         ? const <String>[]
         : _parseUrlInputs(_manualUrlCtrl.text);
     if (!_hasTorrent && manualUrls.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入种子链接'), behavior: SnackBarBehavior.floating));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请输入种子链接'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
@@ -1331,24 +1619,32 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       // 种子来源
       if (_hasTorrent) {
         final t = widget.torrent!;
-        params['urls'] = t.magnetUrl.trim().isNotEmpty ? t.magnetUrl : t.detailUrl;
+        params['urls'] = t.magnetUrl.trim().isNotEmpty
+            ? t.magnetUrl
+            : t.detailUrl;
         final torrentIds = <String>[];
         void addId(String id) {
           final value = id.trim();
-          if (value.isNotEmpty && !torrentIds.contains(value)) torrentIds.add(value);
+          if (value.isNotEmpty && !torrentIds.contains(value))
+            torrentIds.add(value);
         }
+
         addId(t.tid);
         for (final id in widget.initialIds ?? const <String>[]) {
           addId(id);
         }
         if (torrentIds.isNotEmpty) {
           params['tid'] = torrentIds.first;
-          params['ids'] = torrentIds.length == 1 ? torrentIds.first : torrentIds;
+          params['ids'] = torrentIds.length == 1
+              ? torrentIds.first
+              : torrentIds;
         } else {
           params['tid'] = '';
         }
-        if (_genTorrentUrl) {
-          final siteId = _siteIdCtrl.text.trim();
+        if (_effectiveGenTorrentUrl) {
+          final siteId = _siteIdCtrl.text.trim().isNotEmpty
+              ? _siteIdCtrl.text.trim()
+              : _defaultSiteId();
           if (siteId.isNotEmpty) {
             params['site_id'] = siteId;
           }
@@ -1361,10 +1657,14 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
         params['urls'] = manualUrls.length == 1 ? manualUrls.first : manualUrls;
         final torrentIds = _torrentIdsForManualUrls(manualUrls);
         if (torrentIds.isNotEmpty) {
-          params['ids'] = torrentIds.length == 1 ? torrentIds.first : torrentIds;
+          params['ids'] = torrentIds.length == 1
+              ? torrentIds.first
+              : torrentIds;
         }
-        final siteId = _siteIdCtrl.text.trim();
-        if (_genTorrentUrl && siteId.isNotEmpty) {
+        final siteId = _siteIdCtrl.text.trim().isNotEmpty
+            ? _siteIdCtrl.text.trim()
+            : _defaultSiteId();
+        if (_effectiveGenTorrentUrl && siteId.isNotEmpty) {
           params['site_id'] = siteId;
         }
         final cookie = _cookieCtrl.text.trim();
@@ -1460,9 +1760,12 @@ class _PushTorrentSheetState extends ConsumerState<PushTorrentSheet> {
       if (mounted) {
         closeAppSheet(context);
         widget.onSuccess?.call();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('已推送到 ${widget.downloader.name}'), behavior: SnackBarBehavior.floating));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已推送到 ${widget.downloader.name}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
