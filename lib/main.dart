@@ -83,9 +83,17 @@ Future<void> _startApp() async {
         size: Size(width, height),
         center: true,
         backgroundColor: Colors.transparent,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
       );
 
       windowManager.waitUntilReadyToShow(windowOptions, () async {
+        if (PlatformTool.isMacOS()) {
+          await windowManager.setTitleBarStyle(
+            TitleBarStyle.hidden,
+            windowButtonVisibility: false,
+          );
+        }
         await windowManager.show();
         await windowManager.focus();
       });

@@ -12,6 +12,7 @@ import 'package:shadcn_flutter/src/components/locale/shadcn_localizations_en.dar
 
 import 'core/theme/theme_provider.dart';
 import 'router/app_router.dart';
+import 'widgets/desktop_window_controls.dart';
 
 class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
@@ -152,7 +153,9 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
       routerConfig: ref.watch(routerProvider),
       builder: (context, child) => _GlobalKeyboardDismiss(
-        child: shadcn.DrawerOverlay(child: child ?? const SizedBox.shrink()),
+        child: DesktopWindowControlsOverlay(
+          child: shadcn.DrawerOverlay(child: child ?? const SizedBox.shrink()),
+        ),
       ),
       locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans'),
       supportedLocales: const [
