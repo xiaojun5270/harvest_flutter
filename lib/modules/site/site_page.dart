@@ -82,49 +82,51 @@ class _SitePageState extends ConsumerState<SitePage> {
         color: pageBackground,
         child: Column(
           children: [
-          // 筛选面板（桌面端展开时显示）
-          if (!mobile && _showFilter)
-            SiteFilterPanel(onClose: () => setState(() => _showFilter = false)),
-          // 工具栏统一放顶部
-          _buildToolbar(
-            context,
-            filteredSites.length,
-            totalCount,
-            hasFilters,
-            mobile,
-          ),
-          CacheStatusBanner(
-            info: cacheInfo,
-            margin: EdgeInsets.fromLTRB(
-              mobile ? 12 : 16,
-              0,
-              mobile ? 12 : 16,
-              6,
+            // 筛选面板（桌面端展开时显示）
+            if (!mobile && _showFilter)
+              SiteFilterPanel(
+                onClose: () => setState(() => _showFilter = false),
+              ),
+            // 工具栏统一放顶部
+            _buildToolbar(
+              context,
+              filteredSites.length,
+              totalCount,
+              hasFilters,
+              mobile,
             ),
-          ),
-          Expanded(
-            child: EasyRefresh(
-              onRefresh: _refresh,
-              header: appRefreshHeader(context),
-              child: sitesAsync.when(
-                loading: () => _buildLoading(context),
-                error: (e, _) => SiteErrorView(error: e, onRetry: _refresh),
-                data: (_) {
-                  if (filteredSites.isEmpty) {
-                    return _buildEmptyState(
-                      context,
-                      hasFilters: hasFilters,
-                      mobile: mobile,
-                    );
-                  }
-                  return SiteListView(
-                    sites: filteredSites,
-                    controller: _scrollController,
-                  );
-                },
+            CacheStatusBanner(
+              info: cacheInfo,
+              margin: EdgeInsets.fromLTRB(
+                mobile ? 12 : 16,
+                0,
+                mobile ? 12 : 16,
+                6,
               ),
             ),
-          ),
+            Expanded(
+              child: EasyRefresh(
+                onRefresh: _refresh,
+                header: appRefreshHeader(context),
+                child: sitesAsync.when(
+                  loading: () => _buildLoading(context),
+                  error: (e, _) => SiteErrorView(error: e, onRetry: _refresh),
+                  data: (_) {
+                    if (filteredSites.isEmpty) {
+                      return _buildEmptyState(
+                        context,
+                        hasFilters: hasFilters,
+                        mobile: mobile,
+                      );
+                    }
+                    return SiteListView(
+                      sites: filteredSites,
+                      controller: _scrollController,
+                    );
+                  },
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -441,6 +443,12 @@ class _SitePageState extends ConsumerState<SitePage> {
                       current,
                       '样式 3',
                     ),
+                    _cardStyleTile(
+                      dropdownContext,
+                      SiteCardStyle.style4,
+                      current,
+                      '样式 4',
+                    ),
                   ],
                 );
               },
@@ -530,6 +538,7 @@ class _SitePageState extends ConsumerState<SitePage> {
             SiteCardStyle.style1 => _styleOnePreview(context),
             SiteCardStyle.style2 => _styleTwoPreview(context),
             SiteCardStyle.style3 => _styleThreePreview(context),
+            SiteCardStyle.style4 => _styleFourPreview(context),
           },
         ),
       ),
@@ -698,6 +707,63 @@ class _SitePageState extends ConsumerState<SitePage> {
                     siteInfo(context, alpha: 0.14),
                   ][i],
                   height: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _styleFourPreview(BuildContext context) {
+    final cs = siteColors(context);
+    return Column(
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: siteSuccess(context, alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: _previewLine(width: 28, color: cs.foreground, height: 6),
+            ),
+            _previewLine(
+              width: 18,
+              color: siteSuccess(context, alpha: 0.18),
+              height: 8,
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Expanded(child: _previewBox(siteSuccess(context, alpha: 0.12))),
+            const SizedBox(width: 4),
+            Expanded(child: _previewBox(siteInfo(context, alpha: 0.12))),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: List.generate(
+            4,
+            (i) => Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: i == 3 ? 0 : 3),
+                child: _previewBox(
+                  [
+                    siteSuccess(context, alpha: 0.12),
+                    siteInfo(context, alpha: 0.12),
+                    siteAccent(context, 4, alpha: 0.12),
+                    siteDanger(context, alpha: 0.10),
+                  ][i],
+                  height: 7,
                 ),
               ),
             ),

@@ -23,25 +23,34 @@ class SiteListView extends ConsumerWidget {
     return EasyRefresh(
       onRefresh: () => ref.read(siteInfoListProvider.notifier).refresh(),
       header: appRefreshHeader(context),
-      child: mobile ? _buildList(context, sites) : _buildGrid(context, sites, cardStyle),
+      child: mobile
+          ? _buildList(context, sites)
+          : _buildGrid(context, sites, cardStyle),
     );
   }
 
   double _bottomPadding(BuildContext context) {
     final media = MediaQuery.of(context);
-    final safeBottom = media.padding.bottom > 0 ? media.padding.bottom : media.viewPadding.bottom;
+    final safeBottom = media.padding.bottom > 0
+        ? media.padding.bottom
+        : media.viewPadding.bottom;
     return 56 + ShellBottomSpacing.value(context) + safeBottom;
   }
 
-  Widget _buildList(BuildContext context, List<SiteInfo> sites) => ListView.separated(
-    controller: controller,
-    padding: EdgeInsets.fromLTRB(8, 4, 8, _bottomPadding(context)),
-    itemCount: sites.length,
-    separatorBuilder: (_, __) => const SizedBox(height: 8),
-    itemBuilder: (_, i) => SiteCard(site: sites[i]),
-  );
+  Widget _buildList(BuildContext context, List<SiteInfo> sites) =>
+      ListView.separated(
+        controller: controller,
+        padding: EdgeInsets.fromLTRB(8, 4, 8, _bottomPadding(context)),
+        itemCount: sites.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) => SiteCard(site: sites[i]),
+      );
 
-  Widget _buildGrid(BuildContext context, List<SiteInfo> sites, SiteCardStyle cardStyle) => LayoutBuilder(
+  Widget _buildGrid(
+    BuildContext context,
+    List<SiteInfo> sites,
+    SiteCardStyle cardStyle,
+  ) => LayoutBuilder(
     builder: (context, c) {
       final cols = (c.maxWidth / 360).floor().clamp(2, 5);
       return GridView.builder(
@@ -55,6 +64,7 @@ class SiteListView extends ConsumerWidget {
             SiteCardStyle.style1 => 160,
             SiteCardStyle.style2 => 214,
             SiteCardStyle.style3 => 374,
+            SiteCardStyle.style4 => 360,
           },
         ),
         itemCount: sites.length,

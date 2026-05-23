@@ -2,11 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
 
-enum SiteCardStyle {
-  style1,
-  style2,
-  style3,
-}
+enum SiteCardStyle { style1, style2, style3, style4 }
 
 final siteCardStyleProvider = StateProvider<SiteCardStyle>((ref) {
   final index = HiveManager.get<int>(StorageKeys.siteCardStyle) ?? 0;

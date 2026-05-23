@@ -54,6 +54,8 @@ class SiteCard extends ConsumerWidget {
         return SiteCard2(site: site, privacy: privacy);
       case SiteCardStyle.style3:
         return SiteCard3(site: site, privacy: privacy);
+      case SiteCardStyle.style4:
+        return SiteCard4(site: site, privacy: privacy);
       case SiteCardStyle.style1:
         break;
     }
@@ -128,9 +130,9 @@ class SiteCard extends ConsumerWidget {
     WebSite? config,
     bool privacy,
   ) {
+    final signStatus = _siteSignStatus(site, config);
     final hasRight =
-        (status != null && status.myLevel.isNotEmpty) ||
-        site.signInText != null;
+        (status != null && status.myLevel.isNotEmpty) || signStatus != null;
     return Row(
       children: [
         _siteLogo(context, config, privacy),
@@ -168,9 +170,9 @@ class SiteCard extends ConsumerWidget {
           const SizedBox(width: 6),
           if (status != null && status.myLevel.isNotEmpty)
             _levelBadge(context, status.myLevel),
-          if (site.signInText != null) ...[
+          if (signStatus != null) ...[
             const SizedBox(width: 4),
-            _signBadge(context, site.signInText!),
+            _signBadge(context, signStatus),
           ],
         ],
       ],
@@ -751,6 +753,13 @@ String _fmtMagicWithRatio(double current, double full) {
   return '${fmtCompact(current)}($pct%)';
 }
 
+String _fmtMagicWithRatioTwoLine(double current, double full) {
+  final text = _fmtMagicWithRatio(current, full);
+  final index = text.indexOf('(');
+  if (index <= 0) return text;
+  return '${text.substring(0, index)}\n${text.substring(index)}';
+}
+
 String _localSiteIconUrl(String siteName) {
   final name = siteName.trim();
   final base = AppConfig.baseUrl.trim();
@@ -1167,7 +1176,7 @@ class SiteCard2 extends ConsumerWidget {
     return SiteActionMenu(
       site: site,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: siteRadius(context, size: "xl"),
@@ -1242,41 +1251,67 @@ class SiteCard2 extends ConsumerWidget {
 
   Widget _emptyCard(BuildContext context, WebSite? config) {
     final signStatus = _siteSignStatus(site, config);
-    return Row(
-      children: [
-        _siteLogo(context, config),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _siteTitle(context)),
-                  if (_hasSiteUnread(site)) ...[
-                    const SizedBox(width: 8),
-                    _siteUnreadIndicators(context, site),
-                  ],
-                  if (signStatus != null) ...[
-                    const SizedBox(width: 8),
-                    _siteSignBadge(context, signStatus),
-                  ],
-                ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bounded = constraints.hasBoundedHeight;
+        final centerHeight = bounded
+            ? (constraints.maxHeight - 92).clamp(36.0, 92.0).toDouble()
+            : 0.0;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                _siteLogo(context, config),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _siteTitle(context)),
+                          if (_hasSiteUnread(site)) ...[
+                            const SizedBox(width: 8),
+                            _siteUnreadIndicators(context, site),
+                          ],
+                          if (signStatus != null) ...[
+                            const SizedBox(width: 8),
+                            _siteSignBadge(context, signStatus),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '暂无站点数据',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _mutedText(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (bounded)
+              SizedBox(
+                height: centerHeight,
+                child: Center(child: _siteLogo(context, config)),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '暂无站点数据',
-                style: TextStyle(fontSize: 12, color: _mutedText(context)),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Icon(
+                shadcn.LucideIcons.chevronRight,
+                color: _mutedText(context),
+                size: 20,
               ),
-            ],
-          ),
-        ),
-        Icon(
-          shadcn.LucideIcons.chevronRight,
-          color: _mutedText(context),
-          size: 20,
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1782,49 +1817,76 @@ class SiteCard3 extends ConsumerWidget {
 
   Widget _emptyCard(BuildContext context, WidgetRef ref, WebSite? config) {
     final signStatus = _siteSignStatus(site, config);
-    return Row(
-      children: [
-        _siteLogo(context, config, 54),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _title(context)),
-                  if (signStatus != null) ...[
-                    const SizedBox(width: 8),
-                    _siteSignBadge(context, signStatus),
-                  ],
-                  if (_hasSiteUnread(site)) ...[
-                    const SizedBox(width: 8),
-                    _siteUnreadIndicators(
-                      context,
-                      site,
-                      iconSize: _statusBadgeIconSize,
-                      fontSize: _statusBadgeFontSize,
-                      height: _statusBadgeHeight,
-                      horizontal: _statusBadgeHorizontal,
-                      mailColor: siteDanger(context),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bounded = constraints.hasBoundedHeight;
+        final centerHeight = bounded
+            ? (constraints.maxHeight - 120).clamp(56.0, 160.0).toDouble()
+            : 0.0;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _siteLogo(context, config, 54),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: _title(context)),
+                            if (signStatus != null) ...[
+                              const SizedBox(width: 8),
+                              _siteSignBadge(context, signStatus),
+                            ],
+                            if (_hasSiteUnread(site)) ...[
+                              const SizedBox(width: 8),
+                              _siteUnreadIndicators(
+                                context,
+                                site,
+                                iconSize: _statusBadgeIconSize,
+                                fontSize: _statusBadgeFontSize,
+                                height: _statusBadgeHeight,
+                                horizontal: _statusBadgeHorizontal,
+                                mailColor: siteDanger(context),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          '暂无站点数据',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _mutedText(context),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                '暂无站点数据',
-                style: TextStyle(
-                  color: _mutedText(context),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  ),
                 ),
+              ],
+            ),
+            if (bounded)
+              SizedBox(
+                height: centerHeight,
+                child: Center(child: _siteLogo(context, config, 44)),
               ),
-            ],
-          ),
-        ),
-        _actionMenuButton(context, ref),
-      ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: _actionMenuButton(context, ref),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -2428,6 +2490,599 @@ class SiteCard3 extends ConsumerWidget {
   }
 }
 
+class SiteCard4 extends SiteCard3 {
+  const SiteCard4({super.key, required super.site, required super.privacy});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = site.latestStatus;
+    final configs = ref.watch(websiteListProvider).valueOrNull ?? [];
+    final config = configs.firstWhereOrNull((c) => c.name == site.site);
+    final spFull = _numVal(config?.spFull);
+
+    return SiteActionMenu(
+      site: site,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+        decoration: BoxDecoration(
+          color: _cardColor(context),
+          borderRadius: siteRadius(context, size: "xl"),
+          border: Border.all(color: _borderColor(context), width: 0.9),
+          boxShadow: [
+            BoxShadow(
+              color: _isDark(context)
+                  ? Colors.black.withValues(alpha: 0.28)
+                  : siteShadow(context, alpha: 0.08),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+              spreadRadius: -6,
+            ),
+          ],
+        ),
+        child: status == null
+            ? _emptyCard4(context, ref, config)
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _hero(context, status, config),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _trafficPanel(
+                          context,
+                          icon: Icons.cloud_upload_rounded,
+                          label: '上传',
+                          value: fmtBytes(status.uploaded),
+                          caption: '总计上传流量',
+                          accent: siteSuccess(context),
+                          background: _softTileColor(
+                            context,
+                            siteSuccess(context, alpha: 0.10),
+                            siteSuccess(context),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: _trafficPanel(
+                          context,
+                          icon: Icons.cloud_download_rounded,
+                          label: '下载',
+                          value: fmtBytes(status.downloaded),
+                          caption: '总计下载流量',
+                          accent: siteInfo(context),
+                          background: _softTileColor(
+                            context,
+                            siteInfo(context, alpha: 0.10),
+                            siteInfo(context),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  _metricGrid(context, status, spFull),
+                  const SizedBox(height: 7),
+                  Divider(
+                    height: 1,
+                    thickness: 0.7,
+                    color: _dividerColor(context),
+                  ),
+                  const SizedBox(height: 7),
+                  _footer4(context, ref, status),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _emptyCard4(BuildContext context, WidgetRef ref, WebSite? config) {
+    final signStatus = _siteSignStatus(site, config);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final centerHeight = constraints.hasBoundedHeight
+            ? (constraints.maxHeight - 144).clamp(72.0, 180.0).toDouble()
+            : 72.0;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _siteLogo(context, config, 54),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: _title(context)),
+                            if (signStatus != null) ...[
+                              const SizedBox(width: 6),
+                              _siteSignBadge(context, signStatus),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '暂无站点数据',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _mutedText(context),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_hasSiteUnread(site)) ...[
+                  const SizedBox(width: 8),
+                  _siteUnreadIndicators(
+                    context,
+                    site,
+                    iconSize: 12,
+                    fontSize: 12,
+                    height: 24,
+                    horizontal: 8,
+                    mailColor: siteDanger(context),
+                  ),
+                ],
+              ],
+            ),
+            SizedBox(
+              height: centerHeight,
+              child: Center(child: _siteLogo(context, config, 44)),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _actionMenuButton(context, ref),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _hero(BuildContext context, SiteDailyStatus status, WebSite? config) {
+    final signStatus = _siteSignStatus(site, config);
+    final milestone = _siteLevelMilestone(config, status);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _siteLogo(context, config, 54),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _title(context)),
+                    if (milestone != null) ...[
+                      const SizedBox(width: 8),
+                      _siteLevelMilestoneBadge(
+                        context,
+                        milestone,
+                        fontSize: 11,
+                        horizontal: 7,
+                        vertical: 0,
+                        radius: 16,
+                        iconSize: 11,
+                        height: 20,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_month_outlined,
+                      size: 14,
+                      color: siteSuccess(context),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        site.durationText.isEmpty ? '-' : site.durationText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _mutedText(context),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (signStatus != null) _siteSignBadge(context, signStatus),
+            if (_hasSiteUnread(site)) ...[
+              const SizedBox(height: 8),
+              _siteUnreadIndicators(
+                context,
+                site,
+                iconSize: 12,
+                fontSize: 12,
+                height: 26,
+                horizontal: 8,
+                mailColor: siteDanger(context),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _trafficPanel(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required String caption,
+    required Color accent,
+    required Color background,
+  }) {
+    return _siteTooltip(
+      '$label: $value',
+      Container(
+        height: 78,
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: siteRadius(context, size: "xl"),
+          border: Border.all(color: accent.withValues(alpha: 0.16), width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: accent, size: 22),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    height: 14,
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  SizedBox(
+                    height: 19,
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: _titleText(context).withValues(alpha: 0.92),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 12,
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        caption,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: _mutedText(context),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metricGrid(
+    BuildContext context,
+    SiteDailyStatus status,
+    double spFull,
+  ) {
+    final items = [
+      _Card4Metric(
+        Icons.spa_outlined,
+        '做种',
+        fmtCompact(status.seed.toDouble()),
+        siteSuccess(context),
+        siteSuccess(context, alpha: 0.08),
+      ),
+      _Card4Metric(
+        Icons.arrow_circle_down_rounded,
+        '下载中',
+        fmtCompact(status.leech.toDouble()),
+        siteInfo(context),
+        siteInfo(context, alpha: 0.08),
+      ),
+      _Card4Metric(
+        Icons.bolt_rounded,
+        '魔力',
+        fmtCompact(status.myBonus),
+        siteAccent(context, 4),
+        siteAccent(context, 4, alpha: 0.08),
+      ),
+      _Card4Metric(
+        shadcn.LucideIcons.diamond,
+        '积分',
+        fmtCompact(status.myScore),
+        siteDanger(context),
+        siteDanger(context, alpha: 0.07),
+      ),
+      _Card4Metric(
+        Icons.hub_outlined,
+        '分享率',
+        _fmtRatio(status.ratio),
+        siteAccent(context, 5),
+        siteAccent(context, 5, alpha: 0.08),
+      ),
+      _Card4Metric(
+        Icons.timer_outlined,
+        '时魔',
+        _fmtMagicWithRatioTwoLine(status.bonusHour, spFull),
+        siteWarning(context),
+        siteWarning(context, alpha: 0.08),
+        twoLineValue: true,
+      ),
+      _Card4Metric(
+        Icons.rocket_launch_outlined,
+        '发种',
+        fmtCompact(status.publish.toDouble()),
+        siteInfo(context),
+        siteInfo(context, alpha: 0.08),
+      ),
+      _Card4Metric(
+        Icons.storage_rounded,
+        '做种量',
+        fmtBytes(status.seedVolume),
+        _mutedText(context),
+        siteColors(context).muted.withValues(alpha: 0.32),
+      ),
+    ];
+
+    return Column(
+      children: [
+        for (var row = 0; row < 2; row++) ...[
+          Row(
+            children: [
+              for (var col = 0; col < 4; col++) ...[
+                Expanded(child: _metricPanel(context, items[row * 4 + col])),
+                if (col != 3) const SizedBox(width: 8),
+              ],
+            ],
+          ),
+          if (row != 1) const SizedBox(height: 5),
+        ],
+      ],
+    );
+  }
+
+  Widget _metricPanel(BuildContext context, _Card4Metric item) {
+    return _siteTooltip(
+      '${item.label}: ${item.value}',
+      Container(
+        height: 54,
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+        decoration: BoxDecoration(
+          color: _softTileColor(context, item.background, item.color),
+          borderRadius: siteRadius(context, size: "lg"),
+          border: Border.all(
+            color: item.color.withValues(alpha: 0.10),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(item.icon, color: item.color, size: 15),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    height: 12,
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: item.color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  _dottedDivider(context),
+                  const SizedBox(height: 3),
+                  SizedBox(
+                    height: item.twoLineValue ? 22 : 15,
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: Text(
+                        item.value,
+                        maxLines: item.twoLineValue ? 2 : 1,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _titleText(context).withValues(alpha: 0.92),
+                          fontSize: item.twoLineValue ? 15 : 16,
+                          fontWeight: FontWeight.w900,
+                          height: item.twoLineValue ? 1.05 : 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dottedDivider(BuildContext context) {
+    final color = _dividerColor(context).withValues(alpha: 0.72);
+    return SizedBox(
+      height: 1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final count = (constraints.maxWidth / 5).floor().clamp(1, 80);
+          return Row(
+            children: List.generate(
+              count,
+              (index) => Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(width: 2, height: 1, color: color),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _footer4(BuildContext context, WidgetRef ref, SiteDailyStatus status) {
+    final rawText = status.updated_at.trim().isNotEmpty
+        ? status.updated_at.trim()
+        : (site.latestStatusUpdatedAt ?? '').trim();
+    final text = _trimMilliseconds(rawText);
+    return Row(
+      children: [
+        Expanded(
+          child: _siteTooltip(
+            text.isEmpty ? '同步： -' : '同步： $text',
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '同步： ${text.isEmpty ? '-' : text}',
+                maxLines: 1,
+                style: TextStyle(
+                  color: _mutedText(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => openDetail(context, site),
+          child: Container(
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _softTileColor(
+                context,
+                siteInfo(context, alpha: 0.14),
+                siteInfo(context),
+              ),
+              borderRadius: siteRadius(context, size: "xl"),
+            ),
+            child: Text(
+              '详情',
+              style: TextStyle(
+                color: siteInfo(context),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _actionMenuButton(context, ref),
+      ],
+    );
+  }
+}
+
 class _MetricTile {
   final String icon;
   final String label;
@@ -2442,6 +3097,24 @@ class _MetricTile {
     this.color,
     this.background,
   );
+}
+
+class _Card4Metric {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final Color background;
+  final bool twoLineValue;
+
+  const _Card4Metric(
+    this.icon,
+    this.label,
+    this.value,
+    this.color,
+    this.background, {
+    this.twoLineValue = false,
+  });
 }
 
 String _fmtRatio(num value) => fmtRatio(value);
