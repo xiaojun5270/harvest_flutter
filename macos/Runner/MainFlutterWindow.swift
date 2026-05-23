@@ -30,13 +30,10 @@ class MainFlutterWindow: NSWindow {
 
     super.awakeFromNib()
 
-    DispatchQueue.main.async {
-      self.moveWindowControlsDown()
-    }
+    hideNativeWindowControls()
   }
 
-  private func moveWindowControlsDown() {
-    let offset: CGFloat = 12
+  private func hideNativeWindowControls() {
     let buttonTypes: [NSWindow.ButtonType] = [
       .closeButton,
       .miniaturizeButton,
@@ -45,9 +42,7 @@ class MainFlutterWindow: NSWindow {
 
     for type in buttonTypes {
       guard let button = self.standardWindowButton(type) else { continue }
-      button.setFrameOrigin(
-        NSPoint(x: button.frame.origin.x, y: button.frame.origin.y - offset)
-      )
+      button.isHidden = true
     }
   }
 }
