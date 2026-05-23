@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/widgets/app_header_layout.dart';
@@ -16,21 +19,111 @@ class DesktopWindowControlsOverlay extends StatelessWidget {
 
     final controlsOnLeft = PlatformTool.isMacOS() || PlatformTool.isLinux();
 
+    final content = PlatformTool.isWindows()
+        ? _WindowsTitleBarDragListener(child: child)
+        : child;
+
     return Stack(
       children: [
-        child,
+        content,
         Positioned(
           top: MediaQuery.paddingOf(context).top,
           left: controlsOnLeft ? kDesktopWindowControlsInset : null,
           right: controlsOnLeft ? null : kDesktopWindowControlsInset,
           height: kAppHeaderHeight,
           child: Align(
-            alignment: controlsOnLeft ? Alignment.centerLeft : Alignment.centerRight,
+            alignment: controlsOnLeft
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
             child: DesktopWindowControls(isMacStyle: controlsOnLeft),
           ),
         ),
       ],
     );
+  }
+}
+
+class _WindowsTitleBarDragListener extends StatefulWidget {
+  final Widget child;
+
+  const _WindowsTitleBarDragListener({required this.child});
+
+  @override
+  State<_WindowsTitleBarDragListener> createState() =>
+      _WindowsTitleBarDragListenerState();
+}
+
+class _WindowsTitleBarDragListenerState
+    extends State<_WindowsTitleBarDragListener> {
+  static const double _dragSlop = 8;
+  static const double _leadingInteractiveGuard = 72;
+  static const double _extraTrailingInteractiveGuard = 180;
+
+  int? _dragPointer;
+  Offset? _dragStart;
+  bool _dragStarted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: (event) => _clearDragCandidate(event.pointer),
+      onPointerCancel: (event) => _clearDragCandidate(event.pointer),
+      child: widget.child,
+    );
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if ((event.buttons & kPrimaryMouseButton) == 0) return;
+    if (!_isInDraggableTitleBar(event.position)) return;
+
+    _dragPointer = event.pointer;
+    _dragStart = event.position;
+    _dragStarted = false;
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_dragPointer != event.pointer || _dragStarted) return;
+
+    final start = _dragStart;
+    if (start == null) return;
+    if ((event.position - start).distance < _dragSlop) return;
+
+    _dragStarted = true;
+    _clearDragCandidate(event.pointer);
+    unawaited(windowManager.startDragging());
+  }
+
+  bool _isInDraggableTitleBar(Offset position) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery == null) return false;
+
+    final top = mediaQuery.padding.top;
+    if (position.dy < top || position.dy > top + kAppHeaderHeight) {
+      return false;
+    }
+
+    final width = mediaQuery.size.width;
+    if (width <= 0) return false;
+
+    final trailingGuard =
+        (kDesktopWindowControlsReservedWidth + _extraTrailingInteractiveGuard)
+            .clamp(kDesktopWindowControlsReservedWidth, width * 0.42)
+            .toDouble();
+
+    if (position.dx < _leadingInteractiveGuard) return false;
+    if (position.dx > width - trailingGuard) return false;
+
+    return true;
+  }
+
+  void _clearDragCandidate(int pointer) {
+    if (_dragPointer != pointer) return;
+    _dragPointer = null;
+    _dragStart = null;
+    _dragStarted = false;
   }
 }
 
@@ -111,13 +204,16 @@ class _TrafficLightWindowButtonState extends State<_TrafficLightWindowButton> {
   @override
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
-    final foreground = Color.lerp(Colors.black, widget.color, 0.18)!
-        .withValues(alpha: 0.72);
+    final foreground = Color.lerp(
+      Colors.black,
+      widget.color,
+      0.18,
+    )!.withValues(alpha: 0.72);
     final circleColor = _pressed
         ? Color.lerp(widget.color, Colors.black, 0.10)!
         : _hovered
-            ? Color.lerp(widget.color, Colors.white, 0.12)!
-            : widget.color;
+        ? Color.lerp(widget.color, Colors.white, 0.12)!
+        : widget.color;
 
     return shadcn.Tooltip(
       tooltip: (_) => Text(widget.tooltip),
