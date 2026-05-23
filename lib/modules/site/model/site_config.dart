@@ -151,7 +151,7 @@ abstract class WebSite with _$WebSite {
   }) = _WebSite;
 
   factory WebSite.fromJson(Map<String, dynamic> json) =>
-      _$WebSiteFromJson(json);
+      _$WebSiteFromJson(_normalizeWebSiteJson(json));
 
   List<String> get tagList =>
       tags.isEmpty ? [] : tags.split(',').map((e) => e.trim()).toList();
@@ -167,6 +167,25 @@ List<String> _stringListFromJson(Object? value) {
         .toList();
   }
   return [value.toString()];
+}
+
+String _stringFromJson(Object? value) {
+  if (value == null) return '';
+  if (value is String) return value;
+  if (value is Iterable) {
+    return value
+        .where((item) => item != null)
+        .map((item) => item.toString())
+        .join(',');
+  }
+  return value.toString();
+}
+
+Map<String, String> _stringMapFromJson(Object? value) {
+  if (value is! Map) return const {};
+  return value.map(
+    (key, item) => MapEntry(key.toString(), _stringFromJson(item)),
+  );
 }
 
 @freezed
@@ -189,5 +208,152 @@ abstract class SiteLevel with _$SiteLevel {
   }) = _SiteLevel;
 
   factory SiteLevel.fromJson(Map<String, dynamic> json) =>
-      _$SiteLevelFromJson(json);
+      _$SiteLevelFromJson(_normalizeSiteLevelJson(json));
+}
+
+Map<String, dynamic> _normalizeWebSiteJson(Map<String, dynamic> json) {
+  final next = Map<String, dynamic>.from(json);
+  next['url'] = _stringListFromJson(next['url']);
+  next['page_search'] = _stringListFromJson(next['page_search']);
+  next['buy_action'] = _stringMapFromJson(next['buy_action']);
+  next['level'] = _siteLevelJsonMapFromJson(next['level']);
+
+  for (final key in const [
+    'page_index',
+    'page_torrents',
+    'page_sign_in',
+    'page_control_panel',
+    'page_detail',
+    'page_download',
+    'page_user',
+    'page_message',
+    'page_hr',
+    'page_leeching',
+    'page_uploaded',
+    'page_seeding',
+    'page_completed',
+    'page_mybonus',
+    'page_viewfilelist',
+    'page_pieces_hash_api',
+    'buy_page',
+  ]) {
+    if (next.containsKey(key)) next[key] = _firstStringFromJson(next[key]);
+  }
+
+  for (final key in const [
+    'name',
+    'nickname',
+    'logo',
+    'tracker',
+    'tags',
+    'sign_info_title',
+    'sign_info_content',
+    'my_invitation_rule',
+    'my_time_join_rule',
+    'my_latest_active_rule',
+    'my_uploaded_rule',
+    'my_downloaded_rule',
+    'my_ratio_rule',
+    'my_bonus_rule',
+    'my_per_hour_bonus_rule',
+    'my_score_rule',
+    'my_level_rule',
+    'my_passkey_rule',
+    'my_uid_rule',
+    'my_hr_rule',
+    'my_leech_rule',
+    'my_publish_rule',
+    'my_seed_rule',
+    'my_seed_vol_rule',
+    'my_mailbox_rule',
+    'my_message_title',
+    'my_notice_rule',
+    'my_notice_title',
+    'my_notice_content',
+    'torrents_rule',
+    'torrent_title_rule',
+    'torrent_subtitle_rule',
+    'torrent_detail_url_rule',
+    'torrent_category_rule',
+    'torrent_poster_rule',
+    'torrent_magnet_url_rule',
+    'torrent_size_rule',
+    'torrent_progress_rule',
+    'torrent_hr_rule',
+    'torrent_sale_rule',
+    'torrent_sale_expire_rule',
+    'torrent_release_rule',
+    'torrent_seeders_rule',
+    'torrent_leechers_rule',
+    'torrent_completers_rule',
+    'torrent_tags_rule',
+    'detail_title_rule',
+    'detail_subtitle_rule',
+    'detail_download_url_rule',
+    'detail_size_rule',
+    'detail_category_rule',
+    'detail_count_files_rule',
+    'detail_hash_rule',
+    'detail_free_rule',
+    'detail_free_expire_rule',
+    'detail_douban_rule',
+    'detail_imdb_rule',
+    'detail_poster_rule',
+    'detail_tags_rule',
+    'detail_hr_rule',
+    'structure',
+    'type',
+    'nation',
+    'my_email_rule',
+    'my_username_rule',
+  ]) {
+    if (next.containsKey(key)) next[key] = _stringFromJson(next[key]);
+  }
+
+  return next;
+}
+
+String _firstStringFromJson(Object? value) {
+  if (value == null) return '';
+  if (value is String) return value;
+  if (value is Iterable) {
+    for (final item in value) {
+      final text = _stringFromJson(item).trim();
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+  return value.toString();
+}
+
+Map<String, dynamic> _normalizeSiteLevelJson(Map<String, dynamic> json) {
+  final next = Map<String, dynamic>.from(json);
+  for (final key in const ['level', 'uploaded', 'downloaded', 'rights']) {
+    if (next.containsKey(key)) next[key] = _stringFromJson(next[key]);
+  }
+  if ((next['uploaded'] as String?)?.isEmpty ?? true) next['uploaded'] = '0';
+  if ((next['downloaded'] as String?)?.isEmpty ?? true) next['downloaded'] = '0';
+  return next;
+}
+
+Map<String, dynamic> _siteLevelJsonMapFromJson(Object? value) {
+  if (value is Map) {
+    return value.map((key, item) {
+      if (item is Map) return MapEntry(key.toString(), _normalizeSiteLevelJson(Map<String, dynamic>.from(item)));
+      return MapEntry(key.toString(), _normalizeSiteLevelJson({'level': item}));
+    });
+  }
+  if (value is Iterable) {
+    final result = <String, dynamic>{};
+    var index = 0;
+    for (final item in value) {
+      index++;
+      if (item is! Map) continue;
+      final level = _normalizeSiteLevelJson(Map<String, dynamic>.from(item));
+      final name = _stringFromJson(level['level']);
+      result[name.isEmpty ? 'Level$index' : name] = level;
+    }
+    return result;
+  }
+  return const {};
 }
