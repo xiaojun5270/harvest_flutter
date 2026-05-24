@@ -314,7 +314,7 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: tokens.size(12),
                   crossAxisSpacing: tokens.size(12),
-                  mainAxisExtent: tokens.size(220),
+                  mainAxisExtent: tokens.size(252),
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, i) => DownloaderCard(

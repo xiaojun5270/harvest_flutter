@@ -31,6 +31,19 @@ class DownloaderSpeedData {
     final infoJson =
         _asStringMap(_pick(json, const ['info', 'status', 'server_state'])) ??
         (Map<String, dynamic>.from(json)..remove('prefs'));
+    final topLevelVersion = _cleanVersion(
+      _pick(json, const [
+        'version',
+        'app_version',
+        'appVersion',
+        'qb_version',
+        'qbVersion',
+      ]),
+    );
+    if (topLevelVersion.isNotEmpty) {
+      infoJson.putIfAbsent('version', () => topLevelVersion);
+      prefsJson.putIfAbsent('version', () => topLevelVersion);
+    }
 
     return DownloaderSpeedData(
       downloaderId: id,
@@ -128,7 +141,16 @@ class DownloaderInfo {
     if (json.containsKey('dl_info_speed') ||
         json.containsKey('up_info_speed') ||
         json.containsKey('free_space_on_disk')) {
-      final version = prefs['version']?.toString() ?? '';
+      final version = _cleanVersion(
+        _pick(prefs, const [
+              'version',
+              'app_version',
+              'appVersion',
+              'qb_version',
+              'qbVersion',
+            ]) ??
+            _pick(json, const ['version']),
+      );
       final rawUploadLimit = _safeInt(
         _pick(json, const ['up_rate_limit', 'uploadLimit']),
       );
@@ -285,6 +307,19 @@ dynamic _pick(Map<String, dynamic> json, List<String> keys) {
     if (json.containsKey(key) && json[key] != null) return json[key];
   }
   return null;
+}
+
+String _cleanVersion(dynamic value) {
+  var text = value?.toString().trim() ?? '';
+  if (text.isEmpty || text.toLowerCase() == 'null') return '';
+  while (text.length >= 2 &&
+      ((text.startsWith('"') && text.endsWith('"')) ||
+          (text.startsWith("'") && text.endsWith("'")))) {
+    text = text.substring(1, text.length - 1).trim();
+  }
+  if (text.isEmpty || text.toLowerCase() == 'null') return '';
+  if (text.contains(' ')) text = text.substring(0, text.indexOf(' '));
+  return text;
 }
 
 int _safeInt(dynamic value) {

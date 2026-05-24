@@ -15,137 +15,96 @@ class DownloaderLiveInfo extends StatelessWidget {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
     final typo = theme.typography;
-    final primary = cs.primary;
-    final destructive = cs.destructive;
-    final warning = Color.lerp(cs.primary, cs.destructive, 0.45)!;
+    final uploadColor = cs.primary;
+    final downloadColor = cs.destructive;
+    final limitColor = Color.lerp(cs.primary, cs.destructive, 0.45)!;
+    final gap = theme.density.baseGap * theme.scaling;
 
     return SizedBox(
       width: double.infinity,
-      child: shadcn.Card(
-        padding: EdgeInsets.zero,
-        filled: true,
-        fillColor: cs.muted.withValues(alpha: 0.28),
+      child: Container(
+        padding: EdgeInsets.all(gap * 0.75),
+        decoration: BoxDecoration(
+          color: cs.muted.withValues(alpha: 0.20),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: cs.border.withValues(alpha: 0.55)),
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // ── 速度 + 版本 ──
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                theme.density.baseContentPadding * theme.scaling * 0.65,
-                theme.density.baseGap * theme.scaling,
-                theme.density.baseContentPadding * theme.scaling * 0.65,
-                0,
-              ),
-              child: Row(
-                children: [
-                  _speedChip(
+            Row(
+              children: [
+                Expanded(
+                  child: _speedTile(
                     icon: shadcn.LucideIcons.arrowDown,
-                    color: primary,
-                    text: _formatSpeed(info.downloadSpeed),
+                    label: '下载',
+                    value: _formatSpeed(info.downloadSpeed),
+                    color: downloadColor,
                     active: info.downloadSpeed > 0,
                     theme: theme,
                     cs: cs,
                     typo: typo,
                   ),
-                  SizedBox(width: theme.density.baseGap * theme.scaling * 0.75),
-                  _speedChip(
+                ),
+                SizedBox(width: gap * 0.65),
+                Expanded(
+                  child: _speedTile(
                     icon: shadcn.LucideIcons.arrowUp,
-                    color: destructive,
-                    text: _formatSpeed(info.uploadSpeed),
+                    label: '上传',
+                    value: _formatSpeed(info.uploadSpeed),
+                    color: uploadColor,
                     active: info.uploadSpeed > 0,
                     theme: theme,
                     cs: cs,
                     typo: typo,
                   ),
-                  const Spacer(),
-                  if (info.version.isNotEmpty)
-                    shadcn.OutlineBadge(child: Text(info.version)),
-                ],
-              ),
-            ),
-
-            // ── 分割线 ──
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal:
-                    theme.density.baseContentPadding * theme.scaling * 0.65,
-              ),
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: theme.density.baseGap * theme.scaling,
                 ),
-                child: Divider(height: 1, color: cs.border),
-              ),
+              ],
             ),
-
-            // ── 统计数据 ──
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                theme.density.baseContentPadding * theme.scaling * 0.65,
-                theme.density.baseGap * theme.scaling,
-                theme.density.baseContentPadding * theme.scaling * 0.65,
-                theme.density.baseGap * theme.scaling,
-              ),
+            SizedBox(height: gap * 0.65),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _statItem(
-                    label: '上传',
+                  _metricPill(
+                    label: '已上传',
                     value: _formatSize(info.uploadedSession),
-                    color: destructive,
+                    color: uploadColor,
                     cs: cs,
                     typo: typo,
                   ),
-                  SizedBox(width: theme.density.baseGap * theme.scaling * 0.5),
-                  _statDivider(theme, cs),
-                  SizedBox(width: theme.density.baseGap * theme.scaling * 0.5),
-                  _statItem(
-                    label: '下载',
+                  SizedBox(width: gap * 0.5),
+                  _metricPill(
+                    label: '已下载',
                     value: _formatSize(info.downloadedSession),
-                    color: primary,
+                    color: downloadColor,
                     cs: cs,
                     typo: typo,
                   ),
-                  if (isQb && info.hasLimit) ...[
-                    SizedBox(
-                      width: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    _statDivider(theme, cs),
-                    SizedBox(
-                      width: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    _statItem(
+                  if (info.hasLimit) ...[
+                    SizedBox(width: gap * 0.5),
+                    _metricPill(
                       label: '限速',
                       value:
-                          '${_formatLimit(info.uploadLimit)}/${_formatLimit(info.downloadLimit)}',
-                      color: warning,
+                          '↑${_formatLimit(info.uploadLimit)} ↓${_formatLimit(info.downloadLimit)}',
+                      color: limitColor,
                       cs: cs,
                       typo: typo,
                     ),
                   ],
-                  if (!isQb && info.activeTorrentCount > 0) ...[
-                    SizedBox(
-                      width: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    _statDivider(theme, cs),
-                    SizedBox(
-                      width: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    _statItem(
+                  if (info.activeTorrentCount > 0) ...[
+                    SizedBox(width: gap * 0.5),
+                    _metricPill(
                       label: '活跃',
                       value: '${info.activeTorrentCount}',
-                      color: primary,
+                      color: uploadColor,
                       cs: cs,
                       typo: typo,
                     ),
                   ],
-                  if (!isQb && info.totalTorrentCount > 0) ...[
-                    SizedBox(
-                      width: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    _statDivider(theme, cs),
-                    SizedBox(
-                      width: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    _statItem(
+                  if (info.totalTorrentCount > 0) ...[
+                    SizedBox(width: gap * 0.5),
+                    _metricPill(
                       label: '总数',
                       value: '${info.totalTorrentCount}',
                       color: cs.mutedForeground,
@@ -153,15 +112,16 @@ class DownloaderLiveInfo extends StatelessWidget {
                       typo: typo,
                     ),
                   ],
-                  const Spacer(),
-                  if (info.freeSpace > 0)
-                    _statItem(
+                  if (info.freeSpace > 0) ...[
+                    SizedBox(width: gap * 0.5),
+                    _metricPill(
                       label: '剩余',
                       value: _formatSize(info.freeSpace),
                       color: cs.mutedForeground,
                       cs: cs,
                       typo: typo,
                     ),
+                  ],
                 ],
               ),
             ),
@@ -171,38 +131,77 @@ class DownloaderLiveInfo extends StatelessWidget {
     );
   }
 
-  Widget _speedChip({
+  Widget _speedTile({
     required IconData icon,
+    required String label,
+    required String value,
     required Color color,
-    required String text,
     required bool active,
     required shadcn.ThemeData theme,
     required shadcn.ColorScheme cs,
     required shadcn.Typography typo,
   }) {
-    return shadcn.Card(
+    return Container(
+      constraints: BoxConstraints(minHeight: theme.scaling * 38),
       padding: EdgeInsets.symmetric(
-        horizontal: theme.density.baseGap * theme.scaling,
-        vertical: theme.density.baseGap * theme.scaling * 0.5,
+        horizontal: theme.density.baseGap * theme.scaling * 0.75,
+        vertical: theme.density.baseGap * theme.scaling * 0.55,
       ),
-      filled: true,
-      fillColor: active
-          ? color.withValues(alpha: 0.08)
-          : cs.mutedForeground.withValues(alpha: 0.04),
+      decoration: BoxDecoration(
+        color: active
+            ? color.withValues(alpha: 0.10)
+            : cs.mutedForeground.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: active
+              ? color.withValues(alpha: 0.24)
+              : cs.border.withValues(alpha: 0.5),
+        ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: theme.scaling * 12,
-            color: active ? color : cs.mutedForeground.withValues(alpha: 0.4),
+          Container(
+            width: theme.scaling * 22,
+            height: theme.scaling * 22,
+            decoration: BoxDecoration(
+              color: active
+                  ? color.withValues(alpha: 0.14)
+                  : cs.mutedForeground.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: theme.scaling * 13,
+              color: active ? color : cs.mutedForeground.withValues(alpha: 0.48),
+            ),
           ),
-          SizedBox(width: theme.density.baseGap * theme.scaling * 0.5),
-          Text(
-            text,
-            style: typo.xSmall.copyWith(
-              color: active ? color : cs.mutedForeground,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          SizedBox(width: theme.density.baseGap * theme.scaling * 0.55),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: typo.xSmall.copyWith(
+                    color: cs.mutedForeground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: typo.xSmall.copyWith(
+                    color: active ? color : cs.mutedForeground,
+                    fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -210,34 +209,42 @@ class DownloaderLiveInfo extends StatelessWidget {
     );
   }
 
-  Widget _statDivider(shadcn.ThemeData theme, shadcn.ColorScheme cs) {
-    return SizedBox(
-      height: theme.scaling * 24,
-      child: VerticalDivider(width: 1, thickness: 1, color: cs.border),
-    );
-  }
-
-  Widget _statItem({
+  Widget _metricPill({
     required String label,
     required String value,
     required Color color,
     required shadcn.ColorScheme cs,
     required shadcn.Typography typo,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: typo.xSmall.copyWith(color: cs.mutedForeground)),
-        const SizedBox(height: 1),
-        Text(
-          value,
-          style: typo.xSmall.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: typo.xSmall.copyWith(
+              color: cs.mutedForeground,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 5),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: typo.xSmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
