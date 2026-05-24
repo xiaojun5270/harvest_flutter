@@ -260,7 +260,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     final user = ref.watch(authNotifierProvider).user;
     final currentIndex = _getCurrentIndex();
     final authInfo = ref.watch(authInfoProvider).valueOrNull;
-    final showAdminUser = _authInfoEmail(authInfo) == 'ngfchl@126.com';
+    final showAdminUser = _canOpenAdminUsers(user, authInfo);
     final updateState = ref.watch(updateProvider);
     final appUpgradeStatus = kIsWeb ? null : ref.watch(appUpgradeStatusProvider);
     final hasAppUpgrade = appUpgradeStatus?.valueOrNull?.hasNewVersion == true;
@@ -393,14 +393,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
                     onTasks: () => _openDrawerTab(4),
                     onOptions: () => _openDrawerPage(const OptionPage()),
                     onUsers: () => _openDrawerPage(const UserManagementPage()),
-                    onAdminUsers: () {
-                      if (!showAdminUser) {
-                        _closeDrawer();
-                        Toast.warning('当前账号无授权管理权限');
-                        return;
-                      }
-                      _openDrawerPage(const AdminUserPage());
-                    },
+                    onAdminUsers: () => _openDrawerPage(const AdminUserPage()),
                     onUpdate: () => _openDrawerPage(const UpdatePage()),
                     onAppUpgrade: () {
                       _closeDrawer();
@@ -1177,12 +1170,12 @@ class _ShellDrawerPanel extends StatelessWidget {
                       children: [
                         _DrawerTile(label: '设置中心', icon: shadcn.LucideIcons.settings, onTap: onOptions),
                         _DrawerTile(label: '用户中心', icon: shadcn.LucideIcons.user, onTap: onUsers),
-                        _DrawerTile(
-                          label: '授权管理',
-                          icon: shadcn.LucideIcons.shieldCheck,
-                          enabled: showAdminUser,
-                          onTap: onAdminUsers,
-                        ),
+                        if (showAdminUser)
+                          _DrawerTile(
+                            label: '授权管理',
+                            icon: shadcn.LucideIcons.shieldCheck,
+                            onTap: onAdminUsers,
+                          ),
                         _DrawerTile(label: '程序更新', icon: shadcn.LucideIcons.arrowUpFromLine, onTap: onUpdate),
                         if (!kIsWeb)
                           _DrawerTile(label: 'APP升级', icon: shadcn.LucideIcons.circleArrowUp, onTap: onAppUpgrade),
@@ -1269,7 +1262,6 @@ class _DrawerTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
-  final bool enabled;
   final VoidCallback onTap;
 
   const _DrawerTile({
@@ -1277,7 +1269,6 @@ class _DrawerTile extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.selected = false,
-    this.enabled = true,
   });
 
   @override
@@ -1285,45 +1276,40 @@ class _DrawerTile extends StatelessWidget {
     final tokens = _ShellDrawerTokens.of(context);
     final theme = tokens.theme;
     final cs = tokens.cs;
-    final fg = !enabled
-        ? cs.mutedForeground
-        : selected
+    final fg = selected
         ? cs.primary
         : cs.foreground;
 
     return Padding(
       padding: tokens.edgeOnly(bottom: 3),
-      child: Opacity(
-        opacity: enabled ? 1 : 0.55,
-        child: shadcn.Button.ghost(
-          onPressed: enabled ? onTap : null,
-          child: Container(
-            width: double.infinity,
-            padding: tokens.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: selected ? cs.primary.withValues(alpha: 0.1) : cs.background.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(theme.radiusMd),
-              border: Border.all(
-                color: selected ? cs.primary.withValues(alpha: 0.26) : cs.background.withValues(alpha: 0),
-                width: 0.8,
-              ),
+      child: shadcn.Button.ghost(
+        onPressed: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: tokens.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? cs.primary.withValues(alpha: 0.1) : cs.background.withValues(alpha: 0),
+            borderRadius: BorderRadius.circular(theme.radiusMd),
+            border: Border.all(
+              color: selected ? cs.primary.withValues(alpha: 0.26) : cs.background.withValues(alpha: 0),
+              width: 0.8,
             ),
-            child: Row(
-              children: [
-                Icon(icon, size: tokens.font(15), color: fg),
-                SizedBox(width: tokens.size(8)),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: theme.typography.small.copyWith(
-                      color: fg,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: tokens.font(15), color: fg),
+              SizedBox(width: tokens.size(8)),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.typography.small.copyWith(
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                   ),
                 ),
-                if (selected) Icon(shadcn.LucideIcons.chevronRight, size: tokens.font(14), color: cs.primary),
-              ],
-            ),
+              ),
+              if (selected) Icon(shadcn.LucideIcons.chevronRight, size: tokens.font(14), color: cs.primary),
+            ],
           ),
         ),
       ),
@@ -1345,4 +1331,11 @@ String? _authInfoEmail(dynamic data) {
     }
   }
   return null;
+}
+
+bool _canOpenAdminUsers(dynamic user, dynamic authInfo) {
+  try {
+    if (user?.isSuperuser == true || user?.isStaff == true) return true;
+  } catch (_) {}
+  return _authInfoEmail(authInfo) == 'ngfchl@126.com';
 }
