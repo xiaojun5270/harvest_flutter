@@ -4,6 +4,7 @@ import 'package:harvest/modules/download/model/downloader.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../model/torrent_model.dart';
+import '../provider/downloader_provider.dart';
 import 'desktop_torrent_detail_panel.dart';
 import 'desktop_torrent_sidebar.dart';
 import 'desktop_torrent_table.dart';
@@ -52,14 +53,20 @@ class DesktopTorrentLayout extends ConsumerStatefulWidget {
 }
 
 class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
+  static const List<int> _pageSizeOptions = [20, 30, 50, 100, 200, 500, 1000];
+
   bool _sidebarCollapsed = false;
   double _sidebarWidth = 280;
+  int _page = 1;
+  int _pageSize = 100;
   static const double _minSidebarWidth = 220;
   static const double _maxSidebarWidth = 460;
 
   @override
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
+    final torrents = ref.watch(filteredTorrentsProvider(widget.downloaderId));
+    final pageData = _pageData(torrents);
 
     return ColoredBox(
       color: cs.mutedForeground.withValues(alpha: 0.025),
@@ -127,10 +134,30 @@ class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
                           downloaderType: widget.downloaderType,
                           selectedHash: widget.selectedHash,
                           selectedHashes: widget.selectedHashes,
+                          torrents: pageData.items,
                           onSelect: widget.onSelect,
                           onSelectionChange: widget.onSelectionChange,
                         ),
                       ),
+                      if (torrents.isNotEmpty)
+                        _DesktopTorrentPaginationBar(
+                          totalItems: torrents.length,
+                          pageStart: pageData.start,
+                          pageEnd: pageData.end,
+                          page: pageData.page,
+                          totalPages: pageData.totalPages,
+                          pageSize: _pageSize,
+                          pageSizeOptions: _pageSizeOptions,
+                          onPageChanged: (page) => setState(() {
+                            _page = page;
+                            widget.onSelectionChange(const <String>{});
+                          }),
+                          onPageSizeChanged: (pageSize) => setState(() {
+                            _pageSize = pageSize;
+                            _page = 1;
+                            widget.onSelectionChange(const <String>{});
+                          }),
+                        ),
                       DesktopTorrentDetailPanel(
                         downloaderId: widget.downloaderId,
                         selectedHash: widget.selectedHash,
@@ -144,6 +171,148 @@ class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _DesktopTorrentPageData _pageData(List<Torrent> torrents) {
+    if (torrents.isEmpty) {
+      return const _DesktopTorrentPageData(
+        items: <Torrent>[],
+        page: 1,
+        totalPages: 1,
+        start: 0,
+        end: 0,
+      );
+    }
+
+    final totalPages = ((torrents.length + _pageSize - 1) / _pageSize)
+        .floor()
+        .clamp(1, 1 << 31);
+    final page = _page.clamp(1, totalPages).toInt();
+    if (page != _page) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _page == page) return;
+        setState(() => _page = page);
+      });
+    }
+
+    final startIndex = (page - 1) * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, torrents.length);
+    return _DesktopTorrentPageData(
+      items: torrents.sublist(startIndex, endIndex),
+      page: page,
+      totalPages: totalPages,
+      start: startIndex + 1,
+      end: endIndex,
+    );
+  }
+}
+
+class _DesktopTorrentPageData {
+  final List<Torrent> items;
+  final int page;
+  final int totalPages;
+  final int start;
+  final int end;
+
+  const _DesktopTorrentPageData({
+    required this.items,
+    required this.page,
+    required this.totalPages,
+    required this.start,
+    required this.end,
+  });
+}
+
+class _DesktopTorrentPaginationBar extends StatelessWidget {
+  final int totalItems;
+  final int pageStart;
+  final int pageEnd;
+  final int page;
+  final int totalPages;
+  final int pageSize;
+  final List<int> pageSizeOptions;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onPageSizeChanged;
+
+  const _DesktopTorrentPaginationBar({
+    required this.totalItems,
+    required this.pageStart,
+    required this.pageEnd,
+    required this.page,
+    required this.totalPages,
+    required this.pageSize,
+    required this.pageSizeOptions,
+    required this.onPageChanged,
+    required this.onPageSizeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: cs.card.withValues(alpha: 0.7),
+        border: Border(top: BorderSide(color: cs.border, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            totalItems == 0
+                ? '共 0 条'
+                : '显示 $pageStart-$pageEnd / 共 $totalItems 条',
+            style: theme.typography.xSmall.copyWith(
+              color: cs.mutedForeground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '每页',
+            style: theme.typography.xSmall.copyWith(
+              color: cs.mutedForeground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 92,
+            child: shadcn.Select<int>(
+              value: pageSize,
+              itemBuilder: (_, value) => Text('$value'),
+              popup: shadcn.SelectPopup<int>(
+                items: shadcn.SelectItemList(
+                  children: [
+                    for (final value in pageSizeOptions)
+                      shadcn.SelectItemButton<int>(
+                        value: value,
+                        child: Text('$value'),
+                      ),
+                  ],
+                ),
+              ).call,
+              onChanged: (value) {
+                if (value == null || value == pageSize) return;
+                onPageSizeChanged(value);
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          shadcn.Pagination(
+            page: page,
+            totalPages: totalPages,
+            maxPages: 5,
+            showLabel: false,
+            hidePreviousOnFirstPage: true,
+            hideNextOnLastPage: true,
+            onPageChanged: onPageChanged,
           ),
         ],
       ),

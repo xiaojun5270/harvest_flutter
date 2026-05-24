@@ -42,6 +42,7 @@ class DesktopTorrentTable extends ConsumerStatefulWidget {
   final DownloaderType downloaderType;
   final String? selectedHash;
   final Set<String> selectedHashes;
+  final List<Torrent>? torrents;
   final ValueChanged<Torrent> onSelect;
   final ValueChanged<Set<String>> onSelectionChange;
 
@@ -51,6 +52,7 @@ class DesktopTorrentTable extends ConsumerStatefulWidget {
     required this.downloaderType,
     required this.selectedHash,
     required this.selectedHashes,
+    this.torrents,
     required this.onSelect,
     required this.onSelectionChange,
   });
@@ -81,7 +83,10 @@ class _DesktopTorrentTableState extends ConsumerState<DesktopTorrentTable> {
     final cs = shadcn.Theme.of(context).colorScheme;
     final downloaderId = widget.downloaderId;
     final asyncData = ref.watch(torrentListProvider(downloaderId));
-    final torrents = ref.watch(filteredTorrentsProvider(downloaderId));
+    final torrents =
+        widget.torrents ??
+        ref.watch(filteredTorrentsProvider(downloaderId)) ??
+        const <Torrent>[];
     final categories = ref.watch(availableCategoriesProvider(downloaderId));
     final tags = ref.watch(availableTagsProvider(downloaderId));
     final matcher = ref.watch(torrentSiteMatcherProvider);
