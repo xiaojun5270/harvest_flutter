@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:harvest/core/http/http.dart';
+import 'package:harvest/widgets/desktop_window_controls.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 import 'package:harvest/core/utils/utils.dart';
 import 'package:path/path.dart' as p;
@@ -48,23 +49,14 @@ class _LogWindowWorkspace extends StatefulWidget {
 }
 
 class _LogWindowWorkspaceState extends State<_LogWindowWorkspace> {
-  final _navigatorKey = GlobalKey<shadcn.WindowNavigatorHandle>();
-  final List<_LogWindowItem> _items = [];
-  int _windowCount = 1;
+  static const double _titleBarHeight = 32;
+  static const Size _minWindowSize = Size(280, 260);
+  static const Size _maxWindowSize = Size(1280, 960);
 
-  @override
-  void initState() {
-    super.initState();
-    _items.add(_createItem(1));
-  }
-
-  @override
-  void dispose() {
-    for (final item in _items) {
-      item.dispose();
-    }
-    super.dispose();
-  }
+  final _logKey = GlobalKey<_LogFloatingWidgetState>();
+  Rect? _bounds;
+  _LogSource _source = _LogSource.app;
+  bool _following = true;
 
   @override
   Widget build(BuildContext context) {
@@ -72,40 +64,12 @@ class _LogWindowWorkspaceState extends State<_LogWindowWorkspace> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
+          final bounds = _resolveBounds(size);
           return _PassThroughHitTest(
-            activeRects: _activeRects(size),
+            activeRects: [bounds.inflate(14)],
             child: Material(
               color: Colors.transparent,
-              child: Stack(
-                children: [
-                  shadcn.WindowNavigator(
-                    key: _navigatorKey,
-                    initialWindows: _items.map((item) => item.window).toList(),
-                    showTopSnapBar: false,
-                    child: const SizedBox.expand(),
-                  ),
-                  Positioned(
-                    top: 18,
-                    right: 18,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _workspaceButton(
-                          icon: shadcn.LucideIcons.plus,
-                          label: '新窗口',
-                          onTap: _addWindow,
-                        ),
-                        const SizedBox(width: 8),
-                        _workspaceButton(
-                          icon: shadcn.LucideIcons.x,
-                          label: '关闭',
-                          onTap: LogOverlayManager.hide,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              child: Stack(children: [_buildWindow(bounds, size)]),
             ),
           );
         },
@@ -113,129 +77,231 @@ class _LogWindowWorkspaceState extends State<_LogWindowWorkspace> {
     );
   }
 
-  void _addWindow() {
-    _windowCount += 1;
-    final item = _createItem(_windowCount);
-    setState(() => _items.add(item));
-    _navigatorKey.currentState?.pushWindow(item.window);
-  }
-
-  _LogWindowItem _createItem(int index) {
-    final offset = ((index - 1) % 5) * 28.0;
-    final controller = shadcn.WindowController(
-      bounds: Rect.fromLTWH(24 + offset, 72 + offset, 560, 430),
-      constraints: const BoxConstraints(
-        minWidth: 360,
-        minHeight: 260,
-        maxWidth: 1280,
-        maxHeight: 960,
-      ),
-    );
-    late final _LogWindowItem item;
-    final window = shadcn.Window.controlled(
-      controller: controller,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(shadcn.LucideIcons.terminal, size: 14),
-          const SizedBox(width: 6),
-          Text('日志 $index'),
-        ],
-      ),
-      content: const _LogFloatingWidget(),
-    );
-    item = _LogWindowItem(index: index, controller: controller, window: window);
-    void update() {
-      if (!mounted) return;
-      if (window.closed.value) {
-        setState(() => _items.remove(item));
-      } else {
-        setState(() {});
-      }
+  Rect _resolveBounds(Size viewport) {
+    final current = _bounds;
+    if (current != null) {
+      final width = current.width.clamp(_minWindowSize.width, _maxWidth(viewport)).toDouble();
+      final height = current.height.clamp(_minWindowSize.height, _maxHeight(viewport)).toDouble();
+      final left = current.left.clamp(0.0, (viewport.width - width).clamp(0.0, viewport.width)).toDouble();
+      final top = current.top.clamp(0.0, (viewport.height - height).clamp(0.0, viewport.height)).toDouble();
+      _bounds = Rect.fromLTWH(left, top, width, height);
+      return _bounds!;
     }
-    controller.addListener(update);
-    window.closed.addListener(update);
-    item.disposeCallback = () {
-      controller.removeListener(update);
-      window.closed.removeListener(update);
-      controller.dispose();
-    };
-    return item;
+
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final viewSize = view.physicalSize / view.devicePixelRatio;
+    final compact = viewSize.width < 700 || viewport.width < 700;
+    final width = compact ? (viewport.width - 24).clamp(280.0, 560.0).toDouble() : 560.0.clamp(_minWindowSize.width, _maxWidth(viewport)).toDouble();
+    final height = compact ? (viewport.height - 118).clamp(300.0, 620.0).toDouble() : 430.0.clamp(_minWindowSize.height, _maxHeight(viewport)).toDouble();
+    final left = compact ? 12.0 : 24.0;
+    final top = compact ? 70.0 : 72.0;
+    _bounds = Rect.fromLTWH(
+      left.clamp(0.0, (viewport.width - width).clamp(0.0, viewport.width)).toDouble(),
+      top.clamp(0.0, (viewport.height - height).clamp(0.0, viewport.height)).toDouble(),
+      width,
+      height,
+    );
+    return _bounds!;
   }
 
-  List<Rect> _activeRects(Size size) {
-    final rects = <Rect>[
-      Rect.fromLTWH(size.width - 190, 8, 182, 54),
-    ];
-    for (final item in _items) {
-      if (item.window.closed.value) continue;
-      final state = item.controller.value;
-      if (state.minimized) continue;
-      rects.add(state.bounds.inflate(14));
-      if (state.maximized != null) {
-        rects.add(Offset.zero & size);
-      }
-    }
-    return rects;
+  double _maxWidth(Size viewport) {
+    return viewport.width.clamp(_minWindowSize.width, _maxWindowSize.width).toDouble();
   }
 
-  Widget _workspaceButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
+  double _maxHeight(Size viewport) {
+    return viewport.height.clamp(_minWindowSize.height, _maxWindowSize.height).toDouble();
+  }
+
+  Widget _buildWindow(Rect bounds, Size viewport) {
     final colors = _LogPalette.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    final theme = shadcn.Theme.of(context);
+    return Positioned.fromRect(
+      rect: bounds,
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colors.panel.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(6),
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: colors.border),
           boxShadow: [
             BoxShadow(
               color: colors.shadow,
-              blurRadius: 14,
-              offset: const Offset(0, 6),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: colors.foreground),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                color: colors.foreground,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Column(
+            children: [
+              Container(
+                height: _titleBarHeight,
+                decoration: BoxDecoration(
+                  color: colors.panel,
+                  border: Border(bottom: BorderSide(color: colors.border)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanUpdate: (details) => _moveWindow(details.delta, viewport),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Row(
+                            children: [
+                              Icon(shadcn.LucideIcons.terminal, size: 14, color: colors.foreground),
+                              const SizedBox(width: 6),
+                              Text(
+                                '日志',
+                                style: theme.typography.small.copyWith(
+                                  color: colors.foreground,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    _titleSourceChip(_LogSource.app),
+                    _titleSourceChip(_LogSource.server),
+                    const SizedBox(width: 6),
+                    _titleLiveChip(),
+                    const SizedBox(width: 4),
+                    const _LogWindowActions(),
+                  ],
+                ),
               ),
-            ),
-          ],
+              Expanded(
+                child: _LogFloatingWidget(
+                  key: _logKey,
+                  statusTrailing: _buildResizeHandle(viewport),
+                  onSourceChanged: (source) {
+                    if (mounted) setState(() => _source = source);
+                  },
+                  onFollowingChanged: (following) {
+                    if (mounted) setState(() => _following = following);
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _titleSourceChip(_LogSource source) {
+    final colors = _LogPalette.of(context);
+    final selected = _source == source;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _logKey.currentState?._switchSource(source),
+      child: Container(
+        margin: const EdgeInsets.only(right: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: selected ? colors.primary.withValues(alpha: 0.14) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: selected ? colors.primary.withValues(alpha: 0.32) : colors.border,
+          ),
+        ),
+        child: Text(
+          source.label,
+          style: TextStyle(
+            color: selected ? colors.primary : colors.muted,
+            fontSize: 9,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _titleLiveChip() {
+    final colors = _LogPalette.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _logKey.currentState?._toggleFollowing(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: _following
+              ? colors.success.withValues(alpha: 0.16)
+              : colors.subtle.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          _following ? 'LIVE' : 'PAUSE',
+          style: TextStyle(
+            color: _following ? colors.success : colors.muted,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResizeHandle(Size viewport) {
+    final colors = _LogPalette.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanUpdate: (details) => _resizeWindow(details.delta, viewport),
+      child: SizedBox(
+        width: 24,
+        height: 22,
+        child: Icon(
+          shadcn.LucideIcons.grip,
+          size: 12,
+          color: colors.subtle,
+        ),
+      ),
+    );
+  }
+
+  void _moveWindow(Offset delta, Size viewport) {
+    final current = _bounds;
+    if (current == null) return;
+    setState(() {
+      final left = (current.left + delta.dx).clamp(0.0, (viewport.width - current.width).clamp(0.0, viewport.width)).toDouble();
+      final top = (current.top + delta.dy).clamp(0.0, (viewport.height - current.height).clamp(0.0, viewport.height)).toDouble();
+      _bounds = Rect.fromLTWH(left, top, current.width, current.height);
+    });
+  }
+
+  void _resizeWindow(Offset delta, Size viewport) {
+    final current = _bounds;
+    if (current == null) return;
+    setState(() {
+      final width = (current.width + delta.dx).clamp(_minWindowSize.width, _maxWidth(viewport)).toDouble();
+      final height = (current.height + delta.dy).clamp(_minWindowSize.height, _maxHeight(viewport)).toDouble();
+      _bounds = Rect.fromLTWH(
+        current.left,
+        current.top,
+        width.clamp(_minWindowSize.width, viewport.width - current.left).toDouble(),
+        height.clamp(_minWindowSize.height, viewport.height - current.top).toDouble(),
+      );
+    });
+  }
 }
 
-class _LogWindowItem {
-  final int index;
-  final shadcn.WindowController controller;
-  final shadcn.Window window;
-  VoidCallback? disposeCallback;
+class _LogWindowActions extends StatelessWidget {
+  const _LogWindowActions();
 
-  _LogWindowItem({
-    required this.index,
-    required this.controller,
-    required this.window,
-  });
-
-  void dispose() {
-    disposeCallback?.call();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(right: 4),
+      child: DesktopTrafficLightButton(
+        color: Color(0xFFFF5F57),
+        icon: shadcn.LucideIcons.x,
+        tooltip: '关闭',
+        onPressed: LogOverlayManager.hide,
+      ),
+    );
   }
 }
 
@@ -392,7 +458,16 @@ class _LogPalette {
 // ══════════════════════════════════════════════════════════
 
 class _LogFloatingWidget extends StatefulWidget {
-  const _LogFloatingWidget();
+  final Widget? statusTrailing;
+  final ValueChanged<_LogSource>? onSourceChanged;
+  final ValueChanged<bool>? onFollowingChanged;
+
+  const _LogFloatingWidget({
+    super.key,
+    this.statusTrailing,
+    this.onSourceChanged,
+    this.onFollowingChanged,
+  });
 
   @override
   State<_LogFloatingWidget> createState() => _LogFloatingWidgetState();
@@ -407,12 +482,19 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
   _FilterLevel _filter = _FilterLevel.all;
   LogLevel _streamLevel = LogLevel.info;
   static const int _streamLimit = 200;
+  static const int _maxLogLines = 800;
+  static const int _trimmedLogLines = 600;
+  static const int _initialTailBytes = 256 * 1024;
+  static const double _minLogFontSize = 8;
+  static const double _maxLogFontSize = 16;
+  static const double _defaultLogFontSize = 12;
   static const List<LogLevel> _streamLevels = [
     LogLevel.debug,
     LogLevel.info,
     LogLevel.warn,
     LogLevel.error,
   ];
+  double _logFontSize = _defaultLogFontSize;
 
   // ── 日志数据 ──
   final List<String> _appLines = [];
@@ -425,8 +507,6 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
   String? _streamError;
   bool _connected = false;
   DateTime? _lastHeartbeatAt;
-
-  bool _showLevelPicker = false;
 
   // ── 滚动 ──
   final _scrollController = ScrollController();
@@ -447,30 +527,45 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
     super.dispose();
   }
 
-  // ────────────────── 日志源 ──────────────────
-
-  void _switchSource(_LogSource source) {
-    if (_source == source) return;
-    _appTailTimer?.cancel();
-    _cancelStream('切换日志源');
-    setState(() {
-      _source = source;
-      _showLevelPicker = false;
-    });
-    if (source == _LogSource.app) {
-      _startAppTailing();
-    } else {
-      _connectStream();
-    }
-    if (_following) _scrollToBottom();
-  }
-
   void _refreshCurrentSource() {
     if (_source == _LogSource.app) {
       _startAppTailing(reset: true);
     } else {
       _connectStream();
     }
+  }
+
+  void _toggleFollowing() {
+    setState(() => _following = !_following);
+    widget.onFollowingChanged?.call(_following);
+  }
+
+  void _selectLogLevel(LogLevel level) {
+    if (_source == _LogSource.app) {
+      AppLogger.reinit(level);
+      setState(() {});
+      Toast.success('已切换为 ${level.name}');
+      return;
+    }
+
+    if (_streamLevel == level) return;
+    setState(() => _streamLevel = level);
+    _connectStream(resetLines: true);
+    Toast.success('已切换为 ${_levelParam(level)}');
+  }
+
+  void _switchSource(_LogSource source) {
+    if (_source == source) return;
+    _appTailTimer?.cancel();
+    _cancelStream('切换日志源');
+    setState(() => _source = source);
+    widget.onSourceChanged?.call(source);
+    if (source == _LogSource.app) {
+      _startAppTailing();
+    } else {
+      _connectStream();
+    }
+    if (_following) _scrollToBottom();
   }
 
   // ────────────────── APP 文件日志 ──────────────────
@@ -511,13 +606,18 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
 
   Future<void> _loadAppInitial(File file) async {
     try {
-      final bytes = await file.readAsBytes();
+      final stat = await file.stat();
+      final start = stat.size > _initialTailBytes ? stat.size - _initialTailBytes : 0;
+      final raf = await file.open(mode: FileMode.read);
+      await raf.setPosition(start);
+      final bytes = await raf.read(stat.size - start);
+      await raf.close();
       final content = utf8.decode(bytes, allowMalformed: true);
       final lines = content.split('\n').where((line) => line.isNotEmpty).toList();
-      final tail = lines.length > 200 ? lines.sublist(lines.length - 200) : lines;
+      final tail = lines.length > _streamLimit ? lines.sublist(lines.length - _streamLimit) : lines;
       setState(() {
         _appLogPath = file.path;
-        _appLastFileLength = bytes.length;
+        _appLastFileLength = stat.size;
         _appLines
           ..clear()
           ..addAll(tail);
@@ -549,10 +649,10 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
         return;
       }
 
-      final raf = file.openSync(mode: FileMode.read);
-      raf.setPositionSync(_appLastFileLength);
-      final newBytes = raf.readSync(currentLength - _appLastFileLength);
-      raf.closeSync();
+      final raf = await file.open(mode: FileMode.read);
+      await raf.setPosition(_appLastFileLength);
+      final newBytes = await raf.read(currentLength - _appLastFileLength);
+      await raf.close();
       _appLastFileLength = currentLength;
 
       final newContent = utf8.decode(newBytes, allowMalformed: true);
@@ -561,8 +661,9 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
 
       setState(() {
         _appLines.addAll(newLines);
-        if (_appLines.length > 2000) {
-          _appLines.removeRange(0, _appLines.length - 1500);
+        _trimLogLines(_appLines);
+        if (newLines.length > 120) {
+          _following = false;
         }
       });
       if (_source == _LogSource.app && _following) _scrollToBottom();
@@ -570,18 +671,22 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
   }
 
   void _addAppLine(String line) {
-    setState(() => _appLines.add(line));
+    setState(() {
+      _appLines.add(line);
+      _trimLogLines(_appLines);
+    });
     if (_source == _LogSource.app && _following) _scrollToBottom();
   }
 
   // ────────────────── 后端日志 SSE ──────────────────
 
-  Future<void> _connectStream() async {
+  Future<void> _connectStream({bool resetLines = false}) async {
     _cancelStream('重新连接日志流');
     final cancelToken = CancelToken();
     _streamCancelToken = cancelToken;
     if (mounted) {
       setState(() {
+        if (resetLines) _serverLines.clear();
         _connected = false;
         _streamError = null;
         _connectionId = null;
@@ -682,7 +787,7 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
           .map((entry) => _entryLine(Map<String, dynamic>.from(entry)))
           .where((line) => line.isNotEmpty)
           .toList();
-      if (lines.isEmpty) return;
+      if (lines.isEmpty && type != 'snapshot') return;
 
       setState(() {
         _connected = true;
@@ -694,9 +799,7 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
             ..addAll(lines);
         } else {
           _serverLines.addAll(lines);
-          if (_serverLines.length > 2000) {
-            _serverLines.removeRange(0, _serverLines.length - 1500);
-          }
+          _trimLogLines(_serverLines);
         }
       });
       if (_source == _LogSource.server && _following) _scrollToBottom();
@@ -735,11 +838,15 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
       _connected = false;
       _streamError = message;
       _serverLines.add('[ERROR] $message');
-      if (_serverLines.length > 2000) {
-        _serverLines.removeRange(0, _serverLines.length - 1500);
-      }
+      _trimLogLines(_serverLines);
     });
     if (_source == _LogSource.server && _following) _scrollToBottom();
+  }
+
+  void _trimLogLines(List<String> lines) {
+    if (lines.length > _maxLogLines) {
+      lines.removeRange(0, lines.length - _trimmedLogLines);
+    }
   }
 
   String _levelParam(LogLevel level) {
@@ -820,6 +927,13 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
     Toast.success('已复制全部');
   }
 
+  void _changeLogFontSize(double delta) {
+    final next = (_logFontSize + delta).clamp(_minLogFontSize, _maxLogFontSize).toDouble();
+    if (next == _logFontSize) return;
+    setState(() => _logFontSize = next);
+    if (_following) _scrollToBottom();
+  }
+
   // ────────────────── 构建 ──────────────────
 
   @override
@@ -829,79 +943,11 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
       color: colors.surface,
       child: Column(
         children: [
-          _buildHeader(),
           _buildFilterBar(),
           Expanded(child: _buildLogList()),
           _buildToolbar(),
           _buildStatusBar(),
         ],
-      ),
-    );
-  }
-
-  // ── 标题栏 ──
-
-  Widget _buildHeader() {
-    final colors = _LogPalette.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.panel,
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
-      child: Row(
-        children: [
-          _sourceChip(_LogSource.app),
-          _sourceChip(_LogSource.server),
-          const Spacer(),
-          GestureDetector(
-            onTap: () => setState(() => _following = !_following),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _following
-                    ? colors.success.withValues(alpha: 0.16)
-                    : colors.subtle.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _following ? 'LIVE' : 'PAUSE',
-                style: TextStyle(
-                  color: _following ? colors.success : colors.muted,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sourceChip(_LogSource source) {
-    final colors = _LogPalette.of(context);
-    final selected = _source == source;
-    return GestureDetector(
-      onTap: () => _switchSource(source),
-      child: Container(
-        margin: const EdgeInsets.only(right: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
-          color: selected ? colors.primary.withValues(alpha: 0.14) : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: selected ? colors.primary.withValues(alpha: 0.32) : colors.border,
-          ),
-        ),
-        child: Text(
-          source.label,
-          style: TextStyle(
-            color: selected ? colors.primary : colors.muted,
-            fontSize: 9,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
       ),
     );
   }
@@ -956,15 +1002,17 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
 
     if (filtered.isEmpty) {
       return Center(
-        child: Text('暂无日志', style: TextStyle(color: colors.subtle, fontSize: 11)),
+        child: Text('暂无日志', style: TextStyle(color: colors.subtle, fontSize: _logFontSize + 1)),
       );
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      itemCount: filtered.length,
-      itemBuilder: (ctx, i) => _buildLine(filtered[i]),
+    return SelectionArea(
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: filtered.length,
+        itemBuilder: (ctx, i) => _buildLine(filtered[i]),
+      ),
     );
   }
 
@@ -972,56 +1020,58 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
     final colors = _LogPalette.of(context);
     final color = _getLevelColor(item.line);
     final isLast = item.originalIndex == _lines.length - 1;
+    final indexWidth = (_logFontSize * 2.8).clamp(28.0, 46.0).toDouble();
+    final tagFontSize = (_logFontSize - 2).clamp(7.0, 12.0).toDouble();
 
-    return GestureDetector(
-      onLongPress: () {
-        Clipboard.setData(ClipboardData(text: item.line));
-        Toast.success('已复制');
-      },
-      child: Container(
-        color: isLast ? color.withValues(alpha: 0.06) : null,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1.5),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 28,
+    return Container(
+      color: isLast ? color.withValues(alpha: 0.06) : null,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectionContainer.disabled(
+            child: SizedBox(
+              width: indexWidth,
               child: Text(
                 '${item.originalIndex + 1}',
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   color: colors.subtle,
-                  fontSize: 9,
+                  fontSize: (_logFontSize - 1).clamp(7.0, 14.0).toDouble(),
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
-            Container(
+          ),
+          SelectionContainer.disabled(
+            child: Container(
               width: 2,
-              height: 12,
+              height: (_logFontSize * 1.2).clamp(10.0, 18.0).toDouble(),
               margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(1)),
             ),
+          ),
             // 级别标签
-            Container(
+          SelectionContainer.disabled(
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
               margin: const EdgeInsets.only(right: 4, top: 1),
               decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(2)),
               child: Text(
                 _getLevelTag(item.line),
-                style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.w700),
+                style: TextStyle(color: color, fontSize: tagFontSize, fontWeight: FontWeight.w700),
               ),
             ),
-            Expanded(
-              child: Text(
-                _stripLevelTag(item.line),
-                style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 10, fontFamily: 'monospace', height: 1.4),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
+          ),
+          Expanded(
+            child: Text(
+              _stripLevelTag(item.line),
+              style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: _logFontSize, fontFamily: 'monospace', height: 1.4),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1029,7 +1079,6 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
   // ── 工具栏 ──
   Widget _buildToolbar() {
     final colors = _LogPalette.of(context);
-    final currentLevel = _source == _LogSource.app ? AppLogger.level : _streamLevel;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1042,135 +1091,31 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
           ),
           child: Row(
             children: [
-              // ── 日志级别 ──
-              GestureDetector(
-                onTap: () => setState(() => _showLevelPicker = !_showLevelPicker),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
-                  ),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.tune_rounded, size: 11, color: colors.primary),
-                      const SizedBox(width: 3),
-                      Text(
-                        currentLevel.name.toUpperCase(),
-                        style: TextStyle(color: colors.primary, fontSize: 9, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(width: 2),
-                      AnimatedRotation(
-                        turns: _showLevelPicker ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 150),
-                        child: Icon(Icons.keyboard_arrow_down, size: 12, color: colors.primary),
+                      _toolBtn(icon: shadcn.LucideIcons.minus, label: '缩小', onTap: () => _changeLogFontSize(-1)),
+                      _toolBtn(icon: shadcn.LucideIcons.plus, label: '放大', onTap: () => _changeLogFontSize(1)),
+                      Container(width: 0.5, height: 14, color: colors.border),
+                      const SizedBox(width: 6),
+                      _toolBtn(icon: Icons.copy_rounded, label: '复制', onTap: _copyAll),
+                      _toolBtn(icon: shadcn.LucideIcons.share2, label: '分享', onTap: _shareLogs),
+                      _toolBtn(icon: shadcn.LucideIcons.trash2, label: '清空', onTap: _clearLogs),
+                      _toolBtn(
+                        icon: shadcn.LucideIcons.refreshCw,
+                        label: _source == _LogSource.app ? '刷新' : '重连',
+                        onTap: _refreshCurrentSource,
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Container(width: 0.5, height: 14, color: colors.border),
-              const SizedBox(width: 6),
-              _toolBtn(icon: Icons.copy_rounded, label: '复制', onTap: _copyAll),
-              _toolBtn(icon: shadcn.LucideIcons.share2, label: '分享', onTap: _shareLogs),
-              _toolBtn(icon: shadcn.LucideIcons.trash2, label: '清空', onTap: _clearLogs),
-              _toolBtn(
-                icon: shadcn.LucideIcons.refreshCw,
-                label: _source == _LogSource.app ? '刷新' : '重连',
-                onTap: _refreshCurrentSource,
               ),
             ],
           ),
         ),
-        // ── 级别下拉面板 ──
-        AnimatedSize(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: _showLevelPicker ? _buildLevelDropdown() : const SizedBox.shrink(),
-        ),
       ],
-    );
-  }
-
-  Widget _buildLevelDropdown() {
-    final colors = _LogPalette.of(context);
-    final current = _source == _LogSource.app ? AppLogger.level : _streamLevel;
-    final levels = _source == _LogSource.app ? LogLevel.values : _streamLevels;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(
-          top: BorderSide(color: colors.border),
-          bottom: BorderSide(color: colors.border),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 6),
-            child: Text('日志级别', style: TextStyle(color: colors.subtle, fontSize: 9)),
-          ),
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: levels.map((level) {
-              final selected = level == current;
-              final color = _levelColor(level);
-              return GestureDetector(
-                onTap: () {
-                  if (_source == _LogSource.app) {
-                    AppLogger.reinit(level);
-                    setState(() => _showLevelPicker = false);
-                    Toast.success('已切换为 ${level.name}');
-                  } else {
-                    setState(() {
-                      _streamLevel = level;
-                      _showLevelPicker = false;
-                    });
-                    _connectStream();
-                    Toast.success('已切换为 ${_levelParam(level)}');
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: selected ? color.withValues(alpha: 0.15) : colors.panel,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: selected ? color.withValues(alpha: 0.4) : colors.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 5,
-                        height: 5,
-                        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        level.name[0].toUpperCase() + level.name.substring(1),
-                        style: TextStyle(
-                          color: selected ? color : colors.muted,
-                          fontSize: 8,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1242,8 +1187,12 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
     final colors = _LogPalette.of(context);
     final filtered = _filteredLines;
     final filterColor = _filterLevelColor(_filter);
+    final statusText = _source == _LogSource.app
+        ? (_appLogPath == null ? 'APP日志' : p.basename(_appLogPath!))
+        : _streamError ?? (_connected ? 'SSE ${_levelParam(_streamLevel)} ${_connectionId ?? ''}${_heartbeatText()}' : '连接中...');
+    final statusColor = _streamError != null && _source == _LogSource.server ? colors.error : colors.subtle;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
       decoration: BoxDecoration(
         color: colors.panel,
         border: Border(top: BorderSide(color: colors.border)),
@@ -1262,29 +1211,62 @@ class _LogFloatingWidgetState extends State<_LogFloatingWidget> {
               ),
             ),
           ),
-          const Spacer(),
-          if (_source == _LogSource.app)
-            Text(
-              _appLogPath == null ? 'APP日志' : p.basename(_appLogPath!),
-              style: TextStyle(color: colors.subtle, fontSize: 9),
-            )
-          else if (_streamError != null)
-            Flexible(
+          const SizedBox(width: 8),
+          _levelStrip(),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
               child: Text(
-                _streamError!,
+                statusText,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: colors.error, fontSize: 9),
+                style: TextStyle(color: statusColor, fontSize: 9),
               ),
-            )
-          else
-            Text(
-              _connected
-                  ? 'SSE ${_levelParam(_streamLevel)} ${_connectionId ?? ''}${_heartbeatText()}'
-                  : '连接中...',
-              style: TextStyle(color: colors.subtle, fontSize: 9),
             ),
+          ),
+          if (widget.statusTrailing != null) ...[
+            const SizedBox(width: 4),
+            widget.statusTrailing!,
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _levelStrip() {
+    final levels = _source == _LogSource.app ? LogLevel.values : _streamLevels;
+    final current = _source == _LogSource.app ? AppLogger.level : _streamLevel;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final level in levels) _levelChip(level, selected: level == current),
+      ],
+    );
+  }
+
+  Widget _levelChip(LogLevel level, {required bool selected}) {
+    final colors = _LogPalette.of(context);
+    final color = _levelColor(level);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _selectLogLevel(level),
+      child: Container(
+        margin: const EdgeInsets.only(right: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.14) : Colors.transparent,
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: selected ? color.withValues(alpha: 0.34) : colors.border.withValues(alpha: 0.45)),
+        ),
+        child: Text(
+          level.name.toUpperCase(),
+          style: TextStyle(
+            color: selected ? color : colors.subtle,
+            fontSize: 8,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
       ),
     );
   }

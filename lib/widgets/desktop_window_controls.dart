@@ -134,13 +134,13 @@ class DesktopWindowControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final closeButton = _TrafficLightWindowButton(
+    final closeButton = DesktopTrafficLightButton(
       color: const Color(0xFFFF5F57),
       icon: shadcn.LucideIcons.x,
       tooltip: '关闭',
       onPressed: () => windowManager.close(),
     );
-    final minimizeButton = _TrafficLightWindowButton(
+    final minimizeButton = DesktopTrafficLightButton(
       color: const Color(0xFFFFBD2E),
       icon: shadcn.LucideIcons.minus,
       tooltip: '最小化',
@@ -153,7 +153,7 @@ class DesktopWindowControls extends StatelessWidget {
         }
       },
     );
-    final maximizeButton = _TrafficLightWindowButton(
+    final maximizeButton = DesktopTrafficLightButton(
       color: const Color(0xFF28C840),
       icon: shadcn.LucideIcons.maximize2,
       tooltip: '最大化',
@@ -179,13 +179,14 @@ class DesktopWindowControls extends StatelessWidget {
   }
 }
 
-class _TrafficLightWindowButton extends StatefulWidget {
+class DesktopTrafficLightButton extends StatefulWidget {
   final Color color;
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
 
-  const _TrafficLightWindowButton({
+  const DesktopTrafficLightButton({
+    super.key,
     required this.color,
     required this.icon,
     required this.tooltip,
@@ -193,11 +194,11 @@ class _TrafficLightWindowButton extends StatefulWidget {
   });
 
   @override
-  State<_TrafficLightWindowButton> createState() =>
-      _TrafficLightWindowButtonState();
+  State<DesktopTrafficLightButton> createState() =>
+      _DesktopTrafficLightButtonState();
 }
 
-class _TrafficLightWindowButtonState extends State<_TrafficLightWindowButton> {
+class _DesktopTrafficLightButtonState extends State<DesktopTrafficLightButton> {
   bool _hovered = false;
   bool _pressed = false;
 
