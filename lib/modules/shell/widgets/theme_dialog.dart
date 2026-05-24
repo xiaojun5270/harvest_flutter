@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
+import 'package:harvest/core/storage/storage_keys.dart';
 import 'package:harvest/core/utils/platform/platform_tool.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 import 'package:window_manager/window_manager.dart';
@@ -35,8 +36,8 @@ class _ThemeDialogState extends ConsumerState<ThemeDialog> {
   Future<void> _applyWindowSize(double width, double height) async {
     await windowManager.setSize(Size(width, height));
     await windowManager.focus();
-    HiveManager.set('ScreenSizeWidth', width.toInt());
-    HiveManager.set('ScreenSizeHeight', height.toInt());
+    HiveManager.set(StorageKeys.windowSizeWidth, width.toInt());
+    HiveManager.set(StorageKeys.windowSizeHeight, height.toInt());
     if (mounted) setState(() {});
   }
 
@@ -45,8 +46,10 @@ class _ThemeDialogState extends ConsumerState<ThemeDialog> {
     final current = ref.watch(themeNotifierProvider);
     final notifier = ref.read(themeNotifierProvider.notifier);
     final tokens = _ThemeDialogTokens.of(context);
-    final currentWidth = HiveManager.get('ScreenSizeWidth')?.toDouble() ?? 1440;
-    final currentHeight = HiveManager.get('ScreenSizeHeight')?.toDouble() ?? 900;
+    final currentWidth =
+        HiveManager.get(StorageKeys.windowSizeWidth)?.toDouble() ?? 1440;
+    final currentHeight =
+        HiveManager.get(StorageKeys.windowSizeHeight)?.toDouble() ?? 900;
 
     return shadcn.AlertDialog(
       padding: EdgeInsets.symmetric(horizontal: tokens.panelHorizontalPadding, vertical: tokens.panelVerticalPadding),

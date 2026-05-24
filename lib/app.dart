@@ -4,9 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:harvest/core/storage/hive_manager.dart';
+import 'package:harvest/core/storage/storage_keys.dart';
+import 'package:harvest/core/utils/platform/platform_tool.dart';
 import 'package:harvest/core/provider/app_auto_refresh_provider.dart';
 import 'package:harvest/modules/notice/provider/notice_provider.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
+import 'package:window_manager/window_manager.dart';
 // ignore: implementation_imports
 import 'package:shadcn_flutter/src/components/locale/shadcn_localizations_en.dart';
 
@@ -21,13 +25,16 @@ class MyApp extends ConsumerStatefulWidget {
   ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
+class _MyAppState extends ConsumerState<MyApp>
+    with WidgetsBindingObserver, WindowListener {
   late Brightness _platformBrightness;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   Timer? _foregroundRefreshTimer;
   Timer? _backgroundNoticeRefreshTimer;
+  Timer? _windowSizeSaveTimer;
   Future<void>? _runningBackgroundNoticeRefresh;
   DateTime _lastBackgroundNoticeRefreshAt = DateTime.now();
+  Size? _lastSavedWindowSize;
 
   @override
   void initState() {
@@ -37,6 +44,9 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
     _lifecycleState =
         WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
+    if (PlatformTool.isDesktopOS()) {
+      windowManager.addListener(this);
+    }
     _scheduleCurrentRefreshTimer();
   }
 
@@ -44,6 +54,10 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   void dispose() {
     _foregroundRefreshTimer?.cancel();
     _backgroundNoticeRefreshTimer?.cancel();
+    _windowSizeSaveTimer?.cancel();
+    if (PlatformTool.isDesktopOS()) {
+      windowManager.removeListener(this);
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -69,6 +83,67 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
     _foregroundRefreshTimer?.cancel();
     _foregroundRefreshTimer = null;
     _scheduleBackgroundNoticeRefreshTimer();
+  }
+
+  @override
+  void onWindowResize() {
+    _scheduleWindowSizeSave();
+  }
+
+  @override
+  void onWindowResized() {
+    _windowSizeSaveTimer?.cancel();
+    unawaited(_saveWindowSize());
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    _scheduleWindowSizeSave();
+  }
+
+  @override
+  void onWindowRestore() {
+    _scheduleWindowSizeSave();
+  }
+
+  void _scheduleWindowSizeSave() {
+    if (!PlatformTool.isDesktopOS()) return;
+    _windowSizeSaveTimer?.cancel();
+    _windowSizeSaveTimer = Timer(const Duration(milliseconds: 450), () {
+      unawaited(_saveWindowSize());
+    });
+  }
+
+  Future<void> _saveWindowSize() async {
+    if (!PlatformTool.isDesktopOS()) return;
+
+    try {
+      if (await windowManager.isMinimized() ||
+          await windowManager.isMaximized() ||
+          await windowManager.isFullScreen()) {
+        return;
+      }
+
+      final size = await windowManager.getSize();
+      if (size.width <= 0 || size.height <= 0) return;
+
+      final normalized = Size(
+        size.width.roundToDouble(),
+        size.height.roundToDouble(),
+      );
+      if (_lastSavedWindowSize == normalized) return;
+
+      _lastSavedWindowSize = normalized;
+      await Future.wait([
+        HiveManager.set(StorageKeys.windowSizeWidth, normalized.width.toInt()),
+        HiveManager.set(
+          StorageKeys.windowSizeHeight,
+          normalized.height.toInt(),
+        ),
+      ]);
+    } catch (error) {
+      debugPrint('保存窗口尺寸失败: $error');
+    }
   }
 
   void _refreshForegroundDataIfDue() {

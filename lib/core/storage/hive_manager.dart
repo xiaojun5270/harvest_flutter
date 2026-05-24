@@ -12,6 +12,8 @@ class HiveManager {
     StorageKeys.baseUrl,
     StorageKeys.authState,
     StorageKeys.loggerLevel,
+    StorageKeys.windowSizeWidth,
+    StorageKeys.windowSizeHeight,
     StorageKeys.appAutoRefreshIntervalMinutes,
     'canConnectInternet',
   };

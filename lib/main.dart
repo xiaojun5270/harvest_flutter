@@ -76,8 +76,10 @@ Future<void> _startApp() async {
     try {
       await windowManager.ensureInitialized();
 
-      double height = HiveManager.get('ScreenSizeHeight')?.toDouble() ?? 900;
-      double width = HiveManager.get('ScreenSizeWidth')?.toDouble() ?? 1440;
+      double height =
+          HiveManager.get(StorageKeys.windowSizeHeight)?.toDouble() ?? 900;
+      double width =
+          HiveManager.get(StorageKeys.windowSizeWidth)?.toDouble() ?? 1440;
 
       WindowOptions windowOptions = WindowOptions(
         size: Size(width, height),

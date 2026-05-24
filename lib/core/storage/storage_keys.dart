@@ -4,6 +4,8 @@ class StorageKeys {
   static const baseUrl = 'base_url';
   static const authState = 'auth_state';
   static const String loggerLevel = 'logger_level';
+  static const String windowSizeWidth = 'ScreenSizeWidth';
+  static const String windowSizeHeight = 'ScreenSizeHeight';
   static const String privacyMode = 'privacy_mode';
   static const String dashboardChartOrder = 'dashboard_chart_order'; // ← 新增
   static const String dashboardChartVisibility =
