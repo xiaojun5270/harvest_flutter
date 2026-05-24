@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/modules/dashboard/provider/dashboard_provider.dart';
 import 'package:harvest/modules/download/provider/downloader_provider.dart';
@@ -5,6 +7,7 @@ import 'package:harvest/modules/download/provider/downloader_speed_provider.dart
 import 'package:harvest/modules/news/douban/provider/douban_provider.dart';
 import 'package:harvest/modules/news/tmdb/provider/tmdb_provider.dart';
 import 'package:harvest/modules/notice/provider/notice_provider.dart';
+import 'package:harvest/modules/notice/service/local_notice_notification_service.dart';
 import 'package:harvest/modules/option/provider/update_provider.dart';
 import 'package:harvest/modules/site/provider/site_filtered_provider.dart';
 import 'package:harvest/modules/site/provider/site_provider.dart';
@@ -13,6 +16,8 @@ import 'package:harvest/modules/task/provider/schedule_provider.dart';
 import 'package:harvest/modules/user/provider/user_management_provider.dart';
 
 void invalidateSessionState(Ref ref) {
+  unawaited(LocalNoticeNotificationService.instance.syncBadgeCount(0));
+
   ref
     ..invalidate(dashboardNotifierProvider)
     ..invalidate(dashboardCacheInfoProvider)

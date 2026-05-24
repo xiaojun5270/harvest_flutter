@@ -41,9 +41,12 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
     final result = await AsyncValue.guard(_fetchNoticeHistoryWithNotification);
     if (result.hasError && previous != null) {
       state = AsyncValue.data(previous);
+      _syncBadgeFor(previous);
       return;
     }
     state = result;
+    final notices = result.valueOrNull;
+    if (notices != null) _syncBadgeFor(notices);
   }
 
   Future<void> markRead(NoticeHistory notice) async {
@@ -148,6 +151,7 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
     } catch (_) {
       // 系统通知失败不应影响站内通知列表刷新。
     }
+    _syncBadgeFor(notices);
     return notices;
   }
 

@@ -30,6 +30,9 @@ class LocalNoticeNotificationService {
 
   bool _initialized = false;
   bool _initializationFailed = false;
+  int? _pendingBadgeCount;
+  int? _lastSyncedBadgeCount;
+  Future<void>? _badgeSyncTask;
 
   Future<void> initialize() async {
     if (_initialized ||
@@ -128,10 +131,31 @@ class LocalNoticeNotificationService {
     if (kIsWeb || !_isBadgeSupportedPlatform) return;
 
     final effectiveCount = count < 0 ? 0 : count;
-    try {
-      await _badgeChannel.invokeMethod<void>('setBadgeCount', effectiveCount);
-    } catch (e, st) {
-      AppLogger.error('同步应用角标失败', e, st);
+    _pendingBadgeCount = effectiveCount;
+    _badgeSyncTask ??= _drainBadgeSyncQueue();
+    await _badgeSyncTask;
+  }
+
+  Future<void> _drainBadgeSyncQueue() async {
+    while (true) {
+      final count = _pendingBadgeCount;
+      if (count == null) {
+        _badgeSyncTask = null;
+        if (_pendingBadgeCount == null) return;
+        _badgeSyncTask ??= _drainBadgeSyncQueue();
+        await _badgeSyncTask;
+        return;
+      }
+
+      _pendingBadgeCount = null;
+      if (_lastSyncedBadgeCount == count) continue;
+
+      try {
+        await _badgeChannel.invokeMethod<void>('setBadgeCount', count);
+        _lastSyncedBadgeCount = count;
+      } catch (e, st) {
+        AppLogger.error('同步应用角标失败', e, st);
+      }
     }
   }
 
