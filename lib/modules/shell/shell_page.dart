@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:harvest/core/config/app_config.dart';
 import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/modules/auth/auth_provider.dart';
 import 'package:harvest/modules/notice/model/notice_history.dart';
@@ -381,9 +382,12 @@ class _ShellPageState extends ConsumerState<ShellPage> {
                   bottom: 0,
                   width: drawerWidth,
                   child: _ShellDrawerPanel(
+                    user: user,
+                    server: AppConfig.baseUrl,
                     currentIndex: currentIndex,
                     showAdminUser: showAdminUser,
                     showNews: showNews,
+                    showAccountSwitcher: ref.watch(loginHistoryProvider).length >= 2,
                     onClose: _closeDrawer,
                     onDashboard: () => _openDrawerTab(2),
                     onNews: () => _openDrawerTab(0),
@@ -402,6 +406,14 @@ class _ShellPageState extends ConsumerState<ShellPage> {
                     onLogs: () {
                       _closeDrawer();
                       LogOverlayManager.toggle(context);
+                    },
+                    onSwitchAccount: () {
+                      _closeDrawer();
+                      ref.read(authNotifierProvider.notifier).logout(redirectTo: '/login-history');
+                    },
+                    onLogout: () {
+                      _closeDrawer();
+                      ref.read(authNotifierProvider.notifier).logout();
                     },
                   ),
                 ),
@@ -1041,18 +1053,25 @@ class _UpdateBadge extends StatelessWidget {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class _ShellDrawerPanel extends StatelessWidget {
+  final dynamic user;
+  final String server;
   final int currentIndex;
   final bool showAdminUser;
   final bool showNews;
+  final bool showAccountSwitcher;
   final VoidCallback onClose;
   final VoidCallback onDashboard, onNews, onSites, onDownloads, onTasks;
   final VoidCallback onSiteTimeline;
   final VoidCallback onOptions, onUsers, onAdminUsers, onUpdate, onAppUpgrade, onLogs;
+  final VoidCallback onSwitchAccount, onLogout;
 
   const _ShellDrawerPanel({
+    required this.user,
+    required this.server,
     required this.currentIndex,
     required this.showAdminUser,
     required this.showNews,
+    required this.showAccountSwitcher,
     required this.onClose,
     required this.onDashboard,
     required this.onNews,
@@ -1066,6 +1085,8 @@ class _ShellDrawerPanel extends StatelessWidget {
     required this.onUpdate,
     required this.onAppUpgrade,
     required this.onLogs,
+    required this.onSwitchAccount,
+    required this.onLogout,
   });
 
   @override
@@ -1073,7 +1094,6 @@ class _ShellDrawerPanel extends StatelessWidget {
     final tokens = _ShellDrawerTokens.of(context);
     final theme = tokens.theme;
     final cs = tokens.cs;
-    final typo = theme.typography;
 
     return Material(
       color: cs.background,
@@ -1091,23 +1111,12 @@ class _ShellDrawerPanel extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // 标题栏
               Padding(
                 padding: tokens.edgeOnly(left: 14, top: PlatformTool.isDesktopOS() ? 33 : 10, right: 8, bottom: 8),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '导航菜单',
-                            style: typo.base.copyWith(color: cs.foreground, fontWeight: FontWeight.w800),
-                          ),
-                          SizedBox(height: tokens.size(1)),
-                          Text('左侧快速访问应用页面与工具', style: typo.xSmall.copyWith(color: cs.mutedForeground)),
-                        ],
-                      ),
+                      child: _DrawerAccountHeader(user: user, server: server),
                     ),
                     shadcn.IconButton.ghost(
                       size: shadcn.ButtonSize.small,
@@ -1185,6 +1194,17 @@ class _ShellDrawerPanel extends StatelessWidget {
                   ],
                 ),
               ),
+              ColoredBox(color: cs.border.withValues(alpha: 0.72), child: const SizedBox(height: 1)),
+              Padding(
+                padding: tokens.edgeOnly(left: 8, top: 8, right: 8, bottom: 8),
+                child: Column(
+                  children: [
+                    if (showAccountSwitcher)
+                      _DrawerTile(label: '切换账号', icon: shadcn.LucideIcons.users, onTap: onSwitchAccount),
+                    _DrawerTile(label: '退出登录', icon: shadcn.LucideIcons.logOut, onTap: onLogout, destructive: true),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -1258,10 +1278,61 @@ class _DrawerGroup extends StatelessWidget {
   }
 }
 
+class _DrawerAccountHeader extends StatelessWidget {
+  final dynamic user;
+  final String server;
+
+  const _DrawerAccountHeader({required this.user, required this.server});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = _ShellDrawerTokens.of(context);
+    final theme = tokens.theme;
+    final cs = tokens.cs;
+    final username = _userName(user);
+    final initial = username.isNotEmpty ? username.characters.first.toUpperCase() : '?';
+
+    return Row(
+      children: [
+        shadcn.Avatar(
+          initials: initial,
+          size: tokens.size(34),
+          backgroundColor: cs.primary,
+        ),
+        SizedBox(width: tokens.size(10)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                username.isEmpty ? '未登录用户' : username,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.typography.small.copyWith(
+                  color: cs.foreground,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: tokens.size(2)),
+              Text(
+                server,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.typography.xSmall.copyWith(color: cs.mutedForeground),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DrawerTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
+  final bool destructive;
   final VoidCallback onTap;
 
   const _DrawerTile({
@@ -1269,6 +1340,7 @@ class _DrawerTile extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.selected = false,
+    this.destructive = false,
   });
 
   @override
@@ -1276,7 +1348,9 @@ class _DrawerTile extends StatelessWidget {
     final tokens = _ShellDrawerTokens.of(context);
     final theme = tokens.theme;
     final cs = tokens.cs;
-    final fg = selected
+    final fg = destructive
+        ? cs.destructive
+        : selected
         ? cs.primary
         : cs.foreground;
 
@@ -1320,6 +1394,14 @@ class _DrawerTile extends StatelessWidget {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  工具函数
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+String _userName(dynamic user) {
+  try {
+    final v = user?.username;
+    if (v != null) return v.toString();
+  } catch (_) {}
+  return '';
+}
 
 String? _authInfoEmail(dynamic data) {
   if (data is Map) {

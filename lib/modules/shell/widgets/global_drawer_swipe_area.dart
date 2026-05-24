@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:harvest/core/config/app_config.dart';
 import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/modules/admin_user/admin_user_page.dart';
 import 'package:harvest/modules/auth/auth_provider.dart';
+import 'package:harvest/modules/login/login_history_provider.dart';
 import 'package:harvest/modules/news/provider/media_info_settings_provider.dart';
 import 'package:harvest/modules/option/widgets/option_page.dart';
 import 'package:harvest/modules/option/widgets/update_page.dart';
@@ -162,16 +164,26 @@ class _GlobalDrawerPanel extends StatelessWidget {
     _afterClose((_, context) => LogOverlayManager.toggle(context));
   }
 
+  Future<void> _switchAccount() async {
+    await _close();
+    ref.read(authNotifierProvider.notifier).logout(redirectTo: '/login-history');
+  }
+
+  Future<void> _logout() async {
+    await _close();
+    ref.read(authNotifierProvider.notifier).logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = _GlobalDrawerTokens.of(context);
     final theme = tokens.theme;
     final cs = tokens.cs;
-    final typo = theme.typography;
     final user = ref.watch(authNotifierProvider).user;
     final authInfo = ref.watch(authInfoProvider).valueOrNull;
     final showAdminUser = _canOpenAdminUsers(user, authInfo);
     final showNews = ref.watch(mediaInfoSettingsProvider).enabled;
+    final showAccountSwitcher = ref.watch(loginHistoryProvider).length >= 2;
     final currentPath = _currentPath(context);
 
     return SizedBox.expand(
@@ -208,25 +220,7 @@ class _GlobalDrawerPanel extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '导航菜单',
-                              style: typo.base.copyWith(
-                                color: cs.foreground,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            SizedBox(height: tokens.size(1)),
-                            Text(
-                              '左侧快速访问应用页面与工具',
-                              style: typo.xSmall.copyWith(
-                                color: cs.mutedForeground,
-                              ),
-                            ),
-                          ],
-                        ),
+                        child: _GlobalDrawerAccountHeader(user: user, server: AppConfig.baseUrl),
                       ),
                       shadcn.IconButton.ghost(
                         size: shadcn.ButtonSize.small,
@@ -336,6 +330,29 @@ class _GlobalDrawerPanel extends StatelessWidget {
                     ],
                   ),
                 ),
+                ColoredBox(
+                  color: cs.border.withValues(alpha: 0.72),
+                  child: const SizedBox(height: 1),
+                ),
+                Padding(
+                  padding: tokens.edgeOnly(left: 8, top: 8, right: 8, bottom: 8),
+                  child: Column(
+                    children: [
+                      if (showAccountSwitcher)
+                        _DrawerTile(
+                          label: '切换账号',
+                          icon: shadcn.LucideIcons.users,
+                          onTap: _switchAccount,
+                        ),
+                      _DrawerTile(
+                        label: '退出登录',
+                        icon: shadcn.LucideIcons.logOut,
+                        onTap: _logout,
+                        destructive: true,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -426,10 +443,61 @@ class _DrawerGroup extends StatelessWidget {
   }
 }
 
+class _GlobalDrawerAccountHeader extends StatelessWidget {
+  final dynamic user;
+  final String server;
+
+  const _GlobalDrawerAccountHeader({required this.user, required this.server});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = _GlobalDrawerTokens.of(context);
+    final theme = tokens.theme;
+    final cs = tokens.cs;
+    final username = _userName(user);
+    final initial = username.isNotEmpty ? username.characters.first.toUpperCase() : '?';
+
+    return Row(
+      children: [
+        shadcn.Avatar(
+          initials: initial,
+          size: tokens.size(34),
+          backgroundColor: cs.primary,
+        ),
+        SizedBox(width: tokens.size(10)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                username.isEmpty ? '未登录用户' : username,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.typography.small.copyWith(
+                  color: cs.foreground,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: tokens.size(2)),
+              Text(
+                server,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.typography.xSmall.copyWith(color: cs.mutedForeground),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DrawerTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
+  final bool destructive;
   final VoidCallback onTap;
 
   const _DrawerTile({
@@ -437,6 +505,7 @@ class _DrawerTile extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.selected = false,
+    this.destructive = false,
   });
 
   @override
@@ -444,7 +513,9 @@ class _DrawerTile extends StatelessWidget {
     final tokens = _GlobalDrawerTokens.of(context);
     final theme = tokens.theme;
     final cs = tokens.cs;
-    final fg = selected
+    final fg = destructive
+        ? cs.destructive
+        : selected
         ? cs.primary
         : cs.foreground;
 
@@ -500,6 +571,14 @@ String _currentPath(BuildContext context) {
   } catch (_) {
     return '';
   }
+}
+
+String _userName(dynamic user) {
+  try {
+    final v = user?.username;
+    if (v != null) return v.toString();
+  } catch (_) {}
+  return '';
 }
 
 String? _authInfoEmail(dynamic data) {
