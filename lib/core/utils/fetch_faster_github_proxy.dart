@@ -118,8 +118,9 @@ const List<String> githubProxyCandidates = [
 
 Future<GithubProxyTestResult> fetchFasterGithubProxy({
   Dio? dio,
-  int sampleSize = 12,
-  int maxRetries = 3,
+  int sampleSize = 20,
+  int maxRetries = 1,
+  int preferredResultCount = 10,
   Duration timeout = const Duration(milliseconds: 1800),
   List<String> proxies = githubProxyCandidates,
 }) async {
@@ -138,7 +139,11 @@ Future<GithubProxyTestResult> fetchFasterGithubProxy({
 
   final random = Random();
   final effectiveSampleSize = sampleSize.clamp(1, normalized.length).toInt();
+  final expectedAvailableCount = preferredResultCount
+      .clamp(1, normalized.length)
+      .toInt();
   final results = <ResponseInfo>[];
+  final availableByUrl = <String, ResponseInfo>{};
 
   for (var retry = 1; retry <= maxRetries; retry++) {
     final selected = _sample(normalized, effectiveSampleSize, random);
@@ -149,21 +154,47 @@ Future<GithubProxyTestResult> fetchFasterGithubProxy({
     );
     results.addAll(tested);
 
-    final available = tested
-        .where((entry) => entry.available && entry.time <= timeout.inMilliseconds)
-        .toList()
+    for (final entry in tested) {
+      if (!entry.available || entry.time > timeout.inMilliseconds) continue;
+      final previous = availableByUrl[entry.url];
+      if (previous == null || entry.time < previous.time) {
+        availableByUrl[entry.url] = entry;
+      }
+    }
+
+    final available = availableByUrl.values.toList()
       ..sort((a, b) => a.time.compareTo(b.time));
-    if (available.isNotEmpty) {
+    if (available.length >= expectedAvailableCount) {
       final fastest = available.first;
       final msg = '最快 GitHub 加速地址：${fastest.url}，响应 ${fastest.time} ms';
       AppLogger.info(msg);
-      return GithubProxyTestResult.success(fastest, results, msg);
+      return GithubProxyTestResult.success(
+        fastest,
+        _sortedUniqueResults(results),
+        msg,
+      );
     }
   }
 
-  results.sort((a, b) => a.time.compareTo(b.time));
+  final available = availableByUrl.values.toList()
+    ..sort((a, b) => a.time.compareTo(b.time));
+  if (available.isNotEmpty) {
+    final fastest = available.first;
+    final msg = '最快 GitHub 加速地址：${fastest.url}，响应 ${fastest.time} ms';
+    AppLogger.info(msg);
+    return GithubProxyTestResult.success(
+      fastest,
+      _sortedUniqueResults(results),
+      msg,
+    );
+  }
+
+  final sortedResults = _sortedUniqueResults(results);
   AppLogger.warn('GitHub 代理测速失败，未找到可用地址');
-  return GithubProxyTestResult.error('未找到可用的 GitHub 加速地址', results: results);
+  return GithubProxyTestResult.error(
+    '未找到可用的 GitHub 加速地址',
+    results: sortedResults,
+  );
 }
 
 String buildGithubProxyUrl(String proxy, String githubUrl) {
@@ -217,6 +248,20 @@ List<String> _sample(List<String> proxies, int count, Random random) {
   return copy.take(count).toList();
 }
 
+List<ResponseInfo> _sortedUniqueResults(List<ResponseInfo> results) {
+  final byUrl = <String, ResponseInfo>{};
+  for (final result in results) {
+    final previous = byUrl[result.url];
+    if (previous == null || result.time < previous.time) {
+      byUrl[result.url] = result;
+    }
+  }
+  return byUrl.values.toList()..sort((a, b) {
+    if (a.available != b.available) return a.available ? -1 : 1;
+    return a.time.compareTo(b.time);
+  });
+}
+
 String _normalizeProxy(String proxy) {
   final value = proxy.trim();
   if (value.endsWith('/')) return value;
@@ -247,13 +292,11 @@ class GithubProxyTestResult {
   });
 
   const GithubProxyTestResult.success(this.data, this.results, this.msg)
-      : success = true;
+    : success = true;
 
-  const GithubProxyTestResult.error(
-    this.msg, {
-    this.results = const [],
-  })  : data = null,
-        success = false;
+  const GithubProxyTestResult.error(this.msg, {this.results = const []})
+    : data = null,
+      success = false;
 }
 
 class ResponseInfo {
@@ -278,10 +321,6 @@ class ResponseInfo {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'url': url,
-      'time': time,
-      'status': status,
-    };
+    return {'url': url, 'time': time, 'status': status};
   }
 }

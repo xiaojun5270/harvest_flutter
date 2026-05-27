@@ -37,6 +37,7 @@ const _appUpgradeTestFlightUrl = 'https://testflight.apple.com/join/kwLil5xf';
 const _appUpgradeIgnoreVersionKey = 'app_upgrade_ignore_version';
 const _appUpgradeUseGithubProxyKey = 'app_upgrade_use_github_proxy';
 const _appUpgradeGithubProxyKey = 'app_upgrade_github_proxy';
+const _appUpgradeGithubProxyResultsKey = 'app_upgrade_github_proxy_results';
 
 final appUpgradeStatusProvider = FutureProvider<AppUpgradeStatus>((ref) async {
   final packageInfo = await PackageInfo.fromPlatform();
@@ -171,6 +172,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   final _dio = Dio();
   CancelToken? _cancelToken;
   StateSetter? _dialogSetState;
+  ProviderSubscription<AsyncValue<AppUpgradeStatus>>? _statusSubscription;
 
   PackageInfo? _packageInfo;
   AppUpdateInfo? _latest;
@@ -186,6 +188,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   String? _error;
   String? _activeDownloadPath;
   ResponseInfo? _githubProxy;
+  List<ResponseInfo> _githubProxyResults = const [];
 
   String get _currentVersion {
     final info = _packageInfo;
@@ -194,6 +197,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   }
 
   Future<void> _handleOpenUpgradeDialog() async {
+    if (kIsWeb) return;
     await widget.onBeforeOpen?.call();
     if (!mounted) return;
     await _openUpgradeDialog();
@@ -215,6 +219,13 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   void initState() {
     super.initState();
     widget.controller?._state = this;
+    if (!kIsWeb) {
+      _statusSubscription = ref.listenManual<AsyncValue<AppUpgradeStatus>>(
+        appUpgradeStatusProvider,
+        (_, next) => _applyAppUpgradeStatus(next),
+        fireImmediately: true,
+      );
+    }
     _init();
   }
 
@@ -231,6 +242,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
 
   @override
   void dispose() {
+    _statusSubscription?.close();
     if (widget.controller?._state == this) widget.controller?._state = null;
     if (_autoPromptOpen && _hasNewVersion && !_ignoredLatest) {
       final latest = _latest?.version.trim();
@@ -248,18 +260,13 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
       _useGithubProxy =
           HiveManager.get<bool>(_appUpgradeUseGithubProxyKey) ?? false;
       _githubProxy = _savedGithubProxy();
+      _githubProxyResults = _savedGithubProxyResults();
       if (kIsWeb) {
         _error = 'Web 端不支持 APP 更新检测';
         return;
       }
       if (widget.autoCheck || widget.embedded) {
-        await _checkLatest(silent: true);
-        if (widget.autoCheck && !widget.embedded && widget.child == null) {
-          unawaited(_loadVersions());
-        }
-        if (widget.autoCheck && mounted && _hasNewVersion && !_ignoredLatest) {
-          unawaited(_openUpgradeDialog(autoPrompt: true));
-        }
+        unawaited(_runInitialVersionLoad());
       }
     } catch (e, st) {
       AppLogger.error('初始化 APP 升级模块失败', e, st);
@@ -271,6 +278,72 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   void _refreshUi() {
     if (mounted) setState(() {});
     _dialogSetState?.call(() {});
+  }
+
+  void _applyAppUpgradeStatus(
+    AsyncValue<AppUpgradeStatus> status, {
+    bool refresh = true,
+  }) {
+    var changed = false;
+    final data = status.valueOrNull;
+    if (data != null) {
+      _latest = data.latest;
+      _loadingLatest = false;
+      _error = null;
+      changed = true;
+    } else if (status.isLoading && _latest == null) {
+      _loadingLatest = true;
+      _error = null;
+      changed = true;
+    } else if (status.hasError && _latest == null) {
+      _loadingLatest = false;
+      _error = '获取最新版本失败';
+      changed = true;
+    }
+    if (changed && refresh) _refreshUi();
+  }
+
+  Future<void> _runInitialVersionLoad() async {
+    await _loadLatestFromStartupProvider(silent: true);
+    if (!mounted) return;
+    if (widget.autoCheck && !widget.embedded && widget.child == null) {
+      unawaited(_loadVersions());
+    }
+    if (widget.autoCheck && mounted && _hasNewVersion && !_ignoredLatest) {
+      unawaited(_openUpgradeDialog(autoPrompt: true));
+    }
+  }
+
+  Future<void> _loadLatestFromStartupProvider({bool silent = true}) async {
+    if (kIsWeb) {
+      _error = 'Web 端不支持 APP 更新检测';
+      if (!silent) Toast.info(_error!);
+      _refreshUi();
+      return;
+    }
+
+    final current = ref.read(appUpgradeStatusProvider);
+    _applyAppUpgradeStatus(current);
+    if (current.valueOrNull != null) return;
+
+    _loadingLatest = true;
+    _error = null;
+    _refreshUi();
+    try {
+      final status = await ref.read(appUpgradeStatusProvider.future);
+      if (!mounted) return;
+      _latest = status.latest;
+      _loadingLatest = false;
+      _error = null;
+      if (!silent) Toast.success('检查完成');
+    } catch (e, st) {
+      _loadingLatest = false;
+      _error = '获取最新版本失败';
+      AppLogger.error(_error!, e, st);
+      if (!silent) Toast.error(_error!);
+    } finally {
+      _refreshUi();
+    }
   }
 
   Future<void> _checkLatest({bool silent = false}) async {
@@ -334,7 +407,9 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   }
 
   Future<void> _openUpgradeDialog({bool autoPrompt = false}) async {
-    if (!kIsWeb && _latest == null) await _checkLatest(silent: true);
+    if (!kIsWeb && _latest == null && !_loadingLatest) {
+      unawaited(_loadLatestFromStartupProvider(silent: true));
+    }
     if (!kIsWeb && _versions.isEmpty) unawaited(_loadVersions());
     if (!mounted) return;
 
@@ -403,20 +478,27 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
                         proxyEnabled: _useGithubProxy,
                         proxyTesting: _testingGithubProxy,
                         proxy: _githubProxy,
+                        proxyResults: _githubProxyResults,
                         onProxyChanged: _setUseGithubProxy,
+                        onProxySelected: _setGithubProxy,
                         onProxyTest: _useGithubProxy && !_testingGithubProxy
                             ? () => _resolveGithubProxy(force: true)
                             : null,
                       ),
                       const SizedBox(height: 10),
+                      if (_downloading) ...[
+                        _DownloadProgress(progress: _progress),
+                        const SizedBox(height: 10),
+                      ],
                       _DialogActionBar(
                         loadingLatest: _loadingLatest,
                         downloading: _downloading,
+                        progress: _progress,
                         hasNewVersion: _hasNewVersion,
                         onCheck: kIsWeb || _loadingLatest
                             ? null
                             : () => _checkLatest(),
-                        onDownload: kIsWeb
+                        onDownload: kIsWeb || (_latest == null && !_downloading)
                             ? null
                             : _downloading
                             ? _cancelDownload
@@ -495,10 +577,6 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
         if (_error != null) ...[
           const SizedBox(height: 10),
           _MessageBox(message: _error!, destructive: true),
-        ],
-        if (_downloading) ...[
-          const SizedBox(height: 12),
-          _DownloadProgress(progress: _progress),
         ],
         SizedBox(height: compact ? 8 : 12),
         _PanelCard(
@@ -932,11 +1010,13 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   Future<void> _setUseGithubProxy(bool value) async {
     _useGithubProxy = value;
     await HiveManager.set(_appUpgradeUseGithubProxyKey, value);
-    if (value) _githubProxy ??= _savedGithubProxy();
-    _refreshUi();
-    if (value && _githubProxy == null) {
-      unawaited(_resolveGithubProxy(force: true));
+    if (value) {
+      _githubProxy ??= _savedGithubProxy();
+      if (_githubProxyResults.isEmpty) {
+        _githubProxyResults = _savedGithubProxyResults();
+      }
     }
+    _refreshUi();
   }
 
   Future<void> _setIgnoredLatest(bool value) async {
@@ -960,6 +1040,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
       );
       return _githubProxy;
     }
+    if (!force) return null;
     if (_testingGithubProxy) {
       AppLogger.debug('[AppUpgrade] github proxy test already running');
       return _githubProxy;
@@ -970,6 +1051,14 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
     try {
       AppLogger.debug('[AppUpgrade] github proxy test start: force=$force');
       final result = await fetchFasterGithubProxy();
+      final testedResults = _topGithubProxyResults(result.results);
+      if (testedResults.isNotEmpty) {
+        _githubProxyResults = testedResults;
+        await HiveManager.set(
+          _appUpgradeGithubProxyResultsKey,
+          _githubProxyResults.map((entry) => entry.toJson()).toList(),
+        );
+      }
       if (result.success && result.data != null) {
         _githubProxy = result.data;
         await HiveManager.set(
@@ -978,9 +1067,10 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
         );
         AppLogger.debug(
           '[AppUpgrade] github proxy selected: proxy=${_githubProxy!.url}, '
-          'time=${_githubProxy!.time}, status=${_githubProxy!.status}',
+          'time=${_githubProxy!.time}, status=${_githubProxy!.status}, '
+          'candidates=${_githubProxyResults.length}',
         );
-        Toast.success('已选择加速地址 ${_githubProxy!.time}ms');
+        Toast.success('已选择最快加速地址 ${_githubProxy!.time}ms');
         return _githubProxy;
       }
       AppLogger.debug(
@@ -1004,6 +1094,37 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
     if (raw is! Map) return null;
     final proxy = ResponseInfo.fromJson(Map<String, dynamic>.from(raw));
     return proxy.url.trim().isEmpty ? null : proxy;
+  }
+
+  List<ResponseInfo> _savedGithubProxyResults() {
+    final raw = HiveManager.get(_appUpgradeGithubProxyResultsKey);
+    if (raw is! List) return const [];
+    return _topGithubProxyResults([
+      for (final item in raw)
+        if (item is Map) ResponseInfo.fromJson(Map<String, dynamic>.from(item)),
+    ]);
+  }
+
+  Future<void> _setGithubProxy(ResponseInfo proxy) async {
+    if (proxy.url.trim().isEmpty) return;
+    _githubProxy = proxy;
+    await HiveManager.set(_appUpgradeGithubProxyKey, proxy.toJson());
+    _refreshUi();
+    Toast.success('已切换加速地址 ${proxy.time}ms');
+  }
+
+  List<ResponseInfo> _topGithubProxyResults(List<ResponseInfo> results) {
+    final byUrl = <String, ResponseInfo>{};
+    for (final result in results) {
+      if (result.url.trim().isEmpty) continue;
+      final previous = byUrl[result.url];
+      if (previous == null || result.time < previous.time) {
+        byUrl[result.url] = result;
+      }
+    }
+    final available = byUrl.values.where((entry) => entry.available).toList()
+      ..sort((a, b) => a.time.compareTo(b.time));
+    return available.take(10).toList();
   }
 
   String _resolveInstallerFileName(
@@ -1052,6 +1173,8 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) return const SizedBox.shrink();
+
     if (widget.embedded) return _buildEmbeddedPanel(context);
 
     final child = widget.child;
@@ -1130,20 +1253,27 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
                   proxyEnabled: _useGithubProxy,
                   proxyTesting: _testingGithubProxy,
                   proxy: _githubProxy,
+                  proxyResults: _githubProxyResults,
                   onProxyChanged: _setUseGithubProxy,
+                  onProxySelected: _setGithubProxy,
                   onProxyTest: _useGithubProxy && !_testingGithubProxy
                       ? () => _resolveGithubProxy(force: true)
                       : null,
                 ),
                 const SizedBox(height: 8),
+                if (_downloading) ...[
+                  _DownloadProgress(progress: _progress),
+                  const SizedBox(height: 8),
+                ],
                 _DialogActionBar(
                   loadingLatest: _loadingLatest,
                   downloading: _downloading,
+                  progress: _progress,
                   hasNewVersion: _hasNewVersion,
                   onCheck: kIsWeb || _loadingLatest
                       ? null
                       : () => _checkLatest(),
-                  onDownload: kIsWeb
+                  onDownload: kIsWeb || (_latest == null && !_downloading)
                       ? null
                       : _downloading
                       ? _cancelDownload
@@ -1211,18 +1341,25 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
           proxyEnabled: _useGithubProxy,
           proxyTesting: _testingGithubProxy,
           proxy: _githubProxy,
+          proxyResults: _githubProxyResults,
           onProxyChanged: _setUseGithubProxy,
+          onProxySelected: _setGithubProxy,
           onProxyTest: _useGithubProxy && !_testingGithubProxy
               ? () => _resolveGithubProxy(force: true)
               : null,
         ),
         const SizedBox(height: 8),
+        if (_downloading) ...[
+          _DownloadProgress(progress: _progress),
+          const SizedBox(height: 8),
+        ],
         _DialogActionBar(
           loadingLatest: _loadingLatest,
           downloading: _downloading,
+          progress: _progress,
           hasNewVersion: _hasNewVersion,
           onCheck: kIsWeb || _loadingLatest ? null : () => _checkLatest(),
-          onDownload: kIsWeb
+          onDownload: kIsWeb || (_latest == null && !_downloading)
               ? null
               : _downloading
               ? _cancelDownload
@@ -1423,7 +1560,9 @@ class _UpgradeOptionRow extends StatelessWidget {
   final bool proxyEnabled;
   final bool proxyTesting;
   final ResponseInfo? proxy;
+  final List<ResponseInfo> proxyResults;
   final ValueChanged<bool> onProxyChanged;
+  final ValueChanged<ResponseInfo> onProxySelected;
   final VoidCallback? onProxyTest;
 
   const _UpgradeOptionRow({
@@ -1433,7 +1572,9 @@ class _UpgradeOptionRow extends StatelessWidget {
     required this.proxyEnabled,
     required this.proxyTesting,
     required this.proxy,
+    required this.proxyResults,
     required this.onProxyChanged,
+    required this.onProxySelected,
     required this.onProxyTest,
   });
 
@@ -1445,7 +1586,7 @@ class _UpgradeOptionRow extends StatelessWidget {
         : proxyEnabled && proxy != null
         ? '${proxy!.url} · ${proxy!.time}ms'
         : proxyEnabled
-        ? '下载前自动测速'
+        ? '点击测速选择加速地址'
         : '原始下载地址';
 
     final ignoreOption = _SwitchOptionCard(
@@ -1462,23 +1603,37 @@ class _UpgradeOptionRow extends StatelessWidget {
       title: 'GitHub 加速',
       subtitle: proxySubtitle,
       tooltip: proxyEnabled
-          ? '下载 GitHub Release 资源前自动测速并使用可用加速地址'
+          ? '下载 GitHub Release 资源时使用已选择的加速地址，可手动测速更新候选列表'
           : '关闭后直接使用原始下载地址',
       value: proxyEnabled,
       enabled: !proxyTesting,
       onChanged: onProxyChanged,
       trailing: proxyEnabled
-          ? shadcn.IconButton.ghost(
-              size: shadcn.ButtonSize.small,
-              density: shadcn.ButtonDensity.iconDense,
-              onPressed: onProxyTest,
-              icon: proxyTesting
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: shadcn.CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(shadcn.LucideIcons.refreshCw, size: 14),
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GithubProxyDropdownButton(
+                  enabled: !proxyTesting,
+                  selected: proxy,
+                  results: proxyResults,
+                  onSelected: onProxySelected,
+                ),
+                const SizedBox(width: 2),
+                shadcn.IconButton.ghost(
+                  size: shadcn.ButtonSize.small,
+                  density: shadcn.ButtonDensity.iconDense,
+                  onPressed: onProxyTest,
+                  icon: proxyTesting
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: shadcn.CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(shadcn.LucideIcons.refreshCw, size: 14),
+                ),
+              ],
             )
           : null,
     );
@@ -1494,6 +1649,160 @@ class _UpgradeOptionRow extends StatelessWidget {
               Expanded(child: proxyOption),
             ],
           );
+  }
+}
+
+class _GithubProxyDropdownButton extends StatelessWidget {
+  final bool enabled;
+  final ResponseInfo? selected;
+  final List<ResponseInfo> results;
+  final ValueChanged<ResponseInfo> onSelected;
+
+  const _GithubProxyDropdownButton({
+    required this.enabled,
+    required this.selected,
+    required this.results,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Builder(
+      builder: (buttonContext) => shadcn.IconButton.ghost(
+        size: shadcn.ButtonSize.small,
+        density: shadcn.ButtonDensity.iconDense,
+        onPressed: enabled ? () => _showMenu(buttonContext) : null,
+        icon: const Icon(shadcn.LucideIcons.chevronDown, size: 14),
+      ),
+    );
+  }
+
+  void _showMenu(BuildContext context) {
+    final entries = _menuEntries();
+    final fastest = results.isEmpty || entries.isEmpty ? null : entries.first;
+
+    shadcn.showDropdown<void>(
+      context: context,
+      alignment: Alignment.topRight,
+      offset: const Offset(0, 8),
+      widthConstraint: shadcn.PopoverConstraint.intrinsic,
+      heightConstraint: shadcn.PopoverConstraint.intrinsic,
+      consumeOutsideTaps: false,
+      builder: (_) => ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: shadcn.DropdownMenu(
+          children: [
+            shadcn.MenuLabel(child: const Text('GitHub 加速地址')),
+            const shadcn.MenuDivider(),
+            if (entries.isEmpty)
+              shadcn.MenuLabel(child: const Text('点击测速生成候选地址'))
+            else
+              for (final entry in entries)
+                shadcn.MenuButton(
+                  leading: Icon(_leadingIcon(entry, fastest), size: 15),
+                  onPressed: (overlayContext) async {
+                    await shadcn.closeOverlay(overlayContext);
+                    onSelected(entry);
+                  },
+                  child: _GithubProxyMenuItem(
+                    proxy: entry,
+                    selected: selected?.url == entry.url,
+                    fastest: fastest?.url == entry.url,
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _leadingIcon(ResponseInfo entry, ResponseInfo? fastest) {
+    if (selected?.url == entry.url) return shadcn.LucideIcons.check;
+    if (fastest?.url == entry.url) return shadcn.LucideIcons.zap;
+    return shadcn.LucideIcons.globe;
+  }
+
+  List<ResponseInfo> _menuEntries() {
+    if (results.isEmpty) {
+      final current = selected;
+      if (current == null || current.url.trim().isEmpty) return const [];
+      return [current];
+    }
+    final entries =
+        results.where((entry) => entry.url.trim().isNotEmpty).toList()
+          ..sort((a, b) => a.time.compareTo(b.time));
+    return entries.take(10).toList();
+  }
+}
+
+class _GithubProxyMenuItem extends StatelessWidget {
+  final ResponseInfo proxy;
+  final bool selected;
+  final bool fastest;
+
+  const _GithubProxyMenuItem({
+    required this.proxy,
+    required this.selected,
+    required this.fastest,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final latencyColor = fastest ? cs.primary : cs.foreground;
+    final latencyBorderColor = fastest
+        ? cs.primary.withValues(alpha: 0.34)
+        : cs.border.withValues(alpha: 0.58);
+    final latencyFillColor = fastest
+        ? cs.primary.withValues(alpha: 0.1)
+        : cs.muted.withValues(alpha: 0.32);
+
+    return SizedBox(
+      width: 292,
+      child: Row(
+        children: [
+          Container(
+            constraints: const BoxConstraints(minWidth: 58),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: latencyFillColor,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: latencyBorderColor, width: 0.5),
+            ),
+            child: Text(
+              '${proxy.time}ms',
+              maxLines: 1,
+              style: theme.typography.xSmall.copyWith(
+                color: latencyColor,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              proxy.url,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.typography.small.copyWith(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (fastest)
+            Text(
+              '最快',
+              style: theme.typography.xSmall.copyWith(
+                color: cs.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2055,6 +2364,7 @@ class _SmallProgress extends StatelessWidget {
 class _DialogActionBar extends StatelessWidget {
   final bool loadingLatest;
   final bool downloading;
+  final double progress;
   final bool hasNewVersion;
   final VoidCallback? onCheck;
   final VoidCallback? onDownload;
@@ -2063,6 +2373,7 @@ class _DialogActionBar extends StatelessWidget {
   const _DialogActionBar({
     required this.loadingLatest,
     required this.downloading,
+    required this.progress,
     required this.hasNewVersion,
     required this.onCheck,
     required this.onDownload,
@@ -2098,10 +2409,37 @@ class _DialogActionBar extends StatelessWidget {
             onPressed: onDownload,
             alignment: Alignment.center,
             child: downloading
-                ? const Text('取消')
+                ? _DownloadButtonLabel(progress: progress, label: '取消')
                 : Text(hasNewVersion ? '更新' : '重装'),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _DownloadButtonLabel extends StatelessWidget {
+  final double progress;
+  final String label;
+
+  const _DownloadButtonLabel({required this.progress, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (progress * 100).clamp(0, 100).round();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 14,
+          height: 14,
+          child: shadcn.CircularProgressIndicator(
+            strokeWidth: 2,
+            value: progress <= 0 ? null : progress,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('$pct% $label'),
       ],
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -10,6 +11,7 @@ import 'package:harvest/core/http/api.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
 import 'package:harvest/core/utils/utils.dart';
+import 'package:harvest/modules/option/widgets/app_upgrade_page.dart';
 import 'package:harvest/modules/shell/widgets/log_floating_overlay.dart';
 import 'package:harvest/router/app_router.dart';
 import 'package:harvest/widgets/shad_text_field.dart';
@@ -27,6 +29,7 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
+  final _appUpgradeController = AppUpgradeController();
   late final TextEditingController _serverController;
   late final TextEditingController _usernameController;
   late final TextEditingController _passwordController;
@@ -85,138 +88,227 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: ColoredBox(
         color: cs.background,
-        child: Padding(
-          padding: tokens.edgeSymmetric(horizontal: 16),
-          child: Align(
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: tokens.formWidth),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    tokens.vGap(40),
-                    Image.asset(
-                      'assets/images/logo.png',
-                      width: tokens.logoSize,
-                      height: tokens.logoSize,
-                      fit: BoxFit.contain,
-                    ),
-                    tokens.vGap(16),
-                    Text(
-                      kDebugMode ? '调试模式' : 'PT 一下',
-                      style: theme.typography.xLarge.copyWith(
-                        color: cs.foreground,
-                        fontWeight: FontWeight.w700,
+        child: Stack(
+          children: [
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final verticalPadding = tokens.size(24);
+                    final minHeight =
+                        (constraints.maxHeight - verticalPadding * 2)
+                            .clamp(0.0, double.infinity)
+                            .toDouble();
+
+                    return SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: tokens.edgeSymmetric(
+                        horizontal: 16,
+                        vertical: 24,
                       ),
-                    ),
-                    tokens.vGap(20),
-                    ShadTextField(
-                      controller: _serverController,
-                      placeholder: const Text('服务器地址'),
-                      enabled: !kIsWeb,
-                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                    ),
-                    tokens.fieldGap,
-                    ShadTextField(
-                      controller: _usernameController,
-                      placeholder: const Text('账号'),
-                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                    ),
-                    tokens.fieldGap,
-                    ShadTextField(
-                      controller: _passwordController,
-                      placeholder: const Text('密码'),
-                      obscureText: true,
-                      maxLines: 1,
-                      features: const [shadcn.InputFeature.passwordToggle()],
-                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                    ),
-                    tokens.vGap(20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: shadcn.Button.primary(
-                            onPressed: auth.loading
-                                ? null
-                                : () async {
-                                    final serverError = _validateServerAddress(
-                                      _serverController.text,
-                                    );
-                                    if (serverError != null) {
-                                      Toast.error(serverError);
-                                      return;
-                                    }
-                                    final baseUrl = AppConfig.normalizeBaseUrl(
-                                      _serverController.text,
-                                    );
-                                    final setupStatus = await _fetchSetupStatus(
-                                      baseUrl,
-                                    );
-                                    if (setupStatus?.needsSetup == true) {
-                                      await _showSetupDialog(baseUrl);
-                                      return;
-                                    }
-                                    try {
-                                      await ref
-                                          .read(authNotifierProvider.notifier)
-                                          .login(
-                                            baseUrl,
-                                            _usernameController.text.trim(),
-                                            _passwordController.text,
-                                          );
-                                    } catch (e, trace) {
-                                      AppLogger.error(e);
-                                      AppLogger.error(trace);
-                                      if (_isSetupRequiredError(e)) {
-                                        if (context.mounted) {
-                                          await _showSetupDialog(baseUrl);
-                                        }
-                                        return;
-                                      }
-                                      if (context.mounted) {
-                                        Toast.error(_loginErrorMessage(e));
-                                      }
-                                    }
-                                  },
-                            child: Center(
-                              child: Text(auth.loading ? '登录中...' : '登录'),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: minHeight),
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: tokens.formWidth,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                tokens.vGap(40),
+                                Image.asset(
+                                  'assets/images/logo.png',
+                                  width: tokens.logoSize,
+                                  height: tokens.logoSize,
+                                  fit: BoxFit.contain,
+                                ),
+                                tokens.vGap(16),
+                                Text(
+                                  kDebugMode ? '调试模式' : 'PT 一下',
+                                  style: theme.typography.xLarge.copyWith(
+                                    color: cs.foreground,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                tokens.vGap(20),
+                                ShadTextField(
+                                  controller: _serverController,
+                                  placeholder: const Text('服务器地址'),
+                                  enabled: !kIsWeb,
+                                  onSubmitted: (_) =>
+                                      FocusScope.of(context).unfocus(),
+                                ),
+                                tokens.fieldGap,
+                                ShadTextField(
+                                  controller: _usernameController,
+                                  placeholder: const Text('账号'),
+                                  onSubmitted: (_) =>
+                                      FocusScope.of(context).unfocus(),
+                                ),
+                                tokens.fieldGap,
+                                ShadTextField(
+                                  controller: _passwordController,
+                                  placeholder: const Text('密码'),
+                                  obscureText: true,
+                                  maxLines: 1,
+                                  features: const [
+                                    shadcn.InputFeature.passwordToggle(),
+                                  ],
+                                  onSubmitted: (_) =>
+                                      FocusScope.of(context).unfocus(),
+                                ),
+                                tokens.vGap(20),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: shadcn.Button.primary(
+                                        onPressed: auth.loading
+                                            ? null
+                                            : () async {
+                                                final serverError =
+                                                    _validateServerAddress(
+                                                      _serverController.text,
+                                                    );
+                                                if (serverError != null) {
+                                                  Toast.error(serverError);
+                                                  return;
+                                                }
+                                                final baseUrl =
+                                                    AppConfig.normalizeBaseUrl(
+                                                      _serverController.text,
+                                                    );
+                                                final setupStatus =
+                                                    await _fetchSetupStatus(
+                                                      baseUrl,
+                                                    );
+                                                if (setupStatus?.needsSetup ==
+                                                    true) {
+                                                  await _showSetupDialog(
+                                                    baseUrl,
+                                                  );
+                                                  return;
+                                                }
+                                                try {
+                                                  await ref
+                                                      .read(
+                                                        authNotifierProvider
+                                                            .notifier,
+                                                      )
+                                                      .login(
+                                                        baseUrl,
+                                                        _usernameController.text
+                                                            .trim(),
+                                                        _passwordController
+                                                            .text,
+                                                      );
+                                                } catch (e, trace) {
+                                                  AppLogger.error(e);
+                                                  AppLogger.error(trace);
+                                                  if (_isSetupRequiredError(
+                                                    e,
+                                                  )) {
+                                                    if (context.mounted) {
+                                                      await _showSetupDialog(
+                                                        baseUrl,
+                                                      );
+                                                    }
+                                                    return;
+                                                  }
+                                                  if (context.mounted) {
+                                                    Toast.error(
+                                                      _loginErrorMessage(e),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                        child: Center(
+                                          child: Text(
+                                            auth.loading ? '登录中...' : '登录',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    if (showLoginHistory) ...[
+                                      tokens.actionGap,
+                                      shadcn.IconButton.outline(
+                                        onPressed: auth.loading
+                                            ? null
+                                            : () =>
+                                                  context.go('/login-history'),
+                                        icon: shadcn.Tooltip(
+                                          tooltip: (_) => const Text('登录历史'),
+                                          child: Icon(
+                                            shadcn.LucideIcons.history,
+                                            size: tokens.iconSize,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    tokens.actionGap,
+                                    shadcn.IconButton.outline(
+                                      onPressed: () =>
+                                          LogOverlayManager.toggle(context),
+                                      icon: shadcn.Tooltip(
+                                        tooltip: (_) => const Text('日志中心'),
+                                        child: Icon(
+                                          shadcn.LucideIcons.terminal,
+                                          size: tokens.iconSize,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        if (showLoginHistory) ...[
-                          tokens.actionGap,
-                          shadcn.IconButton.outline(
-                            onPressed: auth.loading
-                                ? null
-                                : () => context.go('/login-history'),
-                            icon: shadcn.Tooltip(
-                              tooltip: (_) => const Text('登录历史'),
-                              child: Icon(
-                                shadcn.LucideIcons.history,
-                                size: tokens.iconSize,
-                              ),
-                            ),
-                          ),
-                        ],
-                        tokens.actionGap,
-                        shadcn.IconButton.outline(
-                          onPressed: () => LogOverlayManager.toggle(context),
-                          icon: shadcn.Tooltip(
-                            tooltip: (_) => const Text('日志中心'),
-                            child: Icon(
-                              shadcn.LucideIcons.terminal,
-                              size: tokens.iconSize,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
-          ),
+            if (!kIsWeb) ...[
+              IgnorePointer(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: AppUpgradePage(
+                    autoCheck: false,
+                    controller: _appUpgradeController,
+                    child: const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: tokens.edgeSymmetric(horizontal: 16, vertical: 12),
+                    child: shadcn.IconButton.outline(
+                      onPressed: () =>
+                          unawaited(_appUpgradeController.openDialog()),
+                      icon: shadcn.Tooltip(
+                        tooltip: (_) => const Text('APP 升级'),
+                        child: Icon(
+                          shadcn.LucideIcons.circleArrowUp,
+                          size: tokens.iconSize,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

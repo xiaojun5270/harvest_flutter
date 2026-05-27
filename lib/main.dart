@@ -16,6 +16,7 @@ import 'core/storage/storage_keys.dart';
 import 'core/theme/theme_storage.dart';
 import 'modules/auth/auth_provider.dart';
 import 'modules/notice/service/local_notice_notification_service.dart';
+import 'modules/option/widgets/app_upgrade_page.dart';
 
 void main() {
   runZonedGuarded(_startApp, (error, stack) {
@@ -47,7 +48,9 @@ Future<void> _startApp() async {
   var canConnectInternet = await HiveManager.get('canConnectInternet');
   if (!kIsWeb && (canConnectInternet == null || !canConnectInternet)) {
     try {
-      final res = await Dio().get('https://www.baidu.com').timeout(const Duration(seconds: 5));
+      final res = await Dio()
+          .get('https://www.baidu.com')
+          .timeout(const Duration(seconds: 5));
       if (res.statusCode != 200) {
         AppLogger.debug("============尝试访问网络失败: ${res.statusCode}===========");
       } else {
@@ -63,7 +66,9 @@ Future<void> _startApp() async {
 
   if (PlatformTool.isAndroid() || PlatformTool.isIOS()) {
     AppLogger.debug("============处理状态栏背景颜色透明问题===========");
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(statusBarColor: Colors.transparent));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
+    );
     AppLogger.debug("============处理状态栏背景颜色透明问题完成===========");
     AppLogger.debug("============设置SystemUiMode为edgeToEdge===========");
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -120,10 +125,21 @@ Future<void> _startApp() async {
 
   // ✅ 确认状态
   AppLogger.debug("启动 auth: ${container.read(authNotifierProvider).loggedIn}");
+  if (!kIsWeb) {
+    unawaited(
+      container
+          .read(appUpgradeStatusProvider.future)
+          .then<void>((_) {})
+          .catchError((Object error) {
+            AppLogger.warn('启动预加载 APP 版本信息失败: $error');
+          }),
+    );
+  }
   runApp(UncontrolledProviderScope(container: container, child: const MyApp()));
   if (!PlatformTool.isWindows()) {
     try {
-      await LocalNoticeNotificationService.instance.handleLaunchNotificationTap();
+      await LocalNoticeNotificationService.instance
+          .handleLaunchNotificationTap();
     } catch (e, st) {
       AppLogger.error('处理通知启动事件失败', e, st);
     }
