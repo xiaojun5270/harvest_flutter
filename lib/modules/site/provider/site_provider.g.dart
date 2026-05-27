@@ -39,7 +39,7 @@ final websiteListProvider =
     );
 
 typedef _$WebsiteList = AsyncNotifier<List<WebSite>>;
-String _$siteInfoListHash() => r'46ffdad23a255646f3f1a5ed162ca8b74cedf3c5';
+String _$siteInfoListHash() => r'e617a0113dca3025b2c3d20b2a178647dc29a4b7';
 
 /// See also [SiteInfoList].
 @ProviderFor(SiteInfoList)
