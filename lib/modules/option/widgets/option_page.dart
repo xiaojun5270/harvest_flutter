@@ -562,8 +562,7 @@ class OptionPage extends ConsumerWidget {
                             _buildVersionCard(context),
                             if (!kIsWeb) _buildAppUpgradeCard(context),
                             _buildUpdateCard(context),
-                            const _CookieBackupImportCard(),
-                            const _HarvestDataImportCard(),
+                            const _DataImportExportCard(),
                             const _AppAutoRefreshIntervalCard(),
                             const _MediaInfoSettingsCard(),
                             _buildSpeedTest(context, ref),
@@ -936,29 +935,43 @@ class _MediaInfoSettingsCardState
 }
 
 // ══════════════════════════════════════════════════════════
-//  站点备份导入
+//  数据导入导出
 // ══════════════════════════════════════════════════════════
 
-class _CookieBackupImportCard extends ConsumerStatefulWidget {
-  const _CookieBackupImportCard();
+class _DataImportExportCard extends ConsumerStatefulWidget {
+  const _DataImportExportCard();
 
   @override
-  ConsumerState<_CookieBackupImportCard> createState() =>
-      _CookieBackupImportCardState();
+  ConsumerState<_DataImportExportCard> createState() =>
+      _DataImportExportCardState();
 }
 
-class _CookieBackupImportCardState
-    extends ConsumerState<_CookieBackupImportCard> {
+class _DataImportExportCardState extends ConsumerState<_DataImportExportCard> {
+  final _baseUrlCtrl = TextEditingController();
+  final _tokenCtrl = TextEditingController();
   CookieBackupSource? _uploading;
+  PlatformFile? _sqliteFile;
+  final _externalFiles = <CookieBackupSource, PlatformFile>{};
   bool _exportingBackup = false;
   bool _importingBackup = false;
   bool _syncingCookieCloud = false;
+  bool _importingApi = false;
+  bool _importingSqlite = false;
 
   bool get _busy =>
       _uploading != null ||
       _exportingBackup ||
       _importingBackup ||
-      _syncingCookieCloud;
+      _syncingCookieCloud ||
+      _importingApi ||
+      _importingSqlite;
+
+  @override
+  void dispose() {
+    _baseUrlCtrl.dispose();
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAndUpload(CookieBackupSource source) async {
     if (_busy) return;
@@ -988,6 +1001,20 @@ class _CookieBackupImportCardState
       Toast.error('无法读取所选文件');
       return;
     }
+    setState(() => _externalFiles[source] = file);
+    final confirmed = await _confirmFileImport(
+      title: '${source.label} 导入',
+      file: file,
+      message: '确定导入「${file.name}」吗？',
+      confirmText: '确认导入',
+    );
+    if (!confirmed) {
+      if (mounted) {
+        setState(() => _externalFiles.remove(source));
+      }
+      return;
+    }
+    if (!mounted) return;
 
     setState(() => _uploading = source);
     try {
@@ -1014,6 +1041,14 @@ class _CookieBackupImportCardState
 
   Future<void> _syncCookieCloud() async {
     if (_busy) return;
+
+    final confirmed = await _confirmAction(
+      title: 'CookieCloud 同步',
+      message: '确定从 CookieCloud 同步站点数据吗？',
+      confirmText: '确认同步',
+      icon: shadcn.LucideIcons.cloud,
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() => _syncingCookieCloud = true);
     try {
@@ -1125,26 +1160,220 @@ class _CookieBackupImportCardState
   @override
   Widget build(BuildContext context) {
     return ExpandableCard(
-      title: '导入导出',
+      title: '数据导入导出',
       icon: shadcn.LucideIcons.databaseBackup,
       builder: (_) => OptionLoadingOverlay(
         loading: _busy,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SizedBox(
+          width: double.infinity,
+          child: shadcn.Accordion(
+            items: [
+              shadcn.AccordionItem(
+                expanded: true,
+                trigger: const shadcn.AccordionTrigger(child: Text('导入导出')),
+                content: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildImportExportContent(context),
+                ),
+              ),
+              shadcn.AccordionItem(
+                trigger: const shadcn.AccordionTrigger(child: Text('数据库文件导入')),
+                content: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildSqliteImportContent(context),
+                ),
+              ),
+              shadcn.AccordionItem(
+                trigger: const shadcn.AccordionTrigger(child: Text('外部数据导入')),
+                content: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildExternalDataImportContent(context),
+                ),
+              ),
+              shadcn.AccordionItem(
+                trigger: const shadcn.AccordionTrigger(child: Text('旧版接口迁移')),
+                content: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildLegacyApiMigrationContent(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImportExportContent(BuildContext context) {
+    if (context.isMobile) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildDataBackupExportTile(context),
+          const SizedBox(height: 8),
+          _buildDataBackupImportTile(context),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: _buildDataBackupExportTile(context)),
+        const SizedBox(width: 8),
+        Expanded(child: _buildDataBackupImportTile(context)),
+      ],
+    );
+  }
+
+  Widget _buildExternalDataImportContent(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildSourceTile(context, CookieBackupSource.ptpp),
+        const SizedBox(height: 8),
+        _buildSourceTile(context, CookieBackupSource.ptd),
+        const SizedBox(height: 8),
+        _buildCookieCloudTile(context),
+      ],
+    );
+  }
+
+  Widget _buildSqliteImportContent(BuildContext context) {
+    return _buildSqliteFilePickerTile(context);
+  }
+
+  Widget _buildSqliteFilePickerTile(BuildContext context) {
+    final cs = _optionColors(context);
+    final typo = shadcn.Theme.of(context).typography;
+    final file = _sqliteFile;
+    final fileColor = file == null ? cs.mutedForeground : cs.foreground;
+
+    return Opacity(
+      opacity: _busy ? 0.55 : 1,
+      child: shadcn.Button.ghost(
+        onPressed: _busy ? null : _pickSqliteFile,
+        child: AppSurfaceContainer(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          borderRadius: _optionRadius(context),
+          color: appSurfaceColor(context, cs.card),
+          borderColor: cs.border.withValues(alpha: 0.7),
+          child: Row(
+            children: [
+              Icon(
+                shadcn.LucideIcons.databaseZap,
+                size: 18,
+                color: fileColor.withValues(alpha: file == null ? 1 : 0.72),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      file?.name ?? '未选择数据库文件',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: typo.small.copyWith(
+                        color: fileColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      file == null
+                          ? '仅支持 .sqlite3 文件'
+                          : '${formatBytes(file.size)}，仅会作为 file 字段上传',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: typo.xSmall.copyWith(color: cs.mutedForeground),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                shadcn.LucideIcons.folderOpen,
+                size: 17,
+                color: _busy
+                    ? cs.mutedForeground
+                    : cs.foreground.withValues(alpha: 0.62),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegacyApiMigrationContent(BuildContext context) {
+    final submitButton = _buildLegacyApiSubmitButton();
+
+    final tokenRow = context.isMobile
+        ? <Widget>[
+            ShadTextField(
+              controller: _tokenCtrl,
+              enabled: !_busy,
+              placeholder: const Text('安全 Token'),
+              obscureText: true,
+              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            ),
+            const SizedBox(height: 10),
+            submitButton,
+          ]
+        : <Widget>[
             Row(
               children: [
-                Expanded(child: _buildDataBackupExportTile(context)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildDataBackupImportTile(context)),
+                Expanded(
+                  child: ShadTextField(
+                    controller: _tokenCtrl,
+                    enabled: !_busy,
+                    placeholder: const Text('安全 Token'),
+                    obscureText: true,
+                    onSubmitted: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 150,
+                    maxWidth: 190,
+                  ),
+                  child: submitButton,
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            _buildSourceTile(context, CookieBackupSource.ptpp),
-            const SizedBox(height: 8),
-            _buildSourceTile(context, CookieBackupSource.ptd),
-            const SizedBox(height: 8),
-            _buildCookieCloudTile(context),
+          ];
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ShadTextField(
+          controller: _baseUrlCtrl,
+          enabled: !_busy,
+          placeholder: const Text('收割机服务器地址，例如 https://example.com'),
+          keyboardType: TextInputType.url,
+          onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+        ),
+        const SizedBox(height: 10),
+        ...tokenRow,
+      ],
+    );
+  }
+
+  Widget _buildLegacyApiSubmitButton() {
+    return shadcn.Button.destructive(
+      onPressed: _busy ? null : _submitLegacyApiMigration,
+      alignment: Alignment.center,
+      child: const Center(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(shadcn.LucideIcons.databaseBackup, size: 15),
+            SizedBox(width: 6),
+            Text('开始导入'),
           ],
         ),
       ),
@@ -1193,6 +1422,7 @@ class _CookieBackupImportCardState
     final cs = _optionColors(context);
     final isUploading = _uploading == source;
     final enabled = !_busy;
+    final file = _externalFiles[source];
     final color = isUploading
         ? cs.primary
         : enabled
@@ -1204,7 +1434,9 @@ class _CookieBackupImportCardState
       onTap: enabled ? () => _pickAndUpload(source) : null,
       leading: Icon(shadcn.LucideIcons.cookie, size: 18, color: color),
       title: '${source.label} 导入',
-      subtitle: '从备份文件导入站点',
+      subtitle: file == null
+          ? '从备份文件导入站点'
+          : '${file.name} · ${formatBytes(file.size)}',
       trailing: Icon(shadcn.LucideIcons.fileUp, size: 17, color: color),
     );
   }
@@ -1227,91 +1459,134 @@ class _CookieBackupImportCardState
       trailing: Icon(shadcn.LucideIcons.refreshCw, size: 17, color: color),
     );
   }
-}
 
-class _HarvestDataImportCard extends ConsumerStatefulWidget {
-  const _HarvestDataImportCard();
-
-  @override
-  ConsumerState<_HarvestDataImportCard> createState() =>
-      _HarvestDataImportCardState();
-}
-
-class _HarvestDataImportCardState
-    extends ConsumerState<_HarvestDataImportCard> {
-  final _baseUrlCtrl = TextEditingController();
-  final _tokenCtrl = TextEditingController();
-  bool _importing = false;
-
-  @override
-  void dispose() {
-    _baseUrlCtrl.dispose();
-    _tokenCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = _optionColors(context);
-    final typo = shadcn.Theme.of(context).typography;
-
-    return ExpandableCard(
-      title: '数据迁移',
-      icon: shadcn.LucideIcons.databaseBackup,
-      builder: (_) => OptionLoadingOverlay(
-        loading: _importing,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '从另一台收割机服务器导入配置与数据。',
-              style: typo.small.copyWith(
-                color: cs.mutedForeground,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ShadTextField(
-              controller: _baseUrlCtrl,
-              placeholder: const Text('收割机服务器地址，例如 https://example.com'),
-              keyboardType: TextInputType.url,
-              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            ),
-            const SizedBox(height: 10),
-            ShadTextField(
-              controller: _tokenCtrl,
-              placeholder: const Text('安全 Token'),
-              obscureText: true,
-              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            ),
-            const SizedBox(height: 10),
-            _ActionButtonFrame(
-              minWidth: 190,
-              maxWidth: 260,
-              child: shadcn.Button.destructive(
-                onPressed: _importing ? null : _submit,
-                alignment: Alignment.center,
-                child: const Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(shadcn.LucideIcons.databaseBackup, size: 15),
-                      SizedBox(width: 6),
-                      Text('开始导入'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+  Future<bool> _confirmFileImport({
+    required String title,
+    required PlatformFile file,
+    required String message,
+    required String confirmText,
+    IconData icon = shadcn.LucideIcons.fileUp,
+  }) {
+    return _confirmAction(
+      title: title,
+      message: '$message\n文件大小: ${formatBytes(file.size)}',
+      confirmText: confirmText,
+      icon: icon,
     );
   }
 
-  Future<void> _submit() async {
+  Future<bool> _confirmAction({
+    required String title,
+    required String message,
+    required String confirmText,
+    required IconData icon,
+  }) async {
+    final result = await shadcn.showDialog<bool>(
+      context: context,
+      builder: (ctx) => shadcn.AlertDialog(
+        leading: Icon(icon),
+        title: Text(title),
+        content: SizedBox(width: 360, child: Text(message)),
+        actions: [
+          shadcn.Button.outline(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          shadcn.Button.primary(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _pickSqliteFile() async {
+    if (_busy) return;
+
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: const ['sqlite3'],
+      );
+    } on PlatformException catch (e) {
+      AppLogger.error('选择 sqlite3 数据库文件失败', e);
+      Toast.error('选择文件失败: ${e.message ?? e.code}');
+      return;
+    } catch (e, st) {
+      AppLogger.error('选择 sqlite3 数据库文件失败', e, st);
+      Toast.error('选择文件失败');
+      return;
+    }
+
+    if (result == null || result.files.isEmpty) return;
+    if (!mounted) return;
+
+    final file = result.files.single;
+    if (!_isSqlite3File(file)) {
+      Toast.error('请选择 .sqlite3 数据库文件');
+      return;
+    }
+    if (file.path == null && file.bytes == null) {
+      Toast.error('无法读取所选文件');
+      return;
+    }
+
+    setState(() => _sqliteFile = file);
+    final confirmed = await _confirmFileImport(
+      title: '数据库文件导入',
+      file: file,
+      message: '确定导入旧版数据库「${file.name}」吗？',
+      confirmText: '确认导入',
+      icon: shadcn.LucideIcons.databaseZap,
+    );
+    if (!confirmed) {
+      if (mounted) setState(() => _sqliteFile = null);
+      return;
+    }
+    if (!mounted) return;
+
+    await _submitSqlite(file);
+  }
+
+  bool _isSqlite3File(PlatformFile file) {
+    return file.name.trim().toLowerCase().endsWith('.sqlite3');
+  }
+
+  Future<void> _submitSqlite(PlatformFile file) async {
+    if (!_isSqlite3File(file)) {
+      Toast.error('请选择 .sqlite3 数据库文件');
+      return;
+    }
+
+    setState(() => _importingSqlite = true);
+    try {
+      AppLogger.info(
+        '提交旧版 sqlite3 数据库导入: file=${file.name}, size=${file.size}',
+      );
+      final message = await ref
+          .read(optionProvider.notifier)
+          .importLegacySqlite(file: file);
+      if (!mounted) return;
+
+      if (message == null) {
+        Toast.error('旧版数据库导入失败');
+      } else {
+        Toast.success(message);
+      }
+    } catch (e, st) {
+      AppLogger.error('旧版数据库导入失败', e, st);
+      if (mounted) Toast.error('旧版数据库导入失败');
+    } finally {
+      if (mounted) setState(() => _importingSqlite = false);
+    }
+  }
+
+  Future<void> _submitLegacyApiMigration() async {
     final baseUrl = _baseUrlCtrl.text.trim();
     final token = _tokenCtrl.text.trim();
     if (baseUrl.isEmpty) {
@@ -1332,7 +1607,7 @@ class _HarvestDataImportCardState
       return;
     }
 
-    setState(() => _importing = true);
+    setState(() => _importingApi = true);
     try {
       final success = await ref
           .read(optionProvider.notifier)
@@ -1346,7 +1621,7 @@ class _HarvestDataImportCardState
       AppLogger.error('收割机数据导入失败', e, st);
       Toast.error('收割机数据导入失败');
     } finally {
-      if (mounted) setState(() => _importing = false);
+      if (mounted) setState(() => _importingApi = false);
     }
   }
 }

@@ -147,6 +147,22 @@ class OptionNotifier extends StateNotifier<OptionState> {
     }
   }
 
+  Future<String?> importLegacySqlite({required PlatformFile file}) async {
+    try {
+      final service = ref.read(optionServiceProvider);
+      final message = await service.importLegacySqlite(file: file);
+      if (!mounted) return null;
+
+      final options = await service.fetchOptions();
+      if (!mounted) return null;
+
+      state = state.copyWith(options: options);
+      return message;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<bool> speedTest() async {
     try {
       await ref.read(optionServiceProvider).speedTest();

@@ -227,6 +227,41 @@ class OptionService {
     AppLogger.info('[Option] 收割机数据导入已提交 baseUrl=$baseUrl');
   }
 
+  /// 从旧版 sqlite3 数据库文件导入数据
+  Future<String> importLegacySqlite({required PlatformFile file}) async {
+    if (file.path == null && file.bytes == null) {
+      throw StateError('无法读取文件: ${file.name}');
+    }
+
+    final formData = FormData();
+    final multipart = file.bytes != null
+        ? MultipartFile.fromBytes(file.bytes!, filename: file.name)
+        : await MultipartFile.fromFile(file.path!, filename: file.name);
+    formData.files.add(MapEntry('file', multipart));
+
+    try {
+      final response = await DioClient.dio.post(
+        API.setupSqlite,
+        data: formData,
+        options: Options(extra: const {'allowAnySucceed': true}),
+      );
+      AppLogger.info('旧版 sqlite3 数据库导入已提交: ${response.data}');
+
+      final data = response.data;
+      if (data is Map && data['msg'] != null) {
+        return data['msg'].toString();
+      }
+      return '旧版数据库导入任务已提交';
+    } on DioException catch (e, st) {
+      AppLogger.error(
+        '旧版 sqlite3 数据库导入失败: response=${e.response?.data}',
+        e,
+        st,
+      );
+      rethrow;
+    }
+  }
+
   /// 生成测速任务
   Future<void> speedTest() async {
     await fetchBasic(API.SPEED_TEST);

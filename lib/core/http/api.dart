@@ -136,6 +136,7 @@ class API {
   static const String setupStatus = "/api/setup/status";
   static const String setupInit = "/api/setup/init";
   static const String setupImport = "/api/setup/import";
+  static const String setupSqlite = "/api/setup/sqlite";
   static const String setupBackup = "/api/setup/backup";
 
   /// 订阅相关
@@ -287,6 +288,7 @@ const _apiEndpointNames = <String, String>{
   API.setupStatus: '初始化状态接口',
   API.setupInit: '初始化配置接口',
   API.setupImport: '旧数据导入接口',
+  API.setupSqlite: '旧数据库导入接口',
   API.setupBackup: '数据备份接口',
   API.SUB_RSS: 'RSS 订阅接口',
   API.SUB_SUB: '订阅配置接口',
