@@ -31,6 +31,7 @@ class LocalNoticeNotificationService {
   bool _initialized = false;
   bool _initializationFailed = false;
   int? _pendingBadgeCount;
+  bool _pendingBadgeForce = false;
   int? _lastSyncedBadgeCount;
   Future<void>? _badgeSyncTask;
 
@@ -127,13 +128,38 @@ class LocalNoticeNotificationService {
     await HiveManager.set(StorageKeys.localNoticeLastNotifiedId, maxNoticeId);
   }
 
-  Future<void> syncBadgeCount(int count) async {
+  Future<void> syncBadgeCount(int count, {bool force = false}) async {
     if (kIsWeb || !_isBadgeSupportedPlatform) return;
 
     final effectiveCount = count < 0 ? 0 : count;
     _pendingBadgeCount = effectiveCount;
+    _pendingBadgeForce = _pendingBadgeForce || force;
     _badgeSyncTask ??= _drainBadgeSyncQueue();
     await _badgeSyncTask;
+  }
+
+  Future<void> clearNotice(int id) async {
+    if (kIsWeb || !_isSupportedPlatform || id <= 0) return;
+    await initialize();
+    if (!_initialized) return;
+
+    try {
+      await _plugin.cancel(id: id);
+    } catch (e, st) {
+      AppLogger.error('清理本地通知失败', e, st);
+    }
+  }
+
+  Future<void> clearAllNotices() async {
+    if (kIsWeb || !_isSupportedPlatform) return;
+    await initialize();
+    if (!_initialized) return;
+
+    try {
+      await _plugin.cancelAll();
+    } catch (e, st) {
+      AppLogger.error('清理全部本地通知失败', e, st);
+    }
   }
 
   Future<void> _drainBadgeSyncQueue() async {
@@ -147,12 +173,15 @@ class LocalNoticeNotificationService {
         return;
       }
 
+      final force = _pendingBadgeForce;
       _pendingBadgeCount = null;
-      if (_lastSyncedBadgeCount == count) continue;
+      _pendingBadgeForce = false;
+      if (!force && _lastSyncedBadgeCount == count) continue;
 
       try {
         await _badgeChannel.invokeMethod<void>('setBadgeCount', count);
         _lastSyncedBadgeCount = count;
+        AppLogger.debug('同步应用角标: $count');
       } catch (e, st) {
         AppLogger.error('同步应用角标失败', e, st);
       }

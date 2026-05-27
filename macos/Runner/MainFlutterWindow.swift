@@ -23,6 +23,7 @@ class MainFlutterWindow: NSWindow {
 
       let count = max(call.arguments as? Int ?? 0, 0)
       NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
+      NSApplication.shared.dockTile.display()
       result(nil)
     }
 

@@ -12,11 +12,7 @@ final noticeHistoryProvider =
       NoticeHistoryNotifier.new,
     );
 
-final noticeUnreadCountProvider = Provider<int>((ref) {
-  final notices =
-      ref.watch(noticeHistoryProvider).valueOrNull ?? const <NoticeHistory>[];
-  return notices.where((notice) => !notice.isRead).length;
-});
+final noticeUnreadCountProvider = StateProvider<int>((_) => 0);
 
 class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
   @override
@@ -54,7 +50,11 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
     if (notice.isRead || notice.id <= 0) return;
 
     final previous = state.valueOrNull;
-    _setReadLocally({notice.id});
+    final previousUnreadCount = ref.read(noticeUnreadCountProvider);
+    final changedLocally = _setReadLocally({notice.id}, syncBadge: false);
+    _syncUnreadCount(previousUnreadCount - 1, forceBadgeSync: true);
+    if (!changedLocally && previous != null) state = AsyncValue.data(previous);
+    unawaited(LocalNoticeNotificationService.instance.clearNotice(notice.id));
 
     try {
       await NoticeService.markRead(notice.id);
@@ -62,6 +62,8 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       if (previous != null) {
         state = AsyncValue.data(previous);
         _syncBadgeFor(previous);
+      } else {
+        _syncUnreadCount(previousUnreadCount);
       }
       rethrow;
     }
@@ -72,12 +74,22 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
     if (notice.id <= 0) return;
 
     final previous = state.valueOrNull;
+    final previousUnreadCount = ref.read(noticeUnreadCountProvider);
     final notices = previous ?? const <NoticeHistory>[];
+    final removedUnread = notices.any(
+      (item) => item.id == notice.id && !item.isRead,
+    );
     state = AsyncValue.data([
       for (final item in notices)
         if (item.id != notice.id) item,
     ]);
     _syncBadgeFor(state.valueOrNull ?? const <NoticeHistory>[]);
+    if (previous == null && !notice.isRead) {
+      _syncUnreadCount(previousUnreadCount - 1, forceBadgeSync: true);
+    } else if (!removedUnread && !notice.isRead) {
+      _syncUnreadCount(previousUnreadCount - 1, forceBadgeSync: true);
+    }
+    unawaited(LocalNoticeNotificationService.instance.clearNotice(notice.id));
 
     try {
       await NoticeService.deleteNotice(notice.id);
@@ -85,6 +97,8 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       if (previous != null) {
         state = AsyncValue.data(previous);
         _syncBadgeFor(previous);
+      } else {
+        _syncUnreadCount(previousUnreadCount);
       }
       rethrow;
     }
@@ -98,16 +112,27 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
         .where((notice) => !notice.isRead && notice.id > 0)
         .map((notice) => notice.id)
         .toSet();
-    if (unreadIds.isEmpty) return;
+    final previousUnreadCount = ref.read(noticeUnreadCountProvider);
+    if (unreadIds.isEmpty && previousUnreadCount <= 0) return;
 
     final previous = List<NoticeHistory>.from(notices);
-    _setReadLocally(unreadIds);
+    if (unreadIds.isEmpty) {
+      _syncUnreadCount(0, forceBadgeSync: true);
+    } else {
+      _setReadLocally(unreadIds, syncBadge: false);
+      _syncUnreadCount(0, forceBadgeSync: true);
+    }
+    unawaited(LocalNoticeNotificationService.instance.clearAllNotices());
 
     try {
       await NoticeService.markAllRead();
     } catch (_) {
       state = AsyncValue.data(previous);
-      _syncBadgeFor(previous);
+      if (previous.isEmpty) {
+        _syncUnreadCount(previousUnreadCount);
+      } else {
+        _syncBadgeFor(previous);
+      }
       rethrow;
     }
   }
@@ -117,10 +142,12 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
 
     final previous = state.valueOrNull;
     final notices = previous ?? const <NoticeHistory>[];
-    if (notices.isEmpty) return;
+    final previousUnreadCount = ref.read(noticeUnreadCountProvider);
+    if (notices.isEmpty && previousUnreadCount <= 0) return;
 
     state = const AsyncValue.data(<NoticeHistory>[]);
     _syncBadgeFor(const <NoticeHistory>[]);
+    unawaited(LocalNoticeNotificationService.instance.clearAllNotices());
 
     try {
       await NoticeService.deleteAll();
@@ -128,20 +155,33 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
       if (previous != null) {
         state = AsyncValue.data(previous);
         _syncBadgeFor(previous);
+      } else {
+        _syncUnreadCount(previousUnreadCount);
       }
       rethrow;
     }
   }
 
-  void _setReadLocally(Set<int> ids) {
+  bool _setReadLocally(Set<int> ids, {bool syncBadge = true}) {
     final notices = state.valueOrNull;
-    if (notices == null) return;
+    if (notices == null) return false;
+    var changed = false;
 
     state = AsyncValue.data([
       for (final notice in notices)
-        ids.contains(notice.id) ? notice.copyWith(isRead: true) : notice,
+        if (ids.contains(notice.id) && !notice.isRead) ...[
+          notice.copyWith(isRead: true),
+        ] else
+          notice,
     ]);
-    _syncBadgeFor(state.valueOrNull ?? const <NoticeHistory>[]);
+    for (final notice in notices) {
+      if (ids.contains(notice.id) && !notice.isRead) {
+        changed = true;
+        break;
+      }
+    }
+    if (syncBadge) _syncBadgeFor(state.valueOrNull ?? const <NoticeHistory>[]);
+    return changed;
   }
 
   Future<List<NoticeHistory>> _fetchNoticeHistoryWithNotification() async {
@@ -157,8 +197,18 @@ class NoticeHistoryNotifier extends AsyncNotifier<List<NoticeHistory>> {
 
   void _syncBadgeFor(List<NoticeHistory> notices) {
     final unreadCount = notices.where((notice) => !notice.isRead).length;
+    _syncUnreadCount(unreadCount);
+  }
+
+  void _syncUnreadCount(int count, {bool forceBadgeSync = false}) {
+    final unreadCount = count < 0 ? 0 : count;
+    ref.read(noticeUnreadCountProvider.notifier).state = unreadCount;
     unawaited(
-      LocalNoticeNotificationService.instance.syncBadgeCount(unreadCount),
+      LocalNoticeNotificationService.instance
+          .syncBadgeCount(unreadCount, force: forceBadgeSync)
+          .catchError((Object error) {
+            // 系统角标同步失败不能影响站内未读状态。
+          }),
     );
   }
 }

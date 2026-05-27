@@ -25,7 +25,7 @@ class NoticeHistory {
       title: '${json['title'] ?? ''}',
       content: '${json['content'] ?? ''}',
       url: parseNullableString(json['url']),
-      isRead: parseBool(json['is_read']),
+      isRead: _parseIsRead(json),
       createdAt: parseNullableString(
         json['created_at'] ?? json['create_time'] ?? json['created'],
       ),
@@ -54,4 +54,15 @@ class NoticeHistory {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+}
+
+bool _parseIsRead(Map<String, dynamic> json) {
+  for (final key in ['is_read', 'isRead', 'read', 'readed', 'has_read']) {
+    if (json.containsKey(key)) return parseBool(json[key]);
+  }
+
+  final readAt = parseNullableString(
+    json['read_at'] ?? json['readAt'] ?? json['read_time'] ?? json['readTime'],
+  );
+  return readAt != null;
 }

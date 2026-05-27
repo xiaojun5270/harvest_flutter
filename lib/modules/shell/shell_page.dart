@@ -297,6 +297,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         : ref.watch(appUpgradeStatusProvider);
     final hasAppUpgrade = appUpgradeStatus?.valueOrNull?.hasNewVersion == true;
     final showNews = ref.watch(mediaInfoSettingsProvider).enabled;
+    final unreadCount = ref.watch(noticeUnreadCountProvider);
     final notices =
         ref.watch(noticeHistoryProvider).valueOrNull ?? const <NoticeHistory>[];
     final unread = [
@@ -337,6 +338,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
                 header: _ShellHeader(
                   title: _pageTitles[currentIndex],
                   subtitle: _pageSubtitles[currentIndex],
+                  unreadCount: unreadCount,
                   unreadNotices: unread,
                   onOpenNotices: () => Navigator.push(
                     context,
@@ -488,6 +490,7 @@ const double _headerActionIconSize = 18;
 class _ShellHeader extends StatelessWidget {
   final String title;
   final String subtitle;
+  final int unreadCount;
   final List<NoticeHistory> unreadNotices;
   final VoidCallback onOpenNotices;
   final VoidCallback onOpenDrawer;
@@ -499,6 +502,7 @@ class _ShellHeader extends StatelessWidget {
   const _ShellHeader({
     required this.title,
     required this.subtitle,
+    required this.unreadCount,
     required this.unreadNotices,
     required this.onOpenNotices,
     required this.onOpenDrawer,
@@ -512,7 +516,8 @@ class _ShellHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
-    final hasUnread = unreadNotices.isNotEmpty;
+    final hasUnread = unreadCount > 0;
+    final canShowTicker = hasUnread && unreadNotices.isNotEmpty;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: cs.brightness == Brightness.dark
           ? SystemUiOverlayStyle.light
@@ -541,8 +546,12 @@ class _ShellHeader extends StatelessWidget {
                   ),
                 ),
               ],
-              title: hasUnread
-                  ? _NoticeTicker(notices: unreadNotices, onTap: onOpenNotices)
+              title: canShowTicker
+                  ? _NoticeTicker(
+                      notices: unreadNotices,
+                      unreadCount: unreadCount,
+                      onTap: onOpenNotices,
+                    )
                   : Text(
                       title,
                       maxLines: 1,
@@ -553,9 +562,9 @@ class _ShellHeader extends StatelessWidget {
                       ),
                     ),
               trailing: [
-                if (!hasUnread)
+                if (!canShowTicker)
                   _HeaderNoticeButton(
-                    unreadCount: unreadNotices.length,
+                    unreadCount: unreadCount,
                     hasUnread: hasUnread,
                     onTap: onOpenNotices,
                   ),
@@ -589,9 +598,14 @@ class _ShellHeader extends StatelessWidget {
 
 class _NoticeTicker extends ConsumerStatefulWidget {
   final List<NoticeHistory> notices;
+  final int unreadCount;
   final VoidCallback onTap;
 
-  const _NoticeTicker({required this.notices, required this.onTap});
+  const _NoticeTicker({
+    required this.notices,
+    required this.unreadCount,
+    required this.onTap,
+  });
 
   @override
   ConsumerState<_NoticeTicker> createState() => _NoticeTickerState();
@@ -638,7 +652,7 @@ class _NoticeTickerState extends ConsumerState<_NoticeTicker> {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
     final notice = widget.notices[_index.clamp(0, widget.notices.length - 1)];
-    final count = widget.notices.length;
+    final count = widget.unreadCount;
     final isDesktop = !context.isMobile;
 
     return GestureDetector(
