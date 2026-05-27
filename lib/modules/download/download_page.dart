@@ -249,10 +249,12 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                     : const Color(0xFFF59E0B),
                 tooltip: paused ? '恢复实时状态' : '暂停实时状态',
               ),
-              StatusBarIconButton(
-                onTap: () => _showEditor(),
-                icon: shadcn.LucideIcons.plus,
-                tooltip: '添加下载器',
+              shadcn.IconButton.ghost(
+                onPressed: () => _showEditor(),
+                icon: shadcn.Tooltip(
+                  tooltip: (_) => const Text('添加下载器'),
+                  child: const Icon(shadcn.LucideIcons.plus, size: 18),
+                ),
               ),
             ],
           );
@@ -356,10 +358,7 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
       );
       return;
     }
-    shadcn.showDialog(
-      context: context,
-      builder: (_) => editor,
-    );
+    shadcn.showDialog(context: context, builder: (_) => editor);
   }
 
   void _confirmDelete(Downloader d) {

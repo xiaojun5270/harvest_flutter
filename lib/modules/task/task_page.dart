@@ -19,7 +19,6 @@ import 'package:harvest/widgets/app_menu.dart';
 import '../../widgets/cache_status_banner.dart';
 import '../shell/provider/screenshot_provider.dart';
 import '../shell/widgets/shell_scaffold.dart';
-import '../torrents/widgets/torrent_stats_bar.dart';
 import 'model/schedule.dart';
 import 'provider/crontab_provider.dart';
 import 'provider/schedule_provider.dart';
@@ -33,7 +32,10 @@ class TaskPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tasksAsync = ref.watch(scheduleProvider);
     final theme = shadcn.Theme.of(context);
-    final pageBackground = appSurfaceColor(context, theme.colorScheme.background);
+    final pageBackground = appSurfaceColor(
+      context,
+      theme.colorScheme.background,
+    );
 
     return AppBackground(
       child: shadcn.Scaffold(
@@ -214,10 +216,12 @@ class _TaskStatusBar extends StatelessWidget {
             tooltipHandler: const shadcn.FixedTooltipOverlayHandler(),
             menuHandler: const shadcn.PopoverOverlayHandler(),
             child: Builder(
-              builder: (buttonContext) => StatusBarIconButton(
-                onTap: () => onAdd(buttonContext),
-                icon: shadcn.LucideIcons.plus,
-                tooltip: '添加任务',
+              builder: (buttonContext) => shadcn.IconButton.ghost(
+                onPressed: () => onAdd(buttonContext),
+                icon: shadcn.Tooltip(
+                  tooltip: (_) => const Text('添加任务'),
+                  child: const Icon(shadcn.LucideIcons.plus, size: 18),
+                ),
               ),
             ),
           ),
@@ -395,91 +399,198 @@ class _TaskListViewState extends ConsumerState<_TaskListView> {
 
   Widget _buildTile(BuildContext context, Schedule task) {
     final crontabList = ref.watch(crontabListProvider).valueOrNull ?? [];
-    final express =
-        crontabList.firstWhereOrNull((c) => c.id == task.crontabId)?.express ??
+    final taskCrontabExpress = task.crontab?.express.trim() ?? '';
+    final matchedCrontabExpress =
+        crontabList
+            .firstWhereOrNull((c) => c.id == task.crontabId)
+            ?.express
+            .trim() ??
         '';
+    final express = taskCrontabExpress.isNotEmpty
+        ? taskCrontabExpress
+        : matchedCrontabExpress;
 
     final icon = _taskIcon(task.task);
     final isMobile = context.isMobile;
-    final hasKwargs = task.kwargs.isNotEmpty && task.kwargs != '{}';
+    final kwargs = task.kwargs.trim();
+    final hasKwargs = kwargs.isNotEmpty && kwargs != '{}';
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
     final typo = theme.typography;
+    final gap = theme.density.baseGap * theme.scaling;
+    final contentPadding = theme.density.baseContentPadding * theme.scaling;
+    final heightScale = theme.scaling.clamp(0.92, 1.18).toDouble();
+    final cardHeight = (isMobile ? 112.0 : 108.0) * heightScale;
+    final titleColor = task.enabled ? cs.foreground : cs.mutedForeground;
+    final bodyColor = task.enabled
+        ? cs.mutedForeground
+        : cs.mutedForeground.withValues(alpha: 0.72);
 
     return AppContextMenu(
       items: _taskMenuItems(context, task),
       openOnTap: isMobile,
       openOnLongPress: !isMobile,
-      child: AppSurfaceContainer(
-        color: appSurfaceColor(context, cs.card),
-        borderColor: cs.border,
-        borderRadius: BorderRadius.circular(theme.radiusLg),
-        padding: EdgeInsets.zero,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            theme.density.baseContentPadding * theme.scaling,
-            theme.density.baseGap * theme.scaling,
-            theme.density.baseContentPadding * theme.scaling,
-            theme.density.baseGap * theme.scaling,
-          ),
-          child: Row(
+      child: SizedBox(
+        height: cardHeight,
+        child: AppSurfaceContainer(
+          color: appSurfaceColor(context, cs.card),
+          borderColor: cs.border,
+          borderRadius: BorderRadius.circular(theme.radiusLg),
+          padding: EdgeInsets.zero,
+          child: Stack(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: (task.enabled ? cs.primary : cs.mutedForeground)
+                        .withValues(alpha: task.enabled ? 0.42 : 0.18),
+                  ),
+                  child: const SizedBox(width: 3),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  contentPadding,
+                  gap * 0.9,
+                  contentPadding,
+                  gap * 0.9,
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      task.name,
-                      style: typo.small.copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(
-                      height: theme.density.baseGap * theme.scaling * 0.5,
-                    ),
-                    Row(
-                      children: [
-                        Icon(icon, size: isMobile ? 14 : 15, color: cs.primary),
-                        SizedBox(
-                          width: theme.density.baseGap * theme.scaling * 0.5,
-                        ),
-                        Expanded(
-                          child: Text(
+                    _buildTaskIconBadge(context, icon, task.enabled),
+                    SizedBox(width: gap * 0.85),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  task.name,
+                                  style: typo.small.copyWith(
+                                    color: titleColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (express.isNotEmpty) ...[
+                                SizedBox(width: gap * 0.75),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: isMobile ? 116 : 138,
+                                  ),
+                                  child: _buildCronBadge(context, express),
+                                ),
+                              ],
+                            ],
+                          ),
+                          SizedBox(height: gap * 0.45),
+                          Text(
                             task.task,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: typo.xSmall.copyWith(
-                              color: cs.mutedForeground,
+                              color: bodyColor,
                               fontSize: isMobile ? null : 13,
                             ),
                           ),
-                        ),
-                        if (express.isNotEmpty)
-                          Text(
-                            express,
-                            style: typo.xSmall.copyWith(
-                              color: cs.primary,
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.w500,
-                              fontSize: isMobile ? null : 13,
-                            ),
-                          ),
-                      ],
+                          SizedBox(height: gap * 0.45),
+                          _buildKwargsSlot(context, task, hasKwargs),
+                        ],
+                      ),
                     ),
-                    if (hasKwargs) _buildKwargsBadge(context, task),
+                    SizedBox(width: gap),
+                    shadcn.Switch(
+                      value: task.enabled,
+                      onChanged: (v) => ref
+                          .read(scheduleProvider.notifier)
+                          .toggle(task.id, v),
+                    ),
                   ],
                 ),
-              ),
-              SizedBox(width: theme.density.baseGap * theme.scaling),
-              shadcn.Switch(
-                value: task.enabled,
-                onChanged: (v) =>
-                    ref.read(scheduleProvider.notifier).toggle(task.id, v),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTaskIconBadge(
+    BuildContext context,
+    IconData icon,
+    bool enabled,
+  ) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final accent = enabled ? cs.primary : cs.mutedForeground;
+    final size = context.isMobile ? 34.0 : 36.0;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: enabled ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(theme.radiusMd),
+        border: Border.all(
+          color: accent.withValues(alpha: enabled ? 0.24 : 0.16),
+          width: 0.5,
+        ),
+      ),
+      child: Icon(icon, size: context.isMobile ? 16 : 17, color: accent),
+    );
+  }
+
+  Widget _buildCronBadge(BuildContext context, String expression) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final gap = theme.density.baseGap * theme.scaling;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: 0.26),
+          width: 0.5,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: gap * 0.7,
+          vertical: gap * 0.28,
+        ),
+        child: Text(
+          expression,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.typography.xSmall.copyWith(
+            color: cs.primary,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.w700,
+            fontSize: context.isMobile ? 11 : 12,
+            height: 1.15,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKwargsSlot(BuildContext context, Schedule task, bool hasKwargs) {
+    final scale = shadcn.Theme.of(context).scaling.clamp(0.92, 1.18).toDouble();
+
+    return SizedBox(
+      height: (context.isMobile ? 30.0 : 28.0) * scale,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: hasKwargs ? _buildKwargsBadge(context, task) : null,
       ),
     );
   }
