@@ -42,7 +42,9 @@ class ResponseInterceptor extends Interceptor {
       '${response.requestOptions.path} status=${response.statusCode} '
       'code=${data is Map ? data['code'] : '-'} msg=${msg ?? '-'}',
     );
-    Toast.error(requestToastMessage(response.requestOptions, msg ?? '请求失败'));
+    if (!suppressErrorToast(response.requestOptions)) {
+      Toast.error(requestToastMessage(response.requestOptions, msg ?? '请求失败'));
+    }
 
     return handler.reject(
       DioException(

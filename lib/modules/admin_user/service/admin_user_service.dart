@@ -1,4 +1,6 @@
+import 'package:dio/dio.dart';
 import 'package:harvest/core/http/api.dart';
+import 'package:harvest/core/http/http_error.dart';
 import 'package:harvest/core/http/http.dart';
 
 import '../model/admin_user_model.dart';
@@ -7,17 +9,28 @@ class AdminUserService {
   AdminUserService._();
 
   static Future<List<AdminUser>> fetchUsers() async {
-    final data = await Http.get<dynamic>(API.ADMIN_USER);
+    final data = await Http.get<dynamic>(
+      API.ADMIN_USER,
+      options: Options(headers: const {noToastHeader: 'true'}),
+    );
     final list = _extractList(data);
     return list
         .whereType<Map>()
         .map((item) => AdminUser.fromJson(Map<String, dynamic>.from(item)))
-        .where((user) => user.id > 0 || user.email.isNotEmpty || (user.username?.isNotEmpty ?? false))
+        .where(
+          (user) =>
+              user.id > 0 ||
+              user.email.isNotEmpty ||
+              (user.username?.isNotEmpty ?? false),
+        )
         .toList();
   }
 
   static Future<void> createUser(String email) async {
-    await Http.post(API.ADMIN_USER, queryParameters: {'invite_email': email, 'notify': false});
+    await Http.post(
+      API.ADMIN_USER,
+      queryParameters: {'invite_email': email, 'notify': false},
+    );
   }
 
   static Future<void> updateUser(AdminUserEditPayload payload) async {
@@ -25,8 +38,15 @@ class AdminUserService {
     await Http.put(API.ADMIN_USER, data: data);
   }
 
-  static Future<void> resetToken(int userId, AdminUserResetTokenPayload payload) async {
-    await Http.post(API.ADMIN_RESET_TOKEN, queryParameters: {'user_id': userId}, data: payload.toJson());
+  static Future<void> resetToken(
+    int userId,
+    AdminUserResetTokenPayload payload,
+  ) async {
+    await Http.post(
+      API.ADMIN_RESET_TOKEN,
+      queryParameters: {'user_id': userId},
+      data: payload.toJson(),
+    );
   }
 
   static Future<void> sendTokenEmail(int userId) async {

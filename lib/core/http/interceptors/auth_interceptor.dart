@@ -18,6 +18,8 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    applyNoToastHeader(options);
+
     if (_isAuthExemptPath(options.path)) {
       AppLogger.debug(
         '[Auth] auth exempt request: ${options.method} ${options.path}',
@@ -78,20 +80,24 @@ class AuthInterceptor extends Interceptor {
         err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.sendTimeout ||
         err.type == DioExceptionType.receiveTimeout) {
-      Toast.error(
-        requestToastMessage(err.requestOptions, '请求超时或连接失败，请检查网络或服务器地址'),
-      );
+      if (!suppressErrorToast(err.requestOptions)) {
+        Toast.error(
+          requestToastMessage(err.requestOptions, '请求超时或连接失败，请检查网络或服务器地址'),
+        );
+      }
       return handler.next(err);
     }
 
     // 非 401 → 直接提示
     if (status != 401) {
-      Toast.error(
-        requestToastMessage(
-          err.requestOptions,
-          _extractMsg(status, responseData),
-        ),
-      );
+      if (!suppressErrorToast(err.requestOptions)) {
+        Toast.error(
+          requestToastMessage(
+            err.requestOptions,
+            _extractMsg(status, responseData),
+          ),
+        );
+      }
       return handler.next(err);
     }
 
