@@ -15,6 +15,7 @@ import '../../router/app_router.dart';
 import '../login/login_history_provider.dart';
 import '../login/login_record.dart';
 import 'session_state_reset.dart';
+import 'setup_prompt_provider.dart';
 
 part 'auth_provider.freezed.dart';
 part 'auth_provider.g.dart';
@@ -131,6 +132,7 @@ class AuthNotifier extends _$AuthNotifier {
 
       await getUser();
       ref.read(postLogoutRouteProvider.notifier).state = null;
+      ref.read(setupDialogBaseUrlProvider.notifier).state = null;
       invalidateSessionState(ref);
 
       // ✅ 只有登录成功才刷新路由
@@ -146,12 +148,22 @@ class AuthNotifier extends _$AuthNotifier {
   }
 
   /// 登出
-  Future<void> logout({String? redirectTo}) async {
+  Future<void> logout({
+    String? redirectTo,
+    bool openSetupAfterLogout = false,
+    String? setupBaseUrl,
+  }) async {
     if (_logoutInProgress) return;
     _logoutInProgress = true;
 
     try {
       ref.read(postLogoutRouteProvider.notifier).state = redirectTo;
+      final setupUrl = setupBaseUrl?.trim();
+      if (openSetupAfterLogout && setupUrl != null && setupUrl.isNotEmpty) {
+        ref.read(setupDialogBaseUrlProvider.notifier).state = setupUrl;
+      } else {
+        ref.read(setupDialogBaseUrlProvider.notifier).state = null;
+      }
       await Future.wait([
         HiveManager.delete(StorageKeys.accessToken),
         HiveManager.delete(StorageKeys.refreshToken),

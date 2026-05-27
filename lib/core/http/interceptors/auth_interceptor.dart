@@ -52,7 +52,7 @@ class AuthInterceptor extends Interceptor {
 
   bool _isSilentCancel(DioException err) {
     return err.type == DioExceptionType.cancel &&
-        err.error?.toString() == 'token_expired';
+        err.error?.toString() == silentAuthCancelReason;
   }
 
   @override
@@ -73,6 +73,15 @@ class AuthInterceptor extends Interceptor {
 
     if (_isAuthExemptPath(err.requestOptions.path)) {
       return handler.next(err);
+    }
+
+    if (isServerSetupRequiredError(err)) {
+      AppLogger.warn('[Auth] server setup required, logout scheduled');
+      await _logout(
+        openSetupAfterLogout: true,
+        setupBaseUrl: AppConfig.baseUrl,
+      );
+      return handler.reject(_silentCancel(err.requestOptions));
     }
 
     // 网络错误
@@ -221,7 +230,7 @@ class AuthInterceptor extends Interceptor {
     return DioException(
       requestOptions: options,
       type: DioExceptionType.cancel,
-      error: 'token_expired',
+      error: silentAuthCancelReason,
     );
   }
 
@@ -239,7 +248,10 @@ class AuthInterceptor extends Interceptor {
     return '请求失败 (${status ?? '网络异常'})';
   }
 
-  Future<void> _logout() async {
+  Future<void> _logout({
+    bool openSetupAfterLogout = false,
+    String? setupBaseUrl,
+  }) async {
     if (_logoutScheduled) return;
 
     final accessToken = HiveManager.get(StorageKeys.accessToken);
@@ -261,7 +273,12 @@ class AuthInterceptor extends Interceptor {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final logout = globalLogout;
       if (logout != null) {
-        unawaited(logout());
+        unawaited(
+          logout(
+            openSetupAfterLogout: openSetupAfterLogout,
+            setupBaseUrl: setupBaseUrl,
+          ),
+        );
       }
       _logoutScheduled = false;
     });

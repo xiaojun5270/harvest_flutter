@@ -74,7 +74,18 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
   // 挂载全局引用
-  globalLogout = () => ref.read(authNotifierProvider.notifier).logout();
+  globalLogout =
+      ({
+        String? redirectTo,
+        bool openSetupAfterLogout = false,
+        String? setupBaseUrl,
+      }) => ref
+          .read(authNotifierProvider.notifier)
+          .logout(
+            redirectTo: redirectTo,
+            openSetupAfterLogout: openSetupAfterLogout,
+            setupBaseUrl: setupBaseUrl,
+          );
 
   return router;
 });

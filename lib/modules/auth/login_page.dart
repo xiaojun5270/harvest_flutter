@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:harvest/core/config/app_config.dart';
 import 'package:harvest/core/http/api.dart';
+import 'package:harvest/core/http/http_error.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
 import 'package:harvest/core/utils/utils.dart';
@@ -20,6 +21,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 import '../login/login_history_provider.dart';
 import '../login/login_record.dart';
 import 'auth_provider.dart';
+import 'setup_prompt_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -34,6 +36,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   late final TextEditingController _usernameController;
   late final TextEditingController _passwordController;
   bool _filledFromHistory = false;
+  bool _setupDialogOpening = false;
   static const _debugUsername = 'admin';
   static const _debugPassword = 'adminadmin';
   static const _debugServer = 'http://127.0.0.1:8000';
@@ -82,6 +85,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       loginHistoryProvider,
       (prev, next) => _fillFromLoginHistory(next),
     );
+    ref.listen<String?>(setupDialogBaseUrlProvider, (prev, next) {
+      if (next == null || next.isEmpty) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openPendingSetupDialog(next);
+      });
+    });
+    final pendingSetupBaseUrl = ref.watch(setupDialogBaseUrlProvider);
+    if (pendingSetupBaseUrl != null && pendingSetupBaseUrl.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openPendingSetupDialog(pendingSetupBaseUrl);
+      });
+    }
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -378,17 +393,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     Toast.success('初始化完成，请登录');
   }
 
-  bool _isSetupRequiredError(Object error) {
-    if (error is DioException) {
-      final status = error.response?.statusCode;
-      final data = error.response?.data;
-      final message =
-          _extractLoginErrorMessage(data) ?? error.error?.toString();
-      return status == 503 &&
-          message != null &&
-          (message.contains('尚未初始化') || message.contains('/setup'));
+  Future<void> _openPendingSetupDialog(String baseUrl) async {
+    if (_setupDialogOpening || !mounted) return;
+    _setupDialogOpening = true;
+    ref.read(setupDialogBaseUrlProvider.notifier).state = null;
+
+    final normalizedBaseUrl = AppConfig.normalizeBaseUrl(baseUrl);
+    _serverController.text = normalizedBaseUrl;
+    try {
+      await _showSetupDialog(normalizedBaseUrl);
+    } finally {
+      _setupDialogOpening = false;
     }
-    return false;
+  }
+
+  bool _isSetupRequiredError(Object error) {
+    return isServerSetupRequiredError(error);
   }
 
   String _loginErrorMessage(Object error) {
@@ -541,7 +561,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
   final _adminPassCtrl = TextEditingController();
   final _jwtSecretCtrl = TextEditingController();
   String _databaseType = 'pgsql';
-  bool _debug = true;
+  bool _debug = false;
   bool _submitting = false;
   String? _error;
 
