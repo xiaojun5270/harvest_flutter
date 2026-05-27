@@ -21,8 +21,12 @@ class SiteActionMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final refreshing = ref.watch(siteRefreshingIdsProvider.select((ids) => ids.contains(site.id)));
-    final content = Stack(children: [child, if (refreshing) const _SiteCardLoadingOverlay()]);
+    final refreshing = ref.watch(
+      siteRefreshingIdsProvider.select((ids) => ids.contains(site.id)),
+    );
+    final content = Stack(
+      children: [child, if (refreshing) const _SiteCardLoadingOverlay()],
+    );
 
     return AppContextMenu(
       enabled: !refreshing,
@@ -44,12 +48,17 @@ class _SiteCardLoadingOverlay extends StatelessWidget {
       child: ClipRRect(
         borderRadius: siteRadius(context, size: "xl"),
         child: DecoratedBox(
-          decoration: BoxDecoration(color: cs.background.withValues(alpha: 0.72)),
+          decoration: BoxDecoration(
+            color: cs.background.withValues(alpha: 0.72),
+          ),
           child: Center(
             child: SizedBox(
               width: 28,
               height: 28,
-              child: shadcn.CircularProgressIndicator(strokeWidth: 2.4, color: cs.primary),
+              child: shadcn.CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: cs.primary,
+              ),
             ),
           ),
         ),
@@ -62,14 +71,20 @@ class _SiteCardLoadingOverlay extends StatelessWidget {
 //  操作列表
 // ═══════════════════════════════════════════════════
 
-List<shadcn.MenuItem> _buildActionItems(BuildContext context, WidgetRef ref, SiteInfo site) {
+List<shadcn.MenuItem> _buildActionItems(
+  BuildContext context,
+  WidgetRef ref,
+  SiteInfo site,
+) {
   final cs = shadcn.Theme.of(context).colorScheme;
   final configs = ref.watch(websiteListProvider).valueOrNull ?? const [];
   final website = findSiteWebsiteConfig(site, configs);
   final disabled = !site.available;
   final alreadySigned = site.signInText == '已签到';
   final hasMirror = site.mirror != null && site.mirror!.isNotEmpty;
-  final browseItems = hasMirror ? _buildBrowseItems(context, site, website) : const <shadcn.MenuItem>[];
+  final browseItems = hasMirror
+      ? _buildBrowseItems(context, site, website)
+      : const <shadcn.MenuItem>[];
 
   // 已禁用站点：只显示查看详情、浏览器、编辑、删除
   if (disabled) {
@@ -90,8 +105,6 @@ List<shadcn.MenuItem> _buildActionItems(BuildContext context, WidgetRef ref, Sit
           showSiteForm(context, site: site);
         },
       ),
-      ...browseItems,
-      const shadcn.MenuDivider(),
       _menuItem(
         icon: shadcn.LucideIcons.trash2,
         label: '删除',
@@ -101,6 +114,7 @@ List<shadcn.MenuItem> _buildActionItems(BuildContext context, WidgetRef ref, Sit
           _confirmDelete(context, ref, site);
         },
       ),
+      ...browseItems,
     ];
   }
 
@@ -120,6 +134,15 @@ List<shadcn.MenuItem> _buildActionItems(BuildContext context, WidgetRef ref, Sit
       onPressed: () {
         if (!context.mounted) return;
         showSiteForm(context, site: site);
+      },
+    ),
+    _menuItem(
+      icon: shadcn.LucideIcons.trash2,
+      label: '删除',
+      color: cs.destructive,
+      onPressed: () {
+        if (!context.mounted) return;
+        _confirmDelete(context, ref, site);
       },
     ),
     const shadcn.MenuDivider(),
@@ -172,16 +195,6 @@ List<shadcn.MenuItem> _buildActionItems(BuildContext context, WidgetRef ref, Sit
       },
     ),
     ...browseItems,
-    const shadcn.MenuDivider(),
-    _menuItem(
-      icon: shadcn.LucideIcons.trash2,
-      label: '删除',
-      color: cs.destructive,
-      onPressed: () {
-        if (!context.mounted) return;
-        _confirmDelete(context, ref, site);
-      },
-    ),
   ];
 }
 
@@ -191,70 +204,140 @@ Future<void> showSiteActionMenu({
   required SiteInfo site,
   required Offset position,
 }) {
-  return appShowContextMenu(context: context, position: position, items: _buildActionItems(context, ref, site));
+  return appShowContextMenu(
+    context: context,
+    position: position,
+    items: _buildActionItems(context, ref, site),
+  );
 }
 
-List<shadcn.MenuItem> _buildBrowseItems(BuildContext context, SiteInfo site, WebSite? website) {
+List<shadcn.MenuItem> _buildBrowseItems(
+  BuildContext context,
+  SiteInfo site,
+  WebSite? website,
+) {
   final targets = buildSiteBrowseTargets(site, website);
   if (targets.isEmpty) return const [];
-  final searchTargets = targets.where((target) => target.label.startsWith('搜索页')).toList();
-  final otherTargets = targets.where((target) => !target.label.startsWith('搜索页')).toList();
+
+  if (kIsWeb) {
+    return [
+      const shadcn.MenuDivider(),
+      ..._buildBrowseTargetItems(context, site, targets, openExternal: true),
+    ];
+  }
+
   return [
-    for (final target in otherTargets) _browseTargetMenu(context, site, target),
+    const shadcn.MenuDivider(),
+    ..._buildBrowseTargetItems(context, site, targets, openExternal: false),
+    const shadcn.MenuDivider(),
+    shadcn.MenuButton(
+      leading: const Icon(shadcn.LucideIcons.externalLink),
+      subMenu: _buildBrowseTargetItems(
+        context,
+        site,
+        targets,
+        openExternal: true,
+      ),
+      child: const Text('外部浏览器'),
+    ),
+  ];
+}
+
+List<shadcn.MenuItem> _buildBrowseTargetItems(
+  BuildContext context,
+  SiteInfo site,
+  List<SiteBrowseTarget> targets, {
+  required bool openExternal,
+}) {
+  final searchTargets = targets
+      .where((target) => target.label.startsWith('搜索页'))
+      .toList();
+  final otherTargets = targets
+      .where((target) => !target.label.startsWith('搜索页'))
+      .toList();
+  return [
+    for (final target in otherTargets)
+      _browseTargetMenu(context, site, target, openExternal: openExternal),
     if (searchTargets.isNotEmpty)
-      shadcn.MenuButton(
-        leading: const Icon(shadcn.LucideIcons.search),
-        onPressed: searchTargets.length == 1 && kIsWeb
-            ? (_) => openSiteExternalBrowser(site, url: searchTargets.first.url)
-            : null,
-        subMenu: searchTargets.length == 1 && !kIsWeb
-            ? _browseTargetActions(context, site, searchTargets.first)
-            : [
-                for (var i = 0; i < searchTargets.length; i++)
-                  shadcn.MenuButton(
-                    leading: const Icon(shadcn.LucideIcons.search),
-                    onPressed: kIsWeb
-                        ? (_) => openSiteExternalBrowser(site, url: searchTargets[i].url)
-                        : null,
-                    subMenu: kIsWeb ? null : _browseTargetActions(context, site, searchTargets[i]),
-                    child: Text('搜索页 ${i + 1}'),
-                  ),
-              ],
-        child: const Text('搜索页'),
+      _browseSearchMenu(
+        context,
+        site,
+        searchTargets,
+        openExternal: openExternal,
       ),
   ];
 }
 
-shadcn.MenuButton _browseTargetMenu(BuildContext context, SiteInfo site, SiteBrowseTarget target) {
+shadcn.MenuButton _browseTargetMenu(
+  BuildContext context,
+  SiteInfo site,
+  SiteBrowseTarget target, {
+  required bool openExternal,
+}) {
   return shadcn.MenuButton(
     leading: Icon(target.icon),
-    onPressed: kIsWeb ? (_) => openSiteExternalBrowser(site, url: target.url) : null,
-    subMenu: kIsWeb ? null : _browseTargetActions(context, site, target),
+    onPressed: (_) =>
+        _openBrowseTarget(context, site, target, openExternal: openExternal),
     child: Text(target.label),
   );
 }
 
-List<shadcn.MenuItem> _browseTargetActions(BuildContext context, SiteInfo site, SiteBrowseTarget target) {
-  return [
-    _menuItem(
-      icon: shadcn.LucideIcons.monitorSmartphone,
-      label: '内置浏览器',
-      onPressed: () {
-        if (!context.mounted) return;
-        openSiteInternalBrowser(
-          context,
-          site,
-          url: target.url,
-          title: '${site.nickname.isNotEmpty ? site.nickname : site.site} · ${target.label}',
-        );
-      },
-    ),
-    _menuItem(
-      icon: shadcn.LucideIcons.externalLink,
-      label: '外部浏览器',
-      onPressed: () => openSiteExternalBrowser(site, url: target.url),
-    ),
-  ];
+shadcn.MenuButton _browseSearchMenu(
+  BuildContext context,
+  SiteInfo site,
+  List<SiteBrowseTarget> targets, {
+  required bool openExternal,
+}) {
+  if (targets.length == 1) {
+    return shadcn.MenuButton(
+      leading: const Icon(shadcn.LucideIcons.search),
+      onPressed: (_) => _openBrowseTarget(
+        context,
+        site,
+        targets.first,
+        openExternal: openExternal,
+      ),
+      child: const Text('搜索页'),
+    );
+  }
+
+  return shadcn.MenuButton(
+    leading: const Icon(shadcn.LucideIcons.search),
+    subMenu: [
+      for (var i = 0; i < targets.length; i++)
+        shadcn.MenuButton(
+          leading: const Icon(shadcn.LucideIcons.search),
+          onPressed: (_) => _openBrowseTarget(
+            context,
+            site,
+            targets[i],
+            openExternal: openExternal,
+          ),
+          child: Text('搜索页 ${i + 1}'),
+        ),
+    ],
+    child: const Text('搜索页'),
+  );
+}
+
+void _openBrowseTarget(
+  BuildContext context,
+  SiteInfo site,
+  SiteBrowseTarget target, {
+  required bool openExternal,
+}) {
+  if (openExternal) {
+    openSiteExternalBrowser(site, url: target.url);
+    return;
+  }
+  if (!context.mounted) return;
+  openSiteInternalBrowser(
+    context,
+    site,
+    url: target.url,
+    title:
+        '${site.nickname.isNotEmpty ? site.nickname : site.site} · ${target.label}',
+  );
 }
 
 shadcn.MenuButton _menuItem({
@@ -284,7 +367,10 @@ void _confirmDelete(BuildContext context, WidgetRef ref, SiteInfo site) {
       title: const Text('确认删除'),
       content: Text('确定要删除站点「${site.site}」吗？'),
       actions: [
-        shadcn.Button.outline(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        shadcn.Button.outline(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('取消'),
+        ),
         shadcn.Button.destructive(
           onPressed: () async {
             Navigator.pop(ctx);
