@@ -22,10 +22,8 @@ import '../shell/provider/screenshot_provider.dart';
 import '../shell/widgets/shell_scaffold.dart';
 import '../site/provider/site_provider.dart';
 import '../user/provider/user_management_provider.dart';
-import 'model/backend_service_status.dart';
 import 'model/dashboard_data.dart';
 import 'model/server_resource_status.dart';
-import 'provider/backend_service_status_provider.dart';
 import 'provider/dashboard_provider.dart';
 import 'provider/privacy_provider.dart';
 import 'provider/server_resource_provider.dart';
@@ -351,18 +349,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   void _syncPhoneMonitorCards(Map<String, bool> visibility) {
     final showServerResource = visibility['phoneServerResource'] ?? true;
-    final showServiceStatus = visibility['phoneServiceStatus'] ?? true;
 
     if (!showServerResource) {
       ref.read(serverResourceProvider.notifier).stop();
     } else if (!ref.read(serverResourceProvider).running) {
       ref.read(serverResourceProvider.notifier).start();
-    }
-
-    if (!showServiceStatus) {
-      ref.read(backendServiceStatusProvider.notifier).stop();
-    } else if (!ref.read(backendServiceStatusProvider).running) {
-      ref.read(backendServiceStatusProvider.notifier).start();
     }
   }
 
@@ -518,7 +509,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final cacheInfo = ref.watch(dashboardCacheInfoProvider);
     final refreshSerial = ref.watch(dashboardRefreshSerialProvider);
     final privacy = ref.watch(privacyModeProvider);
-    final isPhone = PlatformTool.isPhone();
     final cs = shadcn.Theme.of(context).colorScheme;
     final pageBackground = appSurfaceColor(context, cs.background);
 
@@ -535,9 +525,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     return Stack(
       children: [
-        isPhone
-            ? _buildPhoneLayout(data, privacy, cacheInfo, refreshSerial)
-            : _buildDesktopLayout(data, privacy, cacheInfo, refreshSerial),
+        _buildPhoneLayout(data, privacy, cacheInfo, refreshSerial),
         // 浮动工具
         Positioned(
           right: 12,
@@ -675,9 +663,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               ? null
                               : _refreshSiteData,
                           alignment: Alignment.center,
-                          child: Text(
-                            _isRefreshingSiteData ? '执行中' : '站点数据',
-                          ),
+                          child: Text(_isRefreshingSiteData ? '执行中' : '站点数据'),
                         ),
                       ],
                     ),

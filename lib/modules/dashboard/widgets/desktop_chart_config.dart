@@ -7,7 +7,6 @@ class DashboardChartConfig {
   static const defaultOrder = [
     'phoneServer',
     'phoneServerResource',
-    'phoneServiceStatus',
     'phoneDesignation',
     'phoneOverview',
     'phoneActions',
@@ -24,7 +23,6 @@ class DashboardChartConfig {
 
   static const desktopOrder = [
     'desktopServerResource',
-    'desktopServiceStatus',
     'desktopKpi',
     'desktopTrend',
     'desktopDesignation',
@@ -43,7 +41,6 @@ class DashboardChartConfig {
   static const names = {
     'phoneServer': '用户信息',
     'phoneServerResource': '服务器状态',
-    'phoneServiceStatus': '后台服务状态',
     'phoneDesignation': '称号进度',
     'phoneOverview': '数据总览',
     'phoneActions': '快捷操作',
@@ -58,7 +55,6 @@ class DashboardChartConfig {
     'phoneMonthPublish': '月度发种',
     'desktopKpi': '核心指标',
     'desktopServerResource': '服务器状态',
-    'desktopServiceStatus': '后台服务状态',
     'desktopTrend': '吞吐趋势',
     'desktopDesignation': '称号',
     'desktopResource': '全局资源',
@@ -92,7 +88,8 @@ class DashboardChartConfig {
   static Map<String, bool> getVisibility() {
     final saved = HiveManager.get<Map>(StorageKeys.dashboardChartVisibility);
     if (saved != null) {
-      final vis = Map<String, bool>.from(saved);
+      final vis = Map<String, bool>.from(saved)
+        ..removeWhere((id, _) => !allModuleIds.contains(id));
       for (final id in allModuleIds) {
         vis.putIfAbsent(id, () => true);
       }

@@ -333,7 +333,7 @@ class _ChartSettingsDialogState extends State<ChartSettingsDialog> {
                       _SettingsSection(
                         icon: shadcn.LucideIcons.refreshCw,
                         title: '刷新状态',
-                        description: '统一管理服务器状态与后台服务状态的刷新行为。',
+                        description: '统一管理服务器状态的刷新行为。',
                         children: [
                           _SettingsTile(
                             leading: Icon(
@@ -341,7 +341,7 @@ class _ChartSettingsDialogState extends State<ChartSettingsDialog> {
                               size: tokens.iconSm,
                             ),
                             title: '自动刷新',
-                            subtitle: '开启后持续刷新服务器与服务状态，关闭时仅获取一次',
+                            subtitle: '开启后持续刷新服务器状态，关闭时仅获取一次',
                             trailing: shadcn.Switch(
                               value: _serverResourceAutoStart,
                               onChanged: (value) => setState(
@@ -392,6 +392,7 @@ class _ChartSettingsDialogState extends State<ChartSettingsDialog> {
                               ),
                               title: '增量趋势默认间隔',
                               subtitle: '进入仪表盘时默认显示的时间范围',
+                              trailingBelow: true,
                               trailing: _RangeSegmentedControl(
                                 value: _phoneTrendDays,
                                 onChanged: (value) =>
@@ -584,12 +585,14 @@ class _SettingsTile extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget trailing;
+  final bool trailingBelow;
 
   const _SettingsTile({
     required this.leading,
     required this.title,
     required this.trailing,
     this.subtitle,
+    this.trailingBelow = false,
   });
 
   @override
@@ -604,7 +607,7 @@ class _SettingsTile extends StatelessWidget {
       borderColor: cs.border.withValues(alpha: 0.44),
       padding: tokens.symmetric(horizontal: 14, vertical: 13),
       child: LayoutBuilder(
-        builder: (context, constraints) {
+        builder: (_, __) {
           final label = Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -644,16 +647,16 @@ class _SettingsTile extends StatelessWidget {
             ],
           );
 
-          // if (compact) {
-          //   return Column(
-          //     crossAxisAlignment: CrossAxisAlignment.stretch,
-          //     children: [
-          //       label,
-          //       tokens.vGap(10),
-          //       Align(alignment: Alignment.centerRight, child: trailing),
-          //     ],
-          //   );
-          // }
+          if (trailingBelow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                label,
+                tokens.vGap(12),
+                SizedBox(width: double.infinity, child: trailing),
+              ],
+            );
+          }
 
           return Row(
             children: [
@@ -690,32 +693,39 @@ class _RangeSegmentedControl extends StatelessWidget {
       filled: true,
       fillColor: cs.background.withValues(alpha: 0.72),
       borderColor: cs.border.withValues(alpha: 0.68),
-      child: shadcn.Row(
-        mainAxisSize: shadcn.MainAxisSize.max,
-        mainAxisAlignment: shadcn.MainAxisAlignment.spaceAround,
+      child: Row(
         children: [
           for (final item in _items)
-            value == item.key
-                ? shadcn.Button.primary(
-                    onPressed: () => onChanged(item.key),
-                    child: Text(
-                      item.value,
-                      style: theme.typography.xSmall.copyWith(
-                        color: cs.primaryForeground,
-                        fontWeight: FontWeight.w800,
+            Expanded(
+              child: SizedBox(
+                height: tokens.size(32),
+                child: value == item.key
+                    ? shadcn.Button.primary(
+                        onPressed: () => onChanged(item.key),
+                        child: Center(
+                          child: Text(
+                            item.value,
+                            style: theme.typography.xSmall.copyWith(
+                              color: cs.primaryForeground,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      )
+                    : shadcn.Button.ghost(
+                        onPressed: () => onChanged(item.key),
+                        child: Center(
+                          child: Text(
+                            item.value,
+                            style: theme.typography.xSmall.copyWith(
+                              color: cs.mutedForeground,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                : shadcn.Button.ghost(
-                    onPressed: () => onChanged(item.key),
-                    child: Text(
-                      item.value,
-                      style: theme.typography.xSmall.copyWith(
-                        color: cs.mutedForeground,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
+              ),
+            ),
         ],
       ),
     );

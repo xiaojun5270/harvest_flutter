@@ -22,10 +22,8 @@ import '../../models/kv/kv.dart';
 import '../../shell/provider/screenshot_provider.dart';
 import '../../shell/widgets/shell_scaffold.dart';
 import '../../site/provider/site_provider.dart';
-import '../model/backend_service_status.dart';
 import '../model/dashboard_data.dart';
 import '../model/server_resource_status.dart';
-import '../provider/backend_service_status_provider.dart';
 import '../provider/dashboard_provider.dart';
 import '../provider/privacy_provider.dart';
 import '../provider/server_resource_provider.dart';
@@ -275,18 +273,11 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
 
   void _syncDesktopMonitorCards(Map<String, bool> visibility) {
     final showServerResource = visibility['desktopServerResource'] ?? true;
-    final showServiceStatus = visibility['desktopServiceStatus'] ?? true;
 
     if (!showServerResource) {
       ref.read(serverResourceProvider.notifier).stop();
     } else if (!ref.read(serverResourceProvider).running) {
       ref.read(serverResourceProvider.notifier).start();
-    }
-
-    if (!showServiceStatus) {
-      ref.read(backendServiceStatusProvider.notifier).stop();
-    } else if (!ref.read(backendServiceStatusProvider).running) {
-      ref.read(backendServiceStatusProvider.notifier).start();
     }
   }
 
@@ -441,12 +432,12 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
               Positioned.fill(
                 child: data == null
                     ? _initialLoading
-                        ? Center(
-                        child: shadcn.CircularProgressIndicator(
-                          size: tokens.size(18),
-                        ),
-                      )
-                        : _buildDashboardEmptyState(context)
+                          ? Center(
+                              child: shadcn.CircularProgressIndicator(
+                                size: tokens.size(18),
+                              ),
+                            )
+                          : _buildDashboardEmptyState(context)
                     : _buildBoard(
                         context,
                         data,
@@ -1040,7 +1031,6 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
     final showDesignation = _isChartVisible('desktopDesignation');
     final showResource = _isChartVisible('desktopResource');
     final showServerResource = _isChartVisible('desktopServerResource');
-    final showServiceStatus = _isChartVisible('desktopServiceStatus');
     final showStatus = _isChartVisible('desktopStatus');
     final showUploaded = _isChartVisible('desktopUploadShare');
     final showSeed = _isChartVisible('desktopSeedShare');
@@ -1105,28 +1095,16 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
           _buildDistributionRow(data, privacy, stacked: false),
           tokens.vGap(10),
         ],
-        if (showServerResource || showServiceStatus || showAccount) ...[
+        if (showServerResource || showAccount) ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (showServerResource || showServiceStatus)
+              if (showServerResource)
                 Expanded(
                   flex: showAccount ? 7 : 1,
-                  child: Row(
-                    children: [
-                      if (showServerResource)
-                        Expanded(child: _buildServerResourcePanel(height: 300)),
-                      if (showServerResource && showServiceStatus)
-                        tokens.hGap(10),
-                      if (showServiceStatus)
-                        Expanded(
-                          child: _buildBackendServiceStatusPanel(height: 300),
-                        ),
-                    ],
-                  ),
+                  child: _buildServerResourcePanel(height: 300),
                 ),
-              if ((showServerResource || showServiceStatus) && showAccount)
-                tokens.hGap(10),
+              if (showServerResource && showAccount) tokens.hGap(10),
               if (showAccount)
                 Expanded(
                   flex: 4,
@@ -1169,7 +1147,6 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
     final showStatus = _isChartVisible('desktopStatus');
     final showResource = _isChartVisible('desktopResource');
     final showServerResource = _isChartVisible('desktopServerResource');
-    final showServiceStatus = _isChartVisible('desktopServiceStatus');
     final showRank = _isChartVisible('desktopRank');
     final showToday = _isChartVisible('desktopToday');
     final showPublished = _isChartVisible('desktopMonthlyPublish');
@@ -1182,10 +1159,6 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
         if (showToday) ...[_buildTodayPanel(data, privacy), tokens.vGap(10)],
         if (showServerResource) ...[
           _buildServerResourcePanel(height: 320),
-          tokens.vGap(10),
-        ],
-        if (showServiceStatus) ...[
-          _buildBackendServiceStatusPanel(height: 250),
           tokens.vGap(10),
         ],
         if (showStatus) ...[
@@ -1621,366 +1594,6 @@ class _DesktopDashboardPageState extends ConsumerState<DesktopDashboardPage> {
         },
       ),
     );
-  }
-
-  Widget _buildBackendServiceStatusPanel({required double height}) {
-    final tokens = _tokens;
-    final state = ref.watch(backendServiceStatusProvider);
-    final data = state.data;
-    final summary = data?.summary ?? BackendServiceSummary.empty;
-    final services = data?.services ?? const <BackendServiceInfo>[];
-    final running = state.running;
-    final statusText = _backendServiceStatusText(state);
-    final statusColor = _backendServiceStatusColor(state);
-    final updatedText = data?.timestamp == null
-        ? (running ? '等待状态推送' : '监控已暂停')
-        : '更新于 ${_formatDashboardTimeToSecond(data!.timestamp!)}';
-    final subtitle = [
-      if ((data?.source ?? '').isNotEmpty) data!.source,
-      updatedText,
-      if ((data?.connectionId ?? '').isNotEmpty) data!.connectionId,
-    ].join(' · ');
-
-    return _panelContainer(
-      height: height,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: tokens.size(3),
-                height: tokens.size(15),
-                color: _green,
-              ),
-              tokens.hGap(8),
-              Text(
-                '后台服务状态',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _text,
-                  fontSize: tokens.font(15),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              tokens.hGap(12),
-              Expanded(
-                child: Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: tokens.font(11),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              tokens.hGap(10),
-              Container(
-                padding: tokens.edgeSymmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.14),
-                  borderRadius: shadcn.Theme.of(context).borderRadiusXl,
-                  border: Border.all(
-                    color: statusColor.withValues(alpha: 0.28),
-                  ),
-                ),
-                child: Text(
-                  statusText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: tokens.font(11),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              tokens.hGap(8),
-              shadcn.IconButton.ghost(
-                onPressed: () =>
-                    ref.read(backendServiceStatusProvider.notifier).toggle(),
-                icon: Icon(
-                  running ? shadcn.LucideIcons.pause : shadcn.LucideIcons.play,
-                  size: tokens.size(15),
-                  color: running ? _red : _green,
-                ),
-              ),
-            ],
-          ),
-          tokens.vGap(10),
-          Row(
-            children: [
-              Expanded(
-                child: _backendServiceSummaryCell('总数', summary.total, _text),
-              ),
-              tokens.hGap(8),
-              Expanded(
-                child: _backendServiceSummaryCell(
-                  '运行',
-                  summary.running,
-                  _green,
-                ),
-              ),
-              tokens.hGap(8),
-              Expanded(
-                child: _backendServiceSummaryCell(
-                  '停止',
-                  summary.stopped,
-                  _amber,
-                ),
-              ),
-              tokens.hGap(8),
-              Expanded(
-                child: _backendServiceSummaryCell('失败', summary.failed, _red),
-              ),
-            ],
-          ),
-          tokens.vGap(8),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (state.error != null) {
-                  return _backendServicePanelMessage(state.error!, _red);
-                }
-                if (services.isEmpty) {
-                  return _backendServicePanelMessage(
-                    running ? '正在等待后台服务状态推送' : '监控已暂停',
-                    _muted,
-                  );
-                }
-
-                final columns = constraints.maxWidth >= 720 ? 3 : 2;
-                final rows = math.min(
-                  3,
-                  (services.length / columns).ceil().clamp(1, 3),
-                );
-                final rowExtent = rows <= 1
-                    ? constraints.maxHeight
-                    : ((constraints.maxHeight - tokens.size(8) * (rows - 1)) /
-                              rows)
-                          .clamp(tokens.size(42), tokens.size(56));
-                final visibleServices = services
-                    .take(math.min(services.length, columns * rows))
-                    .toList();
-                return GridView.builder(
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: tokens.size(8),
-                    mainAxisSpacing: tokens.size(8),
-                    mainAxisExtent: rowExtent,
-                  ),
-                  itemCount: visibleServices.length,
-                  itemBuilder: (context, index) =>
-                      _backendServiceGridItem(visibleServices[index]),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _backendServiceSummaryCell(String label, int value, Color color) {
-    final tokens = _tokens;
-    return Container(
-      padding: tokens.edgeSymmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: shadcn.Theme.of(context).borderRadiusMd,
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _muted,
-                fontSize: tokens.font(10),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Text(
-            '$value',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: tokens.font(15),
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _backendServiceGridItem(BackendServiceInfo service) {
-    final tokens = _tokens;
-    final color = _backendServiceStateColor(service.state);
-    final uptime = _formatBackendServiceUptime(service.uptime);
-    final detail = service.running && service.pid > 0
-        ? '运行 $uptime · pid ${service.pid}'
-        : service.description.isNotEmpty
-        ? service.description
-        : 'pid ${service.pid}';
-
-    return Container(
-      padding: tokens.edgeSymmetric(horizontal: 9, vertical: 7),
-      decoration: BoxDecoration(
-        color: _panelSoft.withValues(alpha: 0.72),
-        borderRadius: shadcn.Theme.of(context).borderRadiusMd,
-        border: Border.all(color: _line.withValues(alpha: 0.70)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: tokens.size(7),
-            height: tokens.size(7),
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          tokens.hGap(8),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 180,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      service.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _text,
-                        fontSize: tokens.font(11),
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                      ),
-                    ),
-                    tokens.vGap(3),
-                    Text(
-                      detail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _muted,
-                        fontSize: tokens.font(9),
-                        fontWeight: FontWeight.w600,
-                        height: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          tokens.hGap(6),
-          Text(
-            service.state.isEmpty ? '-' : service.state,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: tokens.font(9),
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _backendServicePanelMessage(String text, Color color) {
-    final tokens = _tokens;
-    return Container(
-      width: double.infinity,
-      alignment: Alignment.center,
-      padding: tokens.edgeSymmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: shadcn.Theme.of(context).borderRadiusMd,
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Text(
-        text,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: color,
-          fontSize: tokens.font(11),
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
-  String _backendServiceStatusText(BackendServiceStatusState state) {
-    if (state.error != null) return '连接失败';
-    final data = state.data;
-    if (data == null) return state.running ? '连接中' : '已停止';
-    if (data.healthy) return '全部运行';
-    if (data.hasIssue) return '有异常';
-    return state.running ? '监控中' : '已停止';
-  }
-
-  Color _backendServiceStatusColor(BackendServiceStatusState state) {
-    if (state.error != null) return _red;
-    final data = state.data;
-    if (data?.healthy == true) return _green;
-    if (data?.hasIssue == true) return _amber;
-    return state.running ? _green : _muted;
-  }
-
-  Color _backendServiceStateColor(String state) {
-    switch (state.toUpperCase()) {
-      case 'RUNNING':
-        return _green;
-      case 'STOPPED':
-      case 'EXITED':
-        return _amber;
-      case 'FATAL':
-      case 'FAILED':
-      case 'BACKOFF':
-        return _red;
-      default:
-        return _muted;
-    }
-  }
-
-  String _formatBackendServiceUptime(int seconds) {
-    if (seconds <= 0) return '0s';
-    final days = seconds ~/ 86400;
-    final hours = (seconds % 86400) ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    final remainSeconds = seconds % 60;
-    if (days > 0) return '${days}d ${hours}h ${minutes}m ${remainSeconds}s';
-    if (hours > 0) return '${hours}h ${minutes}m ${remainSeconds}s';
-    if (minutes > 0) return '${minutes}m ${remainSeconds}s';
-    return '${seconds}s';
-  }
-
-  String _formatDashboardTimeToSecond(DateTime time) {
-    final local = time.toLocal();
-    return '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}:'
-        '${local.second.toString().padLeft(2, '0')}';
   }
 
   _DesignationProgress _designationProgress(int siteCount) {

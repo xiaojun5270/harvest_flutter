@@ -12,7 +12,6 @@ class API {
   static const String AUTH_INFO = "/api/auth/auth_info";
   static const String AUTH_USER = "/api/auth/user";
   static const String SERVER_STATUS = "/api/auth/server/status";
-  static const String SERVICES_STATUS = "/api/auth/services/status";
   static const String ADMIN_USER = "/api/auth/admin/users";
   static const String ADMIN_SEND_TOKEN = "/api/auth/admin/send";
   static const String ADMIN_RESET_TOKEN = "/api/auth/admin/reset/token";
@@ -78,18 +77,23 @@ class API {
   // 下载器分类列表
   static const String DOWNLOADER_TORRENTS = "/api/ws/downloader";
   static const String DOWNLOADER_STATUS = "/api/ws/downloader/speed";
-  static const String DOWNLOADER_TOGGLE_SPEED_LIMIT_ENABLE = "/api/option/downloaders/toggle_speed_limit/";
+  static const String DOWNLOADER_TOGGLE_SPEED_LIMIT_ENABLE =
+      "/api/option/downloaders/toggle_speed_limit/";
   static const String DOWNLOADER_MAIN = "/api/option/downloaders/main/";
   static const String DOWNLOADER_TEST = "/api/option/downloaders/test/";
   static const String DOWNLOADER_TAGS = "/api/option/downloaders/tags/";
-  static const String DOWNLOADER_TRACKER_REPLACE = "/api/option/downloaders/trackers/replace/";
+  static const String DOWNLOADER_TRACKER_REPLACE =
+      "/api/option/downloaders/trackers/replace/";
   static const String DOWNLOADER_SET_TAGS = "/api/option/downloaders/tags/set/";
   static const String DOWNLOADER_CATEGORY = "/api/option/downloaders/category/";
-  static const String DOWNLOADER_SET_CATEGORY = "/api/option/downloaders/category/set/";
+  static const String DOWNLOADER_SET_CATEGORY =
+      "/api/option/downloaders/category/set/";
   static const String DOWNLOADER_CONTROL = "/api/option/downloaders/control/";
   static const String DOWNLOADER_PUSH_TORRENT = "/api/option/push_torrent";
-  static const String DOWNLOADER_PREFERENCES = "/api/option/downloaders/preferences/";
-  static const String DOWNLOADER_TORRENT_DETAIL = "/api/option/downloaders/torrent/detail/";
+  static const String DOWNLOADER_PREFERENCES =
+      "/api/option/downloaders/preferences/";
+  static const String DOWNLOADER_TORRENT_DETAIL =
+      "/api/option/downloaders/torrent/detail/";
 
   // 推送种子到下载器
   static const String PUSH_TORRENT_URL = "/api/option/push_torrent/";
@@ -165,7 +169,8 @@ class API {
   static const String TMDB_MOVIE_INFO = "/api/tmdb/movie/";
   static const String TMDB_TV_INFO = "/api/tmdb/tv/";
   static const String TMDB_SEASON = "/api/tmdb/season/{tv_id}/{season_id}";
-  static const String TMDB_EPISODE = "/api/tmdb/episode/{tv_id}/{season_id}/{episode_id}";
+  static const String TMDB_EPISODE =
+      "/api/tmdb/episode/{tv_id}/{season_id}/{episode_id}";
   static const String TMDB_ON_THE_AIR = "/api/tmdb/on_the_air/tvs";
   static const String TMDB_AIRING_TODAY = "/api/tmdb/airing_today/tvs";
   static const String TMDB_UPCOMING_MOVIES = "/api/tmdb/upcoming/movies";
@@ -231,7 +236,6 @@ const _apiEndpointNames = <String, String>{
   API.AUTH_INFO: '认证信息接口',
   API.AUTH_USER: '认证用户接口',
   API.SERVER_STATUS: '服务器状态接口',
-  API.SERVICES_STATUS: '服务状态接口',
   API.ADMIN_USER: '管理员用户接口',
   API.ADMIN_SEND_TOKEN: '授权邮件接口',
   API.ADMIN_RESET_TOKEN: '重置令牌接口',
