@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:harvest/core/config/app_config.dart';
 import 'package:harvest/core/utils/utils.dart';
+import 'package:harvest/modules/admin_user/admin_user_access.dart';
 import 'package:harvest/modules/admin_user/admin_user_page.dart';
 import 'package:harvest/modules/auth/auth_provider.dart';
 import 'package:harvest/modules/login/login_history_provider.dart';
@@ -166,7 +167,9 @@ class _GlobalDrawerPanel extends StatelessWidget {
 
   Future<void> _switchAccount() async {
     await _close();
-    ref.read(authNotifierProvider.notifier).logout(redirectTo: '/login-history');
+    ref
+        .read(authNotifierProvider.notifier)
+        .logout(redirectTo: '/login-history');
   }
 
   Future<void> _logout() async {
@@ -181,7 +184,7 @@ class _GlobalDrawerPanel extends StatelessWidget {
     final cs = tokens.cs;
     final user = ref.watch(authNotifierProvider).user;
     final authInfo = ref.watch(authInfoProvider).valueOrNull;
-    final showAdminUser = _canOpenAdminUsers(user, authInfo);
+    final showAdminUser = canOpenAdminUsers(authInfo);
     final showNews = ref.watch(mediaInfoSettingsProvider).enabled;
     final showAccountSwitcher = ref.watch(loginHistoryProvider).length >= 2;
     final currentPath = _currentPath(context);
@@ -220,7 +223,10 @@ class _GlobalDrawerPanel extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _GlobalDrawerAccountHeader(user: user, server: AppConfig.baseUrl),
+                        child: _GlobalDrawerAccountHeader(
+                          user: user,
+                          server: AppConfig.baseUrl,
+                        ),
                       ),
                       shadcn.IconButton.ghost(
                         size: shadcn.ButtonSize.small,
@@ -307,7 +313,8 @@ class _GlobalDrawerPanel extends StatelessWidget {
                             _DrawerTile(
                               label: '授权管理',
                               icon: shadcn.LucideIcons.shieldCheck,
-                              onTap: () => unawaited(_push(const AdminUserPage())),
+                              onTap: () =>
+                                  unawaited(_push(const AdminUserPage())),
                             ),
                           _DrawerTile(
                             label: '程序更新',
@@ -335,7 +342,12 @@ class _GlobalDrawerPanel extends StatelessWidget {
                   child: const SizedBox(height: 1),
                 ),
                 Padding(
-                  padding: tokens.edgeOnly(left: 8, top: 8, right: 8, bottom: 8),
+                  padding: tokens.edgeOnly(
+                    left: 8,
+                    top: 8,
+                    right: 8,
+                    bottom: 8,
+                  ),
                   child: Column(
                     children: [
                       if (showAccountSwitcher)
@@ -455,7 +467,9 @@ class _GlobalDrawerAccountHeader extends StatelessWidget {
     final theme = tokens.theme;
     final cs = tokens.cs;
     final username = _userName(user);
-    final initial = username.isNotEmpty ? username.characters.first.toUpperCase() : '?';
+    final initial = username.isNotEmpty
+        ? username.characters.first.toUpperCase()
+        : '?';
 
     return Row(
       children: [
@@ -483,7 +497,9 @@ class _GlobalDrawerAccountHeader extends StatelessWidget {
                 server,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.typography.xSmall.copyWith(color: cs.mutedForeground),
+                style: theme.typography.xSmall.copyWith(
+                  color: cs.mutedForeground,
+                ),
               ),
             ],
           ),
@@ -579,23 +595,4 @@ String _userName(dynamic user) {
     if (v != null) return v.toString();
   } catch (_) {}
   return '';
-}
-
-String? _authInfoEmail(dynamic data) {
-  if (data is Map) {
-    final v = data['username'] ?? data['mail'] ?? data['user_email'];
-    if (v != null) return v.toString();
-  }
-  try {
-    final v = data?.username ?? data?.mail ?? data?.userEmail;
-    if (v != null) return v.toString();
-  } catch (_) {}
-  return null;
-}
-
-bool _canOpenAdminUsers(dynamic user, dynamic authInfo) {
-  try {
-    if (user?.isSuperuser == true || user?.isStaff == true) return true;
-  } catch (_) {}
-  return _authInfoEmail(authInfo) == 'ngfchl@126.com';
 }

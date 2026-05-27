@@ -12,6 +12,8 @@ import 'package:harvest/widgets/shad_text_field.dart';
 import 'package:harvest/modules/shell/widgets/global_drawer_swipe_area.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
+import '../user/provider/user_management_provider.dart';
+import 'admin_user_access.dart';
 import 'model/admin_user_model.dart';
 import 'provider/admin_user_provider.dart';
 
@@ -117,9 +119,16 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
 
   @override
   Widget build(BuildContext context) {
-    final usersAsync = ref.watch(adminUserListProvider);
+    final authInfo = ref.watch(authInfoProvider);
     final cs = _adminColors(context);
     final pageBackground = appSurfaceColor(context, cs.background);
+    final canAccess = canOpenAdminUsers(authInfo.valueOrNull);
+
+    if (!canAccess) {
+      return _buildAccessGate(pageBackground, authInfo.isLoading);
+    }
+
+    final usersAsync = ref.watch(adminUserListProvider);
     return EscapeBackScope(
       onBack: () => Navigator.of(context).pop(),
       child: GlobalDrawerSwipeArea(
@@ -159,6 +168,42 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccessGate(Color pageBackground, bool loading) {
+    return EscapeBackScope(
+      onBack: () => Navigator.of(context).pop(),
+      child: GlobalDrawerSwipeArea(
+        child: AppBackground(
+          child: Material(
+            color: pageBackground,
+            child: Column(
+              children: [
+                SafeArea(
+                  bottom: false,
+                  child: _Header(
+                    onBack: () => Navigator.of(context).pop(),
+                    onRefresh: () => ref.invalidate(authInfoProvider),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                    children: [
+                      if (loading)
+                        const _AdminLoadingBlock(label: '权限校验中...')
+                      else
+                        const _AdminEmptyBlock(text: '当前账号无权访问授权管理'),
+                    ],
                   ),
                 ),
               ],
