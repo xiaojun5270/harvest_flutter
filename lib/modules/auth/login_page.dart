@@ -620,34 +620,34 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
                   if (!sqlite)
                     ShadTextField(
                       controller: _hostCtrl,
-                      labelText: '地址',
+                      label: _requiredLabel(context, '地址'),
                       placeholder: const Text('127.0.0.1'),
                       keyboardType: TextInputType.url,
                     ),
                   if (!sqlite)
                     ShadTextField(
                       controller: _portCtrl,
-                      labelText: '端口',
+                      label: _requiredLabel(context, '端口'),
                       placeholder: const Text('5432'),
                       keyboardType: TextInputType.number,
                     ),
                   if (!sqlite)
                     ShadTextField(
                       controller: _nameCtrl,
-                      labelText: '数据库名',
+                      label: _requiredLabel(context, '数据库名'),
                       placeholder: const Text('goharvest'),
                     ),
                   if (sqlite)
                     ShadTextField(
                       controller: _nameCtrl,
-                      labelText: '数据库文件',
+                      label: _requiredLabel(context, '数据库文件'),
                       readOnly: true,
                       enabled: false,
                     ),
                   if (!sqlite)
                     ShadTextField(
                       controller: _userCtrl,
-                      labelText: '数据库用户',
+                      label: _requiredLabel(context, '数据库用户'),
                       placeholder: const Text('goharvest'),
                     ),
                 ],
@@ -691,7 +691,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
                 children: [
                   ShadTextField(
                     controller: _adminUserCtrl,
-                    labelText: '用户名',
+                    label: _requiredLabel(context, '用户名'),
                     placeholder: const Text('admin'),
                   ),
                   ShadTextField(
@@ -704,7 +704,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
               const SizedBox(height: 10),
               ShadTextField(
                 controller: _adminPassCtrl,
-                labelText: '密码',
+                label: _requiredLabel(context, '密码'),
                 obscureText: true,
                 maxLines: 1,
                 features: const [shadcn.InputFeature.passwordToggle()],
@@ -716,7 +716,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
                   Expanded(
                     child: ShadTextField(
                       controller: _jwtSecretCtrl,
-                      labelText: 'JWT Secret',
+                      label: _requiredLabel(context, 'JWT Secret'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -806,6 +806,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
     final compact = MediaQuery.sizeOf(context).width < 720;
     if (compact) {
       return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < children.length; i++) ...[
             if (i > 0) const SizedBox(height: 10),
@@ -828,51 +829,74 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _requiredLabel(context, '类型'),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
+          child: shadcn.Select<String>(
+            value: _databaseType,
+            itemBuilder: (_, value) =>
+                Text(value == 'sqlite' ? 'SQLite' : 'PostgreSQL'),
+            popup: shadcn.SelectPopup<String>(
+              items: shadcn.SelectItemList(
+                children: const [
+                  shadcn.SelectItemButton<String>(
+                    value: 'pgsql',
+                    child: Text('PostgreSQL'),
+                  ),
+                  shadcn.SelectItemButton<String>(
+                    value: 'sqlite',
+                    child: Text('SQLite'),
+                  ),
+                ],
+              ),
+            ).call,
+            onChanged: _submitting
+                ? null
+                : (value) {
+                    if (value == null || value == _databaseType) return;
+                    setState(() {
+                      _databaseType = value;
+                      if (value == 'sqlite') {
+                        _nameCtrl.text = 'db/data.sqlite3';
+                      } else {
+                        if (_portCtrl.text.trim().isEmpty) {
+                          _portCtrl.text = '5432';
+                        }
+                        if (_nameCtrl.text.trim().isEmpty ||
+                            _nameCtrl.text.trim() == 'db/data.sqlite3') {
+                          _nameCtrl.text = 'goharvest';
+                        }
+                      }
+                    });
+                  },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _requiredLabel(BuildContext context, String text) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         Text(
-          '类型',
-          style: shadcn.Theme.of(context).typography.small.copyWith(
-            color: shadcn.Theme.of(context).colorScheme.foreground,
+          text,
+          style: theme.typography.small.copyWith(
+            color: cs.foreground,
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 6),
-        shadcn.Select<String>(
-          value: _databaseType,
-          itemBuilder: (_, value) =>
-              Text(value == 'sqlite' ? 'SQLite' : 'PostgreSQL'),
-          popup: shadcn.SelectPopup<String>(
-            items: shadcn.SelectItemList(
-              children: const [
-                shadcn.SelectItemButton<String>(
-                  value: 'pgsql',
-                  child: Text('PostgreSQL'),
-                ),
-                shadcn.SelectItemButton<String>(
-                  value: 'sqlite',
-                  child: Text('SQLite'),
-                ),
-              ],
-            ),
-          ).call,
-          onChanged: _submitting
-              ? null
-              : (value) {
-                  if (value == null || value == _databaseType) return;
-                  setState(() {
-                    _databaseType = value;
-                    if (value == 'sqlite') {
-                      _nameCtrl.text = 'db/data.sqlite3';
-                    } else {
-                      if (_portCtrl.text.trim().isEmpty) {
-                        _portCtrl.text = '5432';
-                      }
-                      if (_nameCtrl.text.trim().isEmpty ||
-                          _nameCtrl.text.trim() == 'db/data.sqlite3') {
-                        _nameCtrl.text = 'goharvest';
-                      }
-                    }
-                  });
-                },
+        const SizedBox(width: 3),
+        Text(
+          '*',
+          style: theme.typography.small.copyWith(
+            color: cs.destructive,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
@@ -940,6 +964,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
     if (adminUser.isEmpty) return '管理员用户名不能为空';
     if (adminPass.isEmpty) return '管理员密码不能为空';
     if (adminPass.length < 6) return '管理员密码至少需要 6 位';
+    if (_jwtSecretCtrl.text.trim().isEmpty) return 'JWT Secret 不能为空';
     return null;
   }
 
