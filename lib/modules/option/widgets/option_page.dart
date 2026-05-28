@@ -18,6 +18,7 @@ import 'package:harvest/widgets/debug_theme_button.dart';
 import 'package:harvest/widgets/escape_back_scope.dart';
 import 'package:harvest/widgets/shad_text_field.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../provider/option_provider.dart';
@@ -92,19 +93,15 @@ final _formConfigs = <String, FormConfig>{
       child: Builder(
         builder: (context) {
           final randomButton = shadcn.Button.destructive(
-            onPressed: () {
+            onPressed: () async {
               c['token']!.text = _randomString(8);
-              Clipboard.setData(ClipboardData(text: c['token']!.text));
-              Toast.success('已复制到剪贴板');
+              await _copyOptionToken(c['token']!.text);
             },
             alignment: Alignment.center,
             child: const _ButtonText('随机Token'),
           );
           final copyButton = shadcn.Button.outline(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: c['token']!.text));
-              Toast.success('已复制到剪贴板');
-            },
+            onPressed: () => _copyOptionToken(c['token']!.text),
             alignment: Alignment.center,
             child: const _ButtonText('复制Token'),
           );
@@ -485,6 +482,26 @@ final _formConfigs = <String, FormConfig>{
     buildValue: (_, s, v) => v.copyWith(repeat: s['repeat']),
   ),
 };
+
+Future<void> _copyOptionToken(String token) async {
+  final value = token.trim();
+  if (value.isEmpty) {
+    Toast.error('Token 为空');
+    return;
+  }
+
+  try {
+    if (kIsWeb) {
+      Pasteboard.writeText(value);
+    } else {
+      await Clipboard.setData(ClipboardData(text: value));
+    }
+    Toast.success('已复制到剪贴板');
+  } catch (e, st) {
+    AppLogger.error('复制 Token 失败', e, st);
+    Toast.error('复制失败，请手动复制');
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 //  设置页面
