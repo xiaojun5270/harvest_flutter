@@ -134,6 +134,7 @@ class API {
   static const String SYSTEM_CONFIG = "/api/auth/config";
   static const String SYSTEM_LOGGING = "/api/logging";
   static const String setupStatus = "/api/setup/status";
+  static const String setupDatabase = "/api/setup/database";
   static const String setupInit = "/api/setup/init";
   static const String setupImport = "/api/setup/import";
   static const String setupSqlite = "/api/setup/sqlite";
@@ -286,6 +287,7 @@ const _apiEndpointNames = <String, String>{
   API.SYSTEM_CONFIG: '系统配置接口',
   API.SYSTEM_LOGGING: '系统日志接口',
   API.setupStatus: '初始化状态接口',
+  API.setupDatabase: '初始化数据库接口',
   API.setupInit: '初始化配置接口',
   API.setupImport: '旧数据导入接口',
   API.setupSqlite: '旧数据库导入接口',

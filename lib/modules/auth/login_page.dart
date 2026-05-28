@@ -208,6 +208,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                                     true) {
                                                   await _showSetupDialog(
                                                     baseUrl,
+                                                    setupStatus: setupStatus,
                                                   );
                                                   return;
                                                 }
@@ -366,8 +367,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         options: Options(validateStatus: (_) => true),
       );
       final body = res.data;
-      if (body == null || body['succeed'] != true) return null;
-      final data = body['data'];
+      if (body == null) return null;
+      if (body.containsKey('succeed') && body['succeed'] != true) return null;
+      final data = body.containsKey('data') ? body['data'] : body;
       if (data is! Map) return null;
       return _SetupStatus.fromMap(data);
     } catch (e) {
@@ -376,16 +378,24 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
-  Future<void> _showSetupDialog(String baseUrl) async {
+  Future<void> _showSetupDialog(
+    String baseUrl, {
+    _SetupStatus? setupStatus,
+  }) async {
+    if (!mounted) return;
+    final status = setupStatus ?? await _fetchSetupStatus(baseUrl);
     if (!mounted) return;
     final credentials = await shadcn.showDialog<_SetupCredentials>(
       context: context,
-      builder: (ctx) => shadcn.AlertDialog(
-        content: SizedBox(
-          width: min(MediaQuery.sizeOf(ctx).width - 32, 760),
-          child: _SetupDialogContent(baseUrl: baseUrl),
-        ),
-      ),
+      builder: (ctx) {
+        final size = MediaQuery.sizeOf(ctx);
+        return shadcn.AlertDialog(
+          content: SizedBox(
+            width: min(size.width - 32, 760),
+            child: _SetupDialogContent(baseUrl: baseUrl, setupStatus: status),
+          ),
+        );
+      },
     );
     if (!mounted || credentials == null) return;
     _usernameController.text = credentials.username;
@@ -523,13 +533,64 @@ class _LoginThemeTokens {
 class _SetupStatus {
   final bool initialized;
   final bool needsSetup;
+  final Map<String, _DatabaseDefaults> databaseDefaults;
 
-  const _SetupStatus({required this.initialized, required this.needsSetup});
+  const _SetupStatus({
+    required this.initialized,
+    required this.needsSetup,
+    required this.databaseDefaults,
+  });
 
   factory _SetupStatus.fromMap(Map<dynamic, dynamic> data) {
+    final defaults = <String, _DatabaseDefaults>{};
+    final rawDefaults = data['database_defaults'];
+    if (rawDefaults is Map) {
+      for (final entry in rawDefaults.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          defaults[entry.key.toString()] = _DatabaseDefaults.fromMap(value);
+        }
+      }
+    }
+
     return _SetupStatus(
       initialized: data['initialized'] == true,
       needsSetup: data['needs_setup'] == true,
+      databaseDefaults: defaults,
+    );
+  }
+}
+
+class _DatabaseDefaults {
+  final String type;
+  final String host;
+  final String port;
+  final String name;
+  final String user;
+  final String pass;
+  final bool hasPassword;
+
+  const _DatabaseDefaults({
+    required this.type,
+    required this.host,
+    required this.port,
+    required this.name,
+    required this.user,
+    required this.pass,
+    required this.hasPassword,
+  });
+
+  factory _DatabaseDefaults.fromMap(Map<dynamic, dynamic> data) {
+    String read(String key) => data[key]?.toString() ?? '';
+
+    return _DatabaseDefaults(
+      type: read('type'),
+      host: read('host'),
+      port: read('port'),
+      name: read('name'),
+      user: read('user'),
+      pass: read('pass'),
+      hasPassword: data['has_password'] == true,
     );
   }
 }
@@ -543,45 +604,49 @@ class _SetupCredentials {
 
 class _SetupDialogContent extends StatefulWidget {
   final String baseUrl;
+  final _SetupStatus? setupStatus;
 
-  const _SetupDialogContent({required this.baseUrl});
+  const _SetupDialogContent({required this.baseUrl, this.setupStatus});
 
   @override
   State<_SetupDialogContent> createState() => _SetupDialogContentState();
 }
 
 class _SetupDialogContentState extends State<_SetupDialogContent> {
-  final _hostCtrl = TextEditingController(text: '127.0.0.1');
-  final _portCtrl = TextEditingController(text: '5432');
-  final _nameCtrl = TextEditingController(text: 'goharvest');
-  final _userCtrl = TextEditingController(text: 'goharvest');
+  final _stepperController = shadcn.StepperController();
+  final _hostCtrl = TextEditingController();
+  final _portCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _adminUserCtrl = TextEditingController(text: 'admin');
-  final _adminEmailCtrl = TextEditingController();
-  final _adminPassCtrl = TextEditingController();
-  final _jwtSecretCtrl = TextEditingController();
+  final _adminPassCtrl = TextEditingController(text: 'adminadmin');
+  final _adminPassConfirmCtrl = TextEditingController(text: 'adminadmin');
   String _databaseType = 'pgsql';
   bool _debug = false;
   bool _submitting = false;
+  bool _databaseReady = false;
   String? _error;
+
+  int get _step => _stepperController.value.currentStep;
 
   @override
   void initState() {
     super.initState();
-    _jwtSecretCtrl.text = _randomHex(32);
+    _applyDefaultsForDatabaseType(_databaseType);
   }
 
   @override
   void dispose() {
+    _stepperController.dispose();
     _hostCtrl.dispose();
     _portCtrl.dispose();
     _nameCtrl.dispose();
     _userCtrl.dispose();
     _passCtrl.dispose();
     _adminUserCtrl.dispose();
-    _adminEmailCtrl.dispose();
     _adminPassCtrl.dispose();
-    _jwtSecretCtrl.dispose();
+    _adminPassConfirmCtrl.dispose();
     super.dispose();
   }
 
@@ -589,7 +654,6 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
   Widget build(BuildContext context) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
-    final sqlite = _databaseType == 'sqlite';
 
     return shadcn.OverlayManagerLayer(
       popoverHandler: const shadcn.PopoverOverlayHandler(),
@@ -619,7 +683,7 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '填写数据库连接和管理员账户后即可完成初始化。',
+                          _stepSubtitle,
                           style: theme.typography.small.copyWith(
                             color: cs.mutedForeground,
                           ),
@@ -631,155 +695,21 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
                 ],
               ),
               const SizedBox(height: 18),
-              _sectionTitle(context, '数据库'),
-              const SizedBox(height: 10),
-              _fieldGrid(
-                context,
-                children: [
-                  _databaseTypeSelect(context),
-                  if (!sqlite)
-                    ShadTextField(
-                      controller: _hostCtrl,
-                      label: _requiredLabel(context, '地址'),
-                      placeholder: const Text('127.0.0.1'),
-                      keyboardType: TextInputType.url,
-                    ),
-                  if (!sqlite)
-                    ShadTextField(
-                      controller: _portCtrl,
-                      label: _requiredLabel(context, '端口'),
-                      placeholder: const Text('5432'),
-                      keyboardType: TextInputType.number,
-                    ),
-                  if (!sqlite)
-                    ShadTextField(
-                      controller: _nameCtrl,
-                      label: _requiredLabel(context, '数据库名'),
-                      placeholder: const Text('goharvest'),
-                    ),
-                  if (sqlite)
-                    ShadTextField(
-                      controller: _nameCtrl,
-                      label: _requiredLabel(context, '数据库文件'),
-                      readOnly: true,
-                      enabled: false,
-                    ),
-                  if (!sqlite)
-                    ShadTextField(
-                      controller: _userCtrl,
-                      label: _requiredLabel(context, '数据库用户'),
-                      placeholder: const Text('goharvest'),
-                    ),
-                ],
-              ),
-              if (!sqlite) ...[
-                const SizedBox(height: 10),
-                ShadTextField(
-                  controller: _passCtrl,
-                  labelText: '数据库密码',
-                  obscureText: true,
-                  maxLines: 1,
-                  features: const [shadcn.InputFeature.passwordToggle()],
-                ),
-              ],
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  shadcn.Checkbox(
-                    state: _debug
-                        ? shadcn.CheckboxState.checked
-                        : shadcn.CheckboxState.unchecked,
-                    onChanged: (value) => setState(
-                      () => _debug = value == shadcn.CheckboxState.checked,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '开启数据库调试日志',
+              _setupStepper(context),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                shadcn.Alert.destructive(
+                  leading: const Icon(shadcn.LucideIcons.circleAlert),
+                  content: Text(
+                    _error!,
                     style: theme.typography.small.copyWith(
-                      color: cs.foreground,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _sectionTitle(context, '管理员'),
-              const SizedBox(height: 10),
-              _fieldGrid(
-                context,
-                children: [
-                  ShadTextField(
-                    controller: _adminUserCtrl,
-                    label: _requiredLabel(context, '用户名'),
-                    placeholder: const Text('admin'),
-                  ),
-                  ShadTextField(
-                    controller: _adminEmailCtrl,
-                    labelText: '邮箱',
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ShadTextField(
-                controller: _adminPassCtrl,
-                label: _requiredLabel(context, '密码'),
-                obscureText: true,
-                maxLines: 1,
-                features: const [shadcn.InputFeature.passwordToggle()],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: ShadTextField(
-                      controller: _jwtSecretCtrl,
-                      label: _requiredLabel(context, 'JWT Secret'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  shadcn.Button.primary(
-                    onPressed: _submitting
-                        ? null
-                        : () => setState(
-                            () => _jwtSecretCtrl.text = _randomHex(32),
-                          ),
-                    alignment: Alignment.center,
-                    child: const Text('重新生成'),
-                  ),
-                ],
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  _error!,
-                  style: theme.typography.small.copyWith(
-                    color: cs.destructive,
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
               ],
               const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  shadcn.Button.outline(
-                    onPressed: _submitting
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    alignment: Alignment.center,
-                    child: const Text('取消'),
-                  ),
-                  const SizedBox(width: 10),
-                  shadcn.Button.primary(
-                    onPressed: _submitting ? null : _submit,
-                    alignment: Alignment.center,
-                    child: Text(_submitting ? '初始化中...' : '开始初始化'),
-                  ),
-                ],
-              ),
+              _actions(context),
             ],
           ),
         ),
@@ -787,42 +717,447 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
     );
   }
 
+  String get _stepSubtitle {
+    return switch (_step) {
+      0 => '选择要使用的数据库类型。',
+      1 => '确认数据库信息，校验通过后自动同步数据库结构。',
+      _ => '设置初始化管理员账号。',
+    };
+  }
+
   Widget _statusBadge(BuildContext context) {
-    final cs = shadcn.Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
+    final label = Text(_submitting ? '处理中' : '第 ${_step + 1}/3 步');
+    if (_submitting) {
+      return shadcn.OutlineBadge(
+        leading: const SizedBox(
+          width: 12,
+          height: 12,
+          child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+        ),
+        child: label,
+      );
+    }
+
+    return shadcn.OutlineBadge(child: label);
+  }
+
+  Widget _setupStepper(BuildContext context) {
+    final horizontal = MediaQuery.sizeOf(context).width >= 720;
+    final stepper = shadcn.Stepper(
+      controller: _stepperController,
+      direction: horizontal ? Axis.horizontal : Axis.vertical,
+      size: shadcn.StepSize.small,
+      variant: shadcn.StepVariant.line,
+      steps: [
+        shadcn.Step(
+          title: const Text('数据库类型'),
+          contentBuilder: _databaseTypeStep,
+        ),
+        shadcn.Step(
+          title: const Text('数据库同步'),
+          contentBuilder: _databaseSyncStep,
+        ),
+        shadcn.Step(title: const Text('管理员账号'), contentBuilder: _adminStep),
+      ],
+    );
+
+    if (!horizontal) return stepper;
+
+    return SizedBox(height: 300, child: stepper);
+  }
+
+  Widget _databaseTypeStep(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 620;
+    final choices = [
+      _databaseTypeCard(
+        context,
+        type: 'pgsql',
+        title: 'PostgreSQL',
+        description: '使用接口返回的 PGSQL 配置',
+        icon: shadcn.LucideIcons.server,
       ),
-      child: Text(
-        '待初始化',
-        style: shadcn.Theme.of(context).typography.small.copyWith(
-          color: cs.primary,
-          fontWeight: FontWeight.w700,
+      _databaseTypeCard(
+        context,
+        type: 'sqlite',
+        title: 'SQLite',
+        description: '使用本地 sqlite 数据库文件',
+        icon: shadcn.LucideIcons.fileText,
+      ),
+    ];
+
+    return shadcn.RadioGroup<String>(
+      value: _databaseType,
+      enabled: !_submitting,
+      onChanged: _selectDatabaseType,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 18, bottom: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (compact)
+              Column(
+                children: [
+                  for (var i = 0; i < choices.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    choices[i],
+                  ],
+                ],
+              )
+            else
+              Row(
+                children: [
+                  for (var i = 0; i < choices.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    Expanded(child: choices[i]),
+                  ],
+                ],
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _sectionTitle(BuildContext context, String title) {
+  Widget _databaseTypeCard(
+    BuildContext context, {
+    required String type,
+    required String title,
+    required String description,
+    required IconData icon,
+  }) {
     final theme = shadcn.Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: theme.colorScheme.border)),
-      ),
-      child: Text(
-        title,
-        style: theme.typography.small.copyWith(
-          color: theme.colorScheme.foreground,
-          fontWeight: FontWeight.w700,
+    final cs = theme.colorScheme;
+    final selected = _databaseType == type;
+
+    return shadcn.RadioCard<String>(
+      value: type,
+      enabled: !_submitting,
+      filled: false,
+      child: SizedBox(
+        height: 78,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? cs.primary.withValues(alpha: 0.10)
+                    : cs.muted.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: selected
+                      ? cs.primary.withValues(alpha: 0.32)
+                      : cs.border.withValues(alpha: 0.70),
+                ),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: selected ? cs.primary : cs.mutedForeground,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.typography.small.copyWith(
+                      color: cs.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.typography.xSmall.copyWith(
+                      color: cs.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              child: selected
+                  ? Icon(
+                      shadcn.LucideIcons.circleCheck,
+                      key: const ValueKey('selected'),
+                      size: 18,
+                      color: cs.primary,
+                    )
+                  : SizedBox(
+                      key: const ValueKey('empty'),
+                      width: 18,
+                      height: 18,
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _fieldGrid(BuildContext context, {required List<Widget> children}) {
+  Widget _databaseSyncStep(BuildContext context) {
+    if (_databaseType == 'sqlite') {
+      return _stepPanel(
+        context,
+        child: _fieldGrid(
+          context,
+          children: [
+            _setupTextField(
+              context,
+              controller: _nameCtrl,
+              label: _requiredLabel(context, '数据库文件（不可修改）'),
+              enabled: false,
+              readOnly: true,
+            ),
+            _debugSwitchField(context),
+          ],
+        ),
+      );
+    }
+
+    return _stepPanel(
+      context,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _fieldGrid(
+            context,
+            maxColumns: 3,
+            children: [
+              _setupTextField(
+                context,
+                controller: _hostCtrl,
+                label: _requiredLabel(context, '地址'),
+                placeholder: const Text('go-harvest-postgres'),
+                keyboardType: TextInputType.url,
+                onChanged: (_) => _markDatabaseDirty(),
+              ),
+              _setupTextField(
+                context,
+                controller: _portCtrl,
+                label: _requiredLabel(context, '端口'),
+                placeholder: const Text('5432'),
+                keyboardType: TextInputType.number,
+                onChanged: (_) => _markDatabaseDirty(),
+              ),
+              _setupTextField(
+                context,
+                controller: _nameCtrl,
+                label: _requiredLabel(context, '数据库名'),
+                placeholder: const Text('goharvest'),
+                onChanged: (_) => _markDatabaseDirty(),
+              ),
+              _setupTextField(
+                context,
+                controller: _userCtrl,
+                label: _requiredLabel(context, '数据库用户'),
+                placeholder: const Text('goharvest'),
+                onChanged: (_) => _markDatabaseDirty(),
+              ),
+              _setupTextField(
+                context,
+                controller: _passCtrl,
+                labelText: '数据库密码',
+                obscureText: true,
+                maxLines: 1,
+                features: const [shadcn.InputFeature.passwordToggle()],
+                onChanged: (_) => _markDatabaseDirty(),
+              ),
+              _debugSwitchField(context),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _setupTextField(
+    BuildContext context, {
+    TextEditingController? controller,
+    Widget? label,
+    String? labelText,
+    Widget? placeholder,
+    bool enabled = true,
+    bool readOnly = false,
+    bool obscureText = false,
+    int? maxLines = 1,
+    TextInputType? keyboardType,
+    List<shadcn.InputFeature> features = const [],
+    ValueChanged<String>? onChanged,
+  }) {
+    return ShadTextField(
+      controller: controller,
+      label: label,
+      labelText: labelText,
+      placeholder: placeholder,
+      enabled: enabled,
+      readOnly: readOnly,
+      obscureText: obscureText,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      features: features,
+      onChanged: onChanged,
+      decoration: _formFieldDecoration(context, readOnly: readOnly || !enabled),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
+  }
+
+  BoxDecoration _formFieldDecoration(
+    BuildContext context, {
+    bool readOnly = false,
+  }) {
+    final cs = shadcn.Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fillColor = readOnly
+        ? cs.muted.withValues(alpha: dark ? 0.20 : 0.24)
+        : Color.alphaBlend(
+            cs.primary.withValues(alpha: dark ? 0.035 : 0.018),
+            cs.background,
+          );
+
+    return BoxDecoration(
+      color: fillColor,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: readOnly
+            ? cs.border.withValues(alpha: 0.56)
+            : cs.border.withValues(alpha: 0.82),
+      ),
+      boxShadow: readOnly
+          ? null
+          : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? 0.18 : 0.035),
+                blurRadius: 8,
+                offset: const Offset(0, 1),
+              ),
+            ],
+    );
+  }
+
+  Widget _debugSwitchField(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(context, '调试日志'),
+        const SizedBox(height: 6),
+        Container(
+          constraints: const BoxConstraints(minHeight: 38),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: _formFieldDecoration(context),
+          child: Row(
+            children: [
+              Icon(
+                shadcn.LucideIcons.terminal,
+                size: 16,
+                color: cs.mutedForeground,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '开启',
+                  style: theme.typography.small.copyWith(
+                    color: cs.foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              shadcn.Switch(
+                value: _debug,
+                enabled: !_submitting,
+                onChanged: _submitting
+                    ? null
+                    : (value) => setState(() {
+                        _debug = value;
+                        _databaseReady = false;
+                      }),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _adminStep(BuildContext context) {
+    return _stepPanel(
+      context,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _setupTextField(
+            context,
+            controller: _adminUserCtrl,
+            label: _requiredLabel(context, '用户名'),
+            placeholder: const Text('admin'),
+          ),
+          const SizedBox(height: 10),
+          _fieldGrid(
+            context,
+            children: [
+              _setupTextField(
+                context,
+                controller: _adminPassCtrl,
+                label: _requiredLabel(context, '密码'),
+                obscureText: true,
+                maxLines: 1,
+                features: const [shadcn.InputFeature.passwordToggle()],
+              ),
+              _setupTextField(
+                context,
+                controller: _adminPassConfirmCtrl,
+                label: _requiredLabel(context, '确认密码'),
+                obscureText: true,
+                maxLines: 1,
+                features: const [shadcn.InputFeature.passwordToggle()],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepPanel(BuildContext context, {required Widget child}) {
+    final cs = shadcn.Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 10),
+      child: shadcn.Card(
+        padding: const EdgeInsets.all(16),
+        filled: true,
+        fillColor: cs.muted.withValues(alpha: 0.08),
+        borderColor: cs.border.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(8),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _fieldGrid(
+    BuildContext context, {
+    required List<Widget> children,
+    int maxColumns = 2,
+  }) {
     final compact = MediaQuery.sizeOf(context).width < 720;
     if (compact) {
       return Column(
@@ -836,63 +1171,31 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
       );
     }
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 10,
-      children: [
-        for (final child in children) SizedBox(width: 340, child: child),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = min(maxColumns, children.length);
+        final width = (constraints.maxWidth - 16 * (columns - 1)) / columns;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 10,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
     );
   }
 
-  Widget _databaseTypeSelect(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _requiredLabel(context, '类型'),
-        const SizedBox(height: 6),
-        SizedBox(
-          width: double.infinity,
-          child: shadcn.Select<String>(
-            value: _databaseType,
-            itemBuilder: (_, value) =>
-                Text(value == 'sqlite' ? 'SQLite' : 'PostgreSQL'),
-            popup: shadcn.SelectPopup<String>(
-              items: shadcn.SelectItemList(
-                children: const [
-                  shadcn.SelectItemButton<String>(
-                    value: 'pgsql',
-                    child: Text('PostgreSQL'),
-                  ),
-                  shadcn.SelectItemButton<String>(
-                    value: 'sqlite',
-                    child: Text('SQLite'),
-                  ),
-                ],
-              ),
-            ).call,
-            onChanged: _submitting
-                ? null
-                : (value) {
-                    if (value == null || value == _databaseType) return;
-                    setState(() {
-                      _databaseType = value;
-                      if (value == 'sqlite') {
-                        _nameCtrl.text = 'db/data.sqlite3';
-                      } else {
-                        if (_portCtrl.text.trim().isEmpty) {
-                          _portCtrl.text = '5432';
-                        }
-                        if (_nameCtrl.text.trim().isEmpty ||
-                            _nameCtrl.text.trim() == 'db/data.sqlite3') {
-                          _nameCtrl.text = 'goharvest';
-                        }
-                      }
-                    });
-                  },
-          ),
-        ),
-      ],
+  Widget _fieldLabel(BuildContext context, String text) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Text(
+      text,
+      style: theme.typography.small.copyWith(
+        color: cs.foreground,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 
@@ -922,11 +1225,121 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
     );
   }
 
-  Future<void> _submit() async {
-    final adminUser = _adminUserCtrl.text.trim();
-    final adminPass = _adminPassCtrl.text;
-    final validationError = _validate(adminUser, adminPass);
+  Widget _actions(BuildContext context) {
+    final primaryText = switch (_step) {
+      0 => '下一步',
+      1 =>
+        _submitting
+            ? '同步中...'
+            : (_databaseType == 'sqlite' ? '同步数据库' : '校验并同步'),
+      _ => _submitting ? '初始化中...' : '完成初始化',
+    };
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
+      children: [
+        shadcn.Button.outline(
+          onPressed: _submitting ? null : _handleSecondaryAction,
+          alignment: Alignment.center,
+          leading: Icon(
+            _step == 0 ? shadcn.LucideIcons.x : shadcn.LucideIcons.arrowLeft,
+            size: 16,
+          ),
+          child: Text(_step == 0 ? '取消' : '上一步'),
+        ),
+        shadcn.Button.primary(
+          onPressed: _submitting ? null : _handlePrimaryAction,
+          alignment: Alignment.center,
+          leading: _submitting
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  _step == 2
+                      ? shadcn.LucideIcons.check
+                      : shadcn.LucideIcons.arrowRight,
+                  size: 16,
+                ),
+          child: Text(primaryText),
+        ),
+      ],
+    );
+  }
+
+  void _handlePrimaryAction() {
+    if (_step == 0) {
+      _goToStep(1);
+      return;
+    }
+
+    if (_step == 1) {
+      unawaited(_prepareDatabase());
+      return;
+    }
+
+    unawaited(_submitAdmin());
+  }
+
+  void _handleSecondaryAction() {
+    if (_step == 0) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    _goToStep(_step - 1);
+  }
+
+  void _goToStep(int step) {
+    final target = step.clamp(0, 2).toInt();
+    _stepperController.jumpToStep(target);
+    setState(() => _error = null);
+  }
+
+  void _selectDatabaseType(String value) {
+    if (value == _databaseType) return;
+    setState(() {
+      _databaseType = value;
+      _databaseReady = false;
+      _error = null;
+      _applyDefaultsForDatabaseType(value);
+      _stepperController.setStatus(0, null);
+      _stepperController.setStatus(1, null);
+    });
+  }
+
+  void _applyDefaultsForDatabaseType(String type) {
+    if (type == 'sqlite') {
+      final defaults = widget.setupStatus?.databaseDefaults['sqlite'];
+      _nameCtrl.text = _fallback(defaults?.name, 'db/data.sqlite3');
+      return;
+    }
+
+    final defaults = widget.setupStatus?.databaseDefaults['pgsql'];
+    _hostCtrl.text = _fallback(defaults?.host, 'go-harvest-postgres');
+    _portCtrl.text = _fallback(defaults?.port, '5432');
+    _nameCtrl.text = _fallback(defaults?.name, 'goharvest');
+    _userCtrl.text = _fallback(defaults?.user, 'goharvest');
+    _passCtrl.text = defaults?.pass ?? '';
+  }
+
+  String _fallback(String? value, String fallback) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  void _markDatabaseDirty() {
+    if (!_databaseReady) return;
+    setState(() => _databaseReady = false);
+  }
+
+  Future<void> _prepareDatabase() async {
+    final validationError = _validateDatabase();
     if (validationError != null) {
+      _stepperController.setStatus(_step, shadcn.StepState.failed);
       setState(() => _error = validationError);
       return;
     }
@@ -935,32 +1348,52 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
       _submitting = true;
       _error = null;
     });
-    final payload = <String, dynamic>{
-      'database_type': _databaseType,
-      'host': _hostCtrl.text.trim(),
-      'port': _portCtrl.text.trim(),
-      'name': _databaseType == 'sqlite'
-          ? 'db/data.sqlite3'
-          : _nameCtrl.text.trim(),
-      'user': _userCtrl.text.trim(),
-      'pass': _passCtrl.text,
-      'debug': _debug,
-      'admin_user': adminUser,
-      'admin_pass': adminPass,
-      'admin_email': _adminEmailCtrl.text.trim(),
-      'jwt_secret': _jwtSecretCtrl.text.trim(),
-    };
 
     try {
-      final res = await Dio().post<Map<String, dynamic>>(
-        '${widget.baseUrl}${API.setupInit}',
-        data: payload,
-        options: Options(validateStatus: (_) => true),
-      );
-      final body = res.data;
-      if (body == null || body['succeed'] != true) {
-        throw StateError(_extractSetupMessage(body) ?? '初始化失败');
+      await _postSetup(API.setupDatabase, _databasePayload());
+      if (!mounted) return;
+      _stepperController.setStatus(0, null);
+      _stepperController.setStatus(1, null);
+      _stepperController.jumpToStep(2);
+      setState(() {
+        _databaseReady = true;
+      });
+    } catch (e, st) {
+      AppLogger.error('数据库初始化失败', e, st);
+      if (mounted) {
+        _stepperController.setStatus(_step, shadcn.StepState.failed);
+        setState(() => _error = _extractSetupMessage(e) ?? '$e');
       }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _submitAdmin() async {
+    final adminUser = _adminUserCtrl.text.trim();
+    final adminPass = _adminPassCtrl.text;
+    final adminPassConfirm = _adminPassConfirmCtrl.text;
+    final validationError = _validateAdmin(
+      adminUser,
+      adminPass,
+      adminPassConfirm,
+    );
+    if (validationError != null) {
+      _stepperController.setStatus(2, shadcn.StepState.failed);
+      setState(() => _error = validationError);
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    try {
+      await _postSetup(API.setupInit, {
+        'admin_user': adminUser,
+        'admin_pass': adminPass,
+      });
       if (mounted) {
         Navigator.of(
           context,
@@ -968,23 +1401,77 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
       }
     } catch (e, st) {
       AppLogger.error('初始化失败', e, st);
-      if (mounted) setState(() => _error = _extractSetupMessage(e) ?? '$e');
+      if (mounted) {
+        _stepperController.setStatus(2, shadcn.StepState.failed);
+        setState(() => _error = _extractSetupMessage(e) ?? '$e');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  String? _validate(String adminUser, String adminPass) {
+  Map<String, dynamic> _databasePayload() {
+    if (_databaseType == 'sqlite') {
+      return <String, dynamic>{
+        'database_type': 'sqlite',
+        'debug': _debug,
+        'name': _nameCtrl.text.trim(),
+      };
+    }
+
+    return <String, dynamic>{
+      'database_type': 'pgsql',
+      'debug': _debug,
+      'host': _hostCtrl.text.trim(),
+      'port': _portCtrl.text.trim(),
+      'name': _nameCtrl.text.trim(),
+      'user': _userCtrl.text.trim(),
+      'pass': _passCtrl.text,
+    };
+  }
+
+  Future<void> _postSetup(String path, Map<String, dynamic> payload) async {
+    final res = await Dio().post<dynamic>(
+      '${widget.baseUrl}$path',
+      data: payload,
+      options: Options(validateStatus: (_) => true),
+    );
+    final statusCode = res.statusCode ?? 0;
+    final body = res.data;
+    if (statusCode >= 400) {
+      throw StateError(_extractSetupMessage(body) ?? '请求失败 ($statusCode)');
+    }
+    if (body is Map && body.containsKey('succeed') && body['succeed'] != true) {
+      throw StateError(_extractSetupMessage(body) ?? '初始化失败');
+    }
+  }
+
+  String? _validateDatabase() {
     if (_databaseType == 'pgsql') {
       if (_hostCtrl.text.trim().isEmpty) return '数据库地址不能为空';
       if (_portCtrl.text.trim().isEmpty) return '数据库端口不能为空';
+      final port = int.tryParse(_portCtrl.text.trim());
+      if (port == null || port <= 0 || port > 65535) {
+        return '数据库端口不正确';
+      }
       if (_nameCtrl.text.trim().isEmpty) return '数据库名称不能为空';
       if (_userCtrl.text.trim().isEmpty) return '数据库用户名不能为空';
+    } else if (_nameCtrl.text.trim().isEmpty) {
+      return '数据库文件不能为空';
     }
+    return null;
+  }
+
+  String? _validateAdmin(
+    String adminUser,
+    String adminPass,
+    String adminPassConfirm,
+  ) {
+    if (!_databaseReady) return '请先完成数据库同步';
     if (adminUser.isEmpty) return '管理员用户名不能为空';
     if (adminPass.isEmpty) return '管理员密码不能为空';
     if (adminPass.length < 6) return '管理员密码至少需要 6 位';
-    if (_jwtSecretCtrl.text.trim().isEmpty) return 'JWT Secret 不能为空';
+    if (adminPass != adminPassConfirm) return '两次输入的密码不一致';
     return null;
   }
 
@@ -999,16 +1486,11 @@ class _SetupDialogContentState extends State<_SetupDialogContent> {
         final message = value[key]?.toString().trim();
         if (message != null && message.isNotEmpty) return message;
       }
+      final data = value['data'];
+      if (data is Map && !identical(data, value)) {
+        return _extractSetupMessage(data);
+      }
     }
     return null;
-  }
-
-  String _randomHex(int bytes) {
-    final random = Random.secure();
-    final buffer = StringBuffer();
-    for (var i = 0; i < bytes; i++) {
-      buffer.write(random.nextInt(256).toRadixString(16).padLeft(2, '0'));
-    }
-    return buffer.toString();
   }
 }

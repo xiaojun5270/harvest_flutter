@@ -4,6 +4,9 @@ class StorageKeys {
   static const baseUrl = 'base_url';
   static const authState = 'auth_state';
   static const String loggerLevel = 'logger_level';
+  static const String theme = 'theme';
+  static const String themeMode = 'theme_mode';
+  static const String themeState = 'theme_state';
   static const String windowSizeWidth = 'ScreenSizeWidth';
   static const String windowSizeHeight = 'ScreenSizeHeight';
   static const String privacyMode = 'privacy_mode';
