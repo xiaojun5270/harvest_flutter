@@ -1,81 +1,65 @@
 import 'package:hive/hive.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
+import '../storage/hive_manager.dart';
+import '../storage/storage_keys.dart';
 import 'app_theme.dart';
 import 'theme_presets.dart';
 
 class ThemeStorage {
-  static const _boxName = 'settings';
-  static const _themeKey = 'theme';
-  static const _modeKey = 'mode';
-  static const _themeStateKey = 'theme_state';
+  static const _legacyBoxName = 'settings';
+  static const _legacyThemeKey = 'theme';
+  static const _legacyModeKey = 'mode';
+  static const _legacyThemeStateKey = 'theme_state';
+  static const _themeKey = StorageKeys.theme;
+  static const _modeKey = StorageKeys.themeMode;
+  static const _themeStateKey = StorageKeys.themeState;
+  static Future<void>? _migrationFuture;
 
   static Future<void> init() async {
-    if (Hive.isBoxOpen(_boxName)) return;
-    await Hive.openBox(_boxName);
-  }
-
-  static Future<Box> _box() async {
-    if (Hive.isBoxOpen(_boxName)) {
-      return Hive.box(_boxName);
-    }
-    return await Hive.openBox(_boxName);
-  }
-
-  static Box? _boxSync() {
-    if (!Hive.isBoxOpen(_boxName)) return null;
-    return Hive.box(_boxName);
+    _migrationFuture ??= _migrateLegacyBoxIfNeeded();
+    await _migrationFuture;
   }
 
   static Future<void> saveTheme(String name) async {
-    final box = await _box();
-    await box.put(_themeKey, name);
+    await HiveManager.set(_themeKey, name);
   }
 
   static Future<void> saveMode(String mode) async {
-    final box = await _box();
-    await box.put(_modeKey, mode);
+    await HiveManager.set(_modeKey, mode);
   }
 
   static Future<void> saveState(ThemeState state) async {
-    final box = await _box();
-    await box.put(_themeStateKey, state.toJson());
-    await box.put(_themeKey, state.theme.name);
-    await box.put(_modeKey, state.mode.name);
+    await HiveManager.set(_themeStateKey, state.toJson());
+    await HiveManager.set(_themeKey, state.theme.name);
+    await HiveManager.set(_modeKey, state.mode.name);
   }
 
   static Future<String?> getTheme() async {
-    final box = await _box();
-    return box.get(_themeKey);
+    return getThemeSync();
   }
 
   static String? getThemeSync() {
-    final box = _boxSync();
-    return box?.get(_themeKey);
+    if (!HiveManager.isInitialized) return null;
+    return HiveManager.get<String>(_themeKey);
   }
 
   static Future<String?> getMode() async {
-    final box = await _box();
-    return box.get(_modeKey);
+    return getModeSync();
   }
 
   static String? getModeSync() {
-    final box = _boxSync();
-    return box?.get(_modeKey);
+    if (!HiveManager.isInitialized) return null;
+    return HiveManager.get<String>(_modeKey);
   }
 
   static Future<ThemeState?> getState() async {
-    final box = await _box();
-    final raw = box.get(_themeStateKey);
-    if (raw is Map) {
-      return ThemeState.fromJson(Map<String, dynamic>.from(raw));
-    }
-    return null;
+    return getStateSync();
   }
 
   static ThemeState? getStateSync() {
-    final box = _boxSync();
-    final raw = box?.get(_themeStateKey);
+    if (!HiveManager.isInitialized) return null;
+    final raw = HiveManager.get<dynamic>(_themeStateKey);
     if (raw is Map) {
       return ThemeState.fromJson(Map<String, dynamic>.from(raw));
     }
@@ -105,5 +89,52 @@ class ThemeStorage {
       accent: theme.accent,
       mode: mode,
     );
+  }
+
+  static Future<void> _migrateLegacyBoxIfNeeded() async {
+    if (!HiveManager.isInitialized || _hasPersistedTheme()) return;
+
+    Box? box;
+    var openedHere = false;
+    try {
+      if (Hive.isBoxOpen(_legacyBoxName)) {
+        box = Hive.box(_legacyBoxName);
+      } else {
+        box = await Hive.openBox(_legacyBoxName);
+        openedHere = true;
+      }
+
+      final rawState = box.get(_legacyThemeStateKey);
+      final themeName = box.get(_legacyThemeKey);
+      final mode = box.get(_legacyModeKey);
+
+      if (rawState is Map) {
+        await HiveManager.set(
+          _themeStateKey,
+          Map<String, dynamic>.from(rawState),
+        );
+      }
+      if (themeName != null) {
+        await HiveManager.set(_themeKey, themeName.toString());
+      }
+      if (mode != null) {
+        await HiveManager.set(_modeKey, mode.toString());
+      }
+    } catch (_) {
+      // The legacy settings box may be locked by an older app instance. It is
+      // only used for migration, so startup should continue with defaults.
+    } finally {
+      if (openedHere && box != null) {
+        try {
+          await box.close();
+        } catch (_) {}
+      }
+    }
+  }
+
+  static bool _hasPersistedTheme() {
+    return HiveManager.contains(_themeStateKey) ||
+        HiveManager.contains(_themeKey) ||
+        HiveManager.contains(_modeKey);
   }
 }

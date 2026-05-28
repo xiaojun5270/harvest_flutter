@@ -12,6 +12,9 @@ class HiveManager {
     StorageKeys.baseUrl,
     StorageKeys.authState,
     StorageKeys.loggerLevel,
+    StorageKeys.theme,
+    StorageKeys.themeMode,
+    StorageKeys.themeState,
     StorageKeys.windowSizeWidth,
     StorageKeys.windowSizeHeight,
     StorageKeys.appAutoRefreshIntervalMinutes,
@@ -27,12 +30,18 @@ class HiveManager {
   static String? _scopeServer;
   static String? _scopeUsername;
   static bool _authSessionCleared = false;
+  static bool _initialized = false;
+
+  static bool get isInitialized => _initialized;
 
   static Future<void> init() async {
     if (!kIsWeb) {
       await Hive.initFlutter();
     }
-    _box = await Hive.openBox(_boxName);
+    _box = Hive.isBoxOpen(_boxName)
+        ? Hive.box(_boxName)
+        : await Hive.openBox(_boxName);
+    _initialized = true;
   }
 
   static void setScope({required String server, required String username}) {
@@ -104,8 +113,15 @@ class HiveManager {
 
   static String _scopePrefix() {
     final server =
-        (_scopeServer?.isNotEmpty == true ? _scopeServer : _globalString(StorageKeys.baseUrl)) ?? 'default_server';
-    final username = (_scopeUsername?.isNotEmpty == true ? _scopeUsername : _authUsername()) ?? 'anonymous';
+        (_scopeServer?.isNotEmpty == true
+            ? _scopeServer
+            : _globalString(StorageKeys.baseUrl)) ??
+        'default_server';
+    final username =
+        (_scopeUsername?.isNotEmpty == true
+            ? _scopeUsername
+            : _authUsername()) ??
+        'anonymous';
     return '$server-$username';
   }
 
