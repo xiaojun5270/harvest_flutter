@@ -19,6 +19,8 @@ class ShadTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final List<TextInputFormatter>? inputFormatters;
   final TextStyle? style;
+  final BoxDecoration? decoration;
+  final EdgeInsetsGeometry? padding;
   final List<shadcn.InputFeature> features;
   final String? Function(String?)? validator;
   final AutovalidateMode? autovalidateMode;
@@ -45,6 +47,8 @@ class ShadTextField extends StatelessWidget {
     this.textInputAction,
     this.inputFormatters,
     this.style,
+    this.decoration,
+    this.padding,
     this.features = const [],
     this.validator,
     this.autovalidateMode,
@@ -79,7 +83,11 @@ class ShadTextField extends StatelessWidget {
     return _withChrome(context, field: _field());
   }
 
-  Widget _withChrome(BuildContext context, {required Widget field, String? errorText}) {
+  Widget _withChrome(
+    BuildContext context, {
+    required Widget field,
+    String? errorText,
+  }) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
     final labelWidget =
@@ -88,7 +96,10 @@ class ShadTextField extends StatelessWidget {
             ? null
             : Text(
                 labelText!,
-                style: theme.typography.small.copyWith(color: cs.foreground, fontWeight: FontWeight.w600),
+                style: theme.typography.small.copyWith(
+                  color: cs.foreground,
+                  fontWeight: FontWeight.w600,
+                ),
               ));
 
     if (labelWidget == null && errorText == null) return field;
@@ -98,7 +109,10 @@ class ShadTextField extends StatelessWidget {
       children: [
         if (labelWidget != null) ...[
           DefaultTextStyle.merge(
-            style: theme.typography.small.copyWith(color: cs.foreground, fontWeight: FontWeight.w600),
+            style: theme.typography.small.copyWith(
+              color: cs.foreground,
+              fontWeight: FontWeight.w600,
+            ),
             child: labelWidget,
           ),
           const SizedBox(height: 6),
@@ -106,7 +120,10 @@ class ShadTextField extends StatelessWidget {
         field,
         if (errorText != null) ...[
           const SizedBox(height: 5),
-          Text(errorText, style: theme.typography.xSmall.copyWith(color: cs.destructive)),
+          Text(
+            errorText,
+            style: theme.typography.xSmall.copyWith(color: cs.destructive),
+          ),
         ],
       ],
     );
@@ -128,8 +145,11 @@ class ShadTextField extends StatelessWidget {
       textInputAction: textInputAction,
       inputFormatters: inputFormatters,
       style: style,
+      decoration: decoration,
+      padding: padding,
       features: features,
-      contextMenuBuilder: contextMenuBuilder ?? shadcn.TextField.defaultContextMenuBuilder,
+      contextMenuBuilder:
+          contextMenuBuilder ?? shadcn.TextField.defaultContextMenuBuilder,
       onChanged: onChangedOverride ?? onChanged,
       onSubmitted: (value) {
         onSubmitted?.call(value);
