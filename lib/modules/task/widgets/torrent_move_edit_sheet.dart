@@ -125,7 +125,9 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
         _folderMapCtrl.text.trim().isNotEmpty) {
       return;
     }
-    setState(() => _setFolderMapPaths(sourcePath: sourcePath, targetPath: distPath));
+    setState(
+      () => _setFolderMapPaths(sourcePath: sourcePath, targetPath: distPath),
+    );
   }
 
   Future<void> _onSourceChanged(List<Downloader> all, Downloader? item) async {
@@ -134,10 +136,8 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
         : (_distDownloader == null ||
               _distDownloader?.host != item.host ||
               _distDownloader?.id == item.id)
-            ? all.firstWhereOrNull(
-                (d) => d.id != item.id && d.host == item.host,
-              )
-            : _distDownloader;
+        ? all.firstWhereOrNull((d) => d.id != item.id && d.host == item.host)
+        : _distDownloader;
 
     setState(() {
       _sourceDownloader = item;
@@ -153,7 +153,9 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
         _distDownloader?.id != distId) {
       return;
     }
-    setState(() => _setFolderMapPaths(sourcePath: sourcePath, targetPath: distPath));
+    setState(
+      () => _setFolderMapPaths(sourcePath: sourcePath, targetPath: distPath),
+    );
   }
 
   Future<void> _onDistChanged(Downloader? item) async {
@@ -425,9 +427,9 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Column(
             children: [
-              _TaskFormField(
+              ShadTextField(
                 controller: _nameCtrl,
-                label: '任务名称',
+                labelText: '任务名称',
                 hintText: '例如：下载器 A 到下载器 B 的迁移',
                 helperText: '建议写明来源和目标，便于后续区分',
               ),
@@ -472,9 +474,9 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
               ),
               const SizedBox(height: 12),
 
-              _TaskFormField(
+              ShadTextField(
                 controller: _folderMapCtrl,
-                label: '文件夹映射',
+                labelText: '文件夹映射',
                 hintText: '/source/path->/target/path',
                 helperText: '每行一条映射，格式为 源目录->目标目录，可填写多行',
                 maxLines: 3,
@@ -512,39 +514,39 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
               ),
               const SizedBox(height: 12),
 
-              _TaskFormField(
+              ShadTextField(
                 controller: _minuteCtrl,
-                label: '分钟',
+                labelText: '分钟',
                 hintText: '1 或 */5',
                 helperText: 'Cron 分钟位，支持 *、*/5、1,15,30 这类写法',
               ),
               const SizedBox(height: 12),
-              _TaskFormField(
+              ShadTextField(
                 controller: _hourCtrl,
-                label: '小时',
+                labelText: '小时',
                 hintText: '* 或 0-23',
                 helperText: 'Cron 小时位，* 表示每小时',
               ),
 
               if (_advance) ...[
                 const SizedBox(height: 12),
-                _TaskFormField(
+                ShadTextField(
                   controller: _dayOfWeekCtrl,
-                  label: '周几',
+                  labelText: '周几',
                   hintText: '* 或 0-6',
                   helperText: 'Cron 星期位，0/7 一般表示周日',
                 ),
                 const SizedBox(height: 12),
-                _TaskFormField(
+                ShadTextField(
                   controller: _dayOfMonthCtrl,
-                  label: '几号',
+                  labelText: '几号',
                   hintText: '* 或 1-31',
                   helperText: 'Cron 日期位，指定每月的第几天执行',
                 ),
                 const SizedBox(height: 12),
-                _TaskFormField(
+                ShadTextField(
                   controller: _monthOfYearCtrl,
-                  label: '几月',
+                  labelText: '几月',
                   hintText: '* 或 1-12',
                   helperText: 'Cron 月份位，* 表示每月',
                 ),
@@ -584,50 +586,6 @@ class _TorrentMoveEditSheetState extends ConsumerState<TorrentMoveEditSheet> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TaskFormField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hintText;
-  final String? helperText;
-  final int maxLines;
-
-  const _TaskFormField({
-    required this.controller,
-    required this.label,
-    required this.hintText,
-    this.helperText,
-    this.maxLines = 1,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = shadcn.Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        if (helperText != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            helperText!,
-            style: TextStyle(fontSize: 12, color: cs.mutedForeground),
-          ),
-        ],
-        const SizedBox(height: 8),
-        ShadTextField(
-          controller: controller,
-          hintText: hintText,
-          maxLines: maxLines,
-          onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-        ),
-      ],
     );
   }
 }
