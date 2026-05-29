@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:harvest/core/theme/app_surface.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 class ShadTextField extends StatelessWidget {
@@ -7,6 +8,7 @@ class ShadTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final Widget? label;
   final String? labelText;
+  final String? helperText;
   final Widget? placeholder;
   final String? hintText;
   final bool enabled;
@@ -35,6 +37,7 @@ class ShadTextField extends StatelessWidget {
     this.focusNode,
     this.label,
     this.labelText,
+    this.helperText,
     this.placeholder,
     this.hintText,
     this.enabled = true,
@@ -69,6 +72,7 @@ class ShadTextField extends StatelessWidget {
           return _withChrome(
             context,
             field: _field(
+              context,
               onChangedOverride: (value) {
                 field.didChange(value);
                 onChanged?.call(value);
@@ -80,7 +84,7 @@ class ShadTextField extends StatelessWidget {
       );
     }
 
-    return _withChrome(context, field: _field());
+    return _withChrome(context, field: _field(context));
   }
 
   Widget _withChrome(
@@ -102,7 +106,9 @@ class ShadTextField extends StatelessWidget {
                 ),
               ));
 
-    if (labelWidget == null && errorText == null) return field;
+    if (labelWidget == null && helperText == null && errorText == null) {
+      return field;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,6 +124,15 @@ class ShadTextField extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         field,
+        if (helperText != null && errorText == null) ...[
+          const SizedBox(height: 5),
+          Text(
+            helperText!,
+            style: theme.typography.xSmall.copyWith(
+              color: cs.mutedForeground.withValues(alpha: 0.86),
+            ),
+          ),
+        ],
         if (errorText != null) ...[
           const SizedBox(height: 5),
           Text(
@@ -129,7 +144,10 @@ class ShadTextField extends StatelessWidget {
     );
   }
 
-  Widget _field({ValueChanged<String>? onChangedOverride}) {
+  Widget _field(
+    BuildContext context, {
+    ValueChanged<String>? onChangedOverride,
+  }) {
     return shadcn.TextField(
       controller: controller,
       focusNode: focusNode,
@@ -145,7 +163,7 @@ class ShadTextField extends StatelessWidget {
       textInputAction: textInputAction,
       inputFormatters: inputFormatters,
       style: style,
-      decoration: decoration,
+      decoration: decoration ?? _defaultDecoration(context),
       padding: padding,
       features: features,
       contextMenuBuilder:
@@ -157,6 +175,25 @@ class ShadTextField extends StatelessWidget {
           FocusManager.instance.primaryFocus?.unfocus();
         }
       },
+    );
+  }
+
+  BoxDecoration _defaultDecoration(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final baseColor = appSurfaceColor(context, cs.background);
+    return BoxDecoration(
+      color: enabled
+          ? baseColor
+          : Color.alphaBlend(
+              cs.mutedForeground.withValues(alpha: 0.04),
+              baseColor,
+            ),
+      borderRadius: BorderRadius.circular(theme.radiusMd),
+      border: Border.all(
+        color: enabled ? cs.input : cs.border.withValues(alpha: 0.65),
+        width: 0.8,
+      ),
     );
   }
 }
