@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:harvest/core/utils/ui/responsive.dart';
 import 'package:harvest/modules/download/model/downloader.dart';
 import 'package:harvest/modules/download/provider/downloader_speed_provider.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
@@ -32,21 +33,27 @@ class StatsBar extends ConsumerWidget {
     );
 
     if (items.isEmpty) return const SizedBox.shrink();
+    final compactLayout = MediaQuery.sizeOf(context).width < kMobileBreakpoint;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: compactLayout ? 10 : 12,
+        vertical: compactLayout ? 6 : 8,
+      ),
       decoration: BoxDecoration(
         color: cs.background,
         border: Border(bottom: BorderSide(color: cs.border, width: 0.5)),
       ),
       child: SizedBox(
         width: double.infinity,
-        child: Wrap(
-          spacing: 14,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: items,
-        ),
+        child: compactLayout
+            ? StatusBarInlineRow(spacing: 7, height: 18, children: items)
+            : Wrap(
+                spacing: 14,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: items,
+              ),
       ),
     );
   }
@@ -176,6 +183,54 @@ String _formatLimitValue(int value) =>
     value <= 0 ? '不限' : TorrentUtils.formatSpeed(value);
 
 // ── 子组件 ──
+
+class StatusBarInlineRow extends StatelessWidget {
+  final List<Widget> children;
+  final double spacing;
+  final double height;
+  final AlignmentGeometry alignment;
+
+  const StatusBarInlineRow({
+    super.key,
+    required this.children,
+    this.spacing = 8,
+    this.height = 18,
+    this.alignment = Alignment.centerLeft,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) SizedBox(width: spacing),
+          children[i],
+        ],
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.hasBoundedWidth) {
+          return SizedBox(
+            height: height,
+            child: Align(alignment: alignment, child: row),
+          );
+        }
+        return SizedBox(
+          width: constraints.maxWidth,
+          height: height,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: alignment,
+            child: row,
+          ),
+        );
+      },
+    );
+  }
+}
 
 class StatusBarMetric extends StatelessWidget {
   final IconData icon;
@@ -386,6 +441,7 @@ class StatusBarIconButton extends StatelessWidget {
   final VoidCallback? onTap;
   final String? tooltip;
   final Color? color;
+  final bool compact;
 
   const StatusBarIconButton({
     super.key,
@@ -393,6 +449,7 @@ class StatusBarIconButton extends StatelessWidget {
     required this.onTap,
     this.tooltip,
     this.color,
+    this.compact = false,
   });
 
   @override
@@ -402,7 +459,7 @@ class StatusBarIconButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 8),
         child: Icon(
           icon,
           size: 14,

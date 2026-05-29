@@ -8,7 +8,9 @@ import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/storage/storage_keys.dart';
 import 'package:harvest/core/utils/platform/platform_tool.dart';
 import 'package:harvest/core/provider/app_auto_refresh_provider.dart';
+import 'package:harvest/modules/auth/auth_provider.dart';
 import 'package:harvest/modules/notice/provider/notice_provider.dart';
+import 'package:harvest/modules/shell/widgets/global_drawer_swipe_area.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 import 'package:window_manager/window_manager.dart';
 // ignore: implementation_imports
@@ -222,16 +224,22 @@ class _MyAppState extends ConsumerState<MyApp>
     });
 
     final themeState = ref.watch(themeNotifierProvider);
+    final loggedIn = ref.watch(authNotifierProvider).loggedIn;
 
     return shadcn.ShadcnApp.router(
       debugShowCheckedModeBanner: false,
 
       routerConfig: ref.watch(routerProvider),
-      builder: (context, child) => _GlobalKeyboardDismiss(
-        child: DesktopWindowControlsOverlay(
-          child: shadcn.DrawerOverlay(child: child ?? const SizedBox.shrink()),
-        ),
-      ),
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+        return _GlobalKeyboardDismiss(
+          child: DesktopWindowControlsOverlay(
+            child: shadcn.DrawerOverlay(
+              child: loggedIn ? GlobalDrawerSwipeArea(child: content) : content,
+            ),
+          ),
+        );
+      },
       locale: const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans'),
       supportedLocales: const [
         Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans'),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/theme/app_surface.dart';
+import 'package:harvest/core/utils/ui/responsive.dart';
 import 'package:harvest/core/utils/parsers/size_parser.dart';
 import 'package:harvest/modules/download/model/downloader.dart';
 import 'package:harvest/modules/download/model/downloader_speed.dart';
@@ -22,6 +23,7 @@ class TorrentRefreshBar extends ConsumerWidget {
   final VoidCallback onRefreshStateChanged;
   final VoidCallback? onOpenSpeedSettings;
   final ValueChanged<bool>? onToggleSpeedMode;
+  final bool compact;
 
   const TorrentRefreshBar({
     super.key,
@@ -31,6 +33,7 @@ class TorrentRefreshBar extends ConsumerWidget {
     required this.onRefreshStateChanged,
     this.onOpenSpeedSettings,
     this.onToggleSpeedMode,
+    this.compact = false,
   });
 
   @override
@@ -61,9 +64,65 @@ class TorrentRefreshBar extends ConsumerWidget {
         ? cs.destructive
         : cs.primary;
     final statusText = running ? countdown : (enabled ? '暂停' : '关闭');
+    final compactLayout =
+        compact || MediaQuery.sizeOf(context).width < kMobileBreakpoint;
+    final statusItems = <Widget>[
+      _RefreshStatusMetric(
+        icon: running ? shadcn.LucideIcons.radio : shadcn.LucideIcons.pause,
+        value: statusText,
+        color: statusColor,
+        tooltip: running ? '下次刷新倒计时' : statusText,
+      ),
+      _RefreshStatusMetric(
+        icon: shadcn.LucideIcons.zap,
+        value: modeText,
+        color: modeColor,
+        tooltip: onToggleSpeedMode == null
+            ? modeText
+            : (slowMode ? '切换为极速模式' : '切换为龟速模式'),
+        onTap: onToggleSpeedMode == null
+            ? null
+            : () => onToggleSpeedMode!(!slowMode),
+      ),
+      StatusBarMetric(
+        icon: shadcn.LucideIcons.arrowUp,
+        label: '上传',
+        value: TorrentUtils.formatSpeed(uploadSpeed),
+        color: colorSeeding,
+        tooltip: '上传',
+        showLabel: false,
+      ),
+      StatusBarMetric(
+        icon: shadcn.LucideIcons.arrowDown,
+        label: '下载',
+        value: TorrentUtils.formatSpeed(downloadSpeed),
+        color: colorDownloading,
+        tooltip: '下载',
+        showLabel: false,
+      ),
+      _RefreshStatusMetric(
+        icon: shadcn.LucideIcons.hardDrive,
+        value: freeSpace > 0 ? TorrentUtils.formatBytes(freeSpace) : '-',
+        color: cs.mutedForeground,
+        tooltip: '剩余空间',
+      ),
+      if (onOpenSpeedSettings != null)
+        ...buildTorrentStatsBarItems(
+          context: context,
+          ref: ref,
+          downloaderId: downloaderId,
+          downloader: downloader,
+          onOpenSpeedSettings: onOpenSpeedSettings,
+        ),
+    ];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+      padding: EdgeInsets.fromLTRB(
+        compactLayout ? 10 : 16,
+        8,
+        compactLayout ? 8 : 12,
+        8,
+      ),
       decoration: BoxDecoration(
         color: appSurfaceColor(context, cs.background),
         border: Border(bottom: BorderSide(color: cs.border, width: 0.5)),
@@ -71,77 +130,33 @@ class TorrentRefreshBar extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: Wrap(
-              spacing: 14,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _RefreshStatusMetric(
-                  icon: running
-                      ? shadcn.LucideIcons.radio
-                      : shadcn.LucideIcons.pause,
-                  value: statusText,
-                  color: statusColor,
-                  tooltip: running ? '下次刷新倒计时' : statusText,
-                ),
-                _RefreshStatusMetric(
-                  icon: shadcn.LucideIcons.zap,
-                  value: modeText,
-                  color: modeColor,
-                  tooltip: onToggleSpeedMode == null
-                      ? modeText
-                      : (slowMode ? '切换为极速模式' : '切换为龟速模式'),
-                  onTap: onToggleSpeedMode == null
-                      ? null
-                      : () => onToggleSpeedMode!(!slowMode),
-                ),
-                StatusBarMetric(
-                  icon: shadcn.LucideIcons.arrowUp,
-                  label: '上传',
-                  value: TorrentUtils.formatSpeed(uploadSpeed),
-                  color: colorSeeding,
-                  tooltip: '上传',
-                  showLabel: false,
-                ),
-                StatusBarMetric(
-                  icon: shadcn.LucideIcons.arrowDown,
-                  label: '下载',
-                  value: TorrentUtils.formatSpeed(downloadSpeed),
-                  color: colorDownloading,
-                  tooltip: '下载',
-                  showLabel: false,
-                ),
-                _RefreshStatusMetric(
-                  icon: shadcn.LucideIcons.hardDrive,
-                  value: freeSpace > 0
-                      ? TorrentUtils.formatBytes(freeSpace)
-                      : '-',
-                  color: cs.mutedForeground,
-                  tooltip: '剩余空间',
-                ),
-                if (onOpenSpeedSettings != null)
-                  ...buildTorrentStatsBarItems(
-                    context: context,
-                    ref: ref,
-                    downloaderId: downloaderId,
-                    downloader: downloader,
-                    onOpenSpeedSettings: onOpenSpeedSettings,
+            child: compactLayout
+                ? StatusBarInlineRow(
+                    spacing: 7,
+                    height: 18,
+                    children: statusItems,
+                  )
+                : Wrap(
+                    spacing: 14,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: statusItems,
                   ),
-              ],
-            ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: compactLayout ? 6 : 8),
           StatusBarIconButton(
             onTap: onRefresh,
             icon: shadcn.LucideIcons.refreshCw,
             tooltip: '刷新',
             color: cs.mutedForeground,
+            compact: compactLayout,
           ),
           StatusBarIconButton(
             onTap: () => showSpeedSettings(context, ref),
             icon: shadcn.LucideIcons.settings,
             tooltip: '刷新设置',
             color: cs.mutedForeground,
+            compact: compactLayout,
           ),
           StatusBarIconButton(
             onTap: enabled
@@ -164,6 +179,7 @@ class TorrentRefreshBar extends ConsumerWidget {
             icon: paused ? shadcn.LucideIcons.play : shadcn.LucideIcons.pause,
             tooltip: paused ? '恢复自动刷新' : '暂停自动刷新',
             color: cs.mutedForeground,
+            compact: compactLayout,
           ),
         ],
       ),

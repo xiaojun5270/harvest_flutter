@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:harvest/core/config/app_config.dart';
+import 'package:harvest/core/http/api.dart';
+import 'package:harvest/core/http/http.dart';
 import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/modules/admin_user/admin_user_access.dart';
 import 'package:harvest/modules/admin_user/admin_user_page.dart';
@@ -13,6 +15,7 @@ import 'package:harvest/modules/login/login_history_provider.dart';
 import 'package:harvest/modules/news/provider/media_info_settings_provider.dart';
 import 'package:harvest/modules/option/widgets/option_page.dart';
 import 'package:harvest/modules/option/widgets/update_page.dart';
+import 'package:harvest/modules/search/unified_search_page.dart';
 import 'package:harvest/modules/shell/widgets/log_floating_overlay.dart';
 import 'package:harvest/modules/site/site_timeline_page.dart';
 import 'package:harvest/modules/user/provider/user_management_provider.dart';
@@ -92,9 +95,9 @@ class _GlobalDrawerSwipeAreaState extends ConsumerState<GlobalDrawerSwipeArea> {
 
 Future<void> showGlobalDrawer(BuildContext context, WidgetRef ref) async {
   final screenWidth = MediaQuery.sizeOf(context).width;
-  final maxWidth = screenWidth < 320 ? screenWidth : 320.0;
-  final minWidth = maxWidth < 248 ? maxWidth : 248.0;
-  final width = (screenWidth * 0.76).clamp(minWidth, maxWidth).toDouble();
+  final maxWidth = screenWidth < 420 ? screenWidth * 0.78 : 292.0;
+  final minWidth = maxWidth < 236 ? maxWidth : 236.0;
+  final width = (screenWidth * 0.68).clamp(minWidth, maxWidth).toDouble();
   final completer = shadcn.openDrawerOverlay<void>(
     context: context,
     position: shadcn.OverlayPosition.left,
@@ -165,6 +168,43 @@ class _GlobalDrawerPanel extends StatelessWidget {
     _afterClose((_, context) => LogOverlayManager.toggle(context));
   }
 
+  Future<void> _restartServer() async {
+    await _close();
+    _afterClose((_, context) {
+      unawaited(_confirmRestartServer(context));
+    });
+  }
+
+  Future<void> _confirmRestartServer(BuildContext context) async {
+    final ok = await shadcn.showDialog<bool>(
+      context: context,
+      builder: (ctx) => shadcn.AlertDialog(
+        title: const Text('重启服务器'),
+        content: const Text('确定要重启服务器吗？重启期间服务会短暂不可用。'),
+        actions: [
+          shadcn.Button.outline(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          shadcn.Button.destructive(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('重启'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    Toast.info('正在重启服务器');
+    try {
+      await Http.post<dynamic>(API.SERVER_RESTART);
+      Toast.success('服务器重启请求已发送');
+    } catch (e, st) {
+      AppLogger.error('服务器重启失败', e, st);
+      Toast.error('服务器重启失败');
+    }
+  }
+
   Future<void> _switchAccount() async {
     await _close();
     ref
@@ -188,6 +228,7 @@ class _GlobalDrawerPanel extends StatelessWidget {
     final showNews = ref.watch(mediaInfoSettingsProvider).enabled;
     final showAccountSwitcher = ref.watch(loginHistoryProvider).length >= 2;
     final currentPath = _currentPath(context);
+    final selectedKey = _selectedNavigationKey(currentPath);
 
     return SizedBox.expand(
       child: Material(
@@ -211,168 +252,283 @@ class _GlobalDrawerPanel extends StatelessWidget {
                 ),
               ],
             ),
-            child: Column(
-              children: [
-                Padding(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return shadcn.NavigationSidebar(
+                  backgroundColor: cs.background,
+                  surfaceBlur: 0,
+                  surfaceOpacity: 1,
+                  spacing: tokens.size(4),
+                  labelType: shadcn.NavigationLabelType.expanded,
+                  labelPosition: shadcn.NavigationLabelPosition.end,
+                  labelSize: shadcn.NavigationLabelSize.large,
                   padding: tokens.edgeOnly(
-                    left: 14,
-                    top: 10,
-                    right: 8,
-                    bottom: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _GlobalDrawerAccountHeader(
-                          user: user,
-                          server: AppConfig.baseUrl,
-                        ),
-                      ),
-                      shadcn.IconButton.ghost(
-                        size: shadcn.ButtonSize.small,
-                        density: shadcn.ButtonDensity.iconDense,
-                        onPressed: _close,
-                        icon: const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: Icon(shadcn.LucideIcons.x, size: 18),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                ColoredBox(
-                  color: cs.border.withValues(alpha: 0.72),
-                  child: const SizedBox(height: 1),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: tokens.edgeOnly(
-                      left: 8,
-                      top: 8,
-                      right: 8,
-                      bottom: 12,
-                    ),
-                    children: [
-                      _DrawerGroup(
-                        title: '主要页面',
-                        children: [
-                          _DrawerTile(
-                            label: '仪表',
-                            icon: shadcn.LucideIcons.layoutDashboard,
-                            selected: currentPath.startsWith('/dashboard'),
-                            onTap: () => _go('/dashboard'),
-                          ),
-                          if (showNews)
-                            _DrawerTile(
-                              label: '资讯',
-                              icon: shadcn.LucideIcons.newspaper,
-                              selected: currentPath.startsWith('/home'),
-                              onTap: () => _go('/home'),
-                            ),
-                          _DrawerTile(
-                            label: '站点数据',
-                            icon: shadcn.LucideIcons.globe,
-                            selected: currentPath.startsWith('/sites'),
-                            onTap: () => _go('/sites'),
-                          ),
-                          _DrawerTile(
-                            label: '站点时间轴',
-                            icon: shadcn.LucideIcons.gitBranchPlus,
-                            onTap: () => _push(const SiteTimelinePage()),
-                          ),
-                          _DrawerTile(
-                            label: '下载器',
-                            icon: shadcn.LucideIcons.download,
-                            selected: currentPath.startsWith('/downloads'),
-                            onTap: () => _go('/downloads'),
-                          ),
-                          _DrawerTile(
-                            label: '任务列表',
-                            icon: shadcn.LucideIcons.listTodo,
-                            selected: currentPath.startsWith('/tasks'),
-                            onTap: () => _go('/tasks'),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: tokens.size(8)),
-                      _DrawerGroup(
-                        title: '管理与工具',
-                        children: [
-                          _DrawerTile(
-                            label: '设置中心',
-                            icon: shadcn.LucideIcons.settings,
-                            onTap: () => _push(const OptionPage()),
-                          ),
-                          _DrawerTile(
-                            label: '用户中心',
-                            icon: shadcn.LucideIcons.user,
-                            onTap: () => _push(const UserManagementPage()),
-                          ),
-                          if (showAdminUser)
-                            _DrawerTile(
-                              label: '授权管理',
-                              icon: shadcn.LucideIcons.shieldCheck,
-                              onTap: () =>
-                                  unawaited(_push(const AdminUserPage())),
-                            ),
-                          _DrawerTile(
-                            label: '程序更新',
-                            icon: shadcn.LucideIcons.arrowUpFromLine,
-                            onTap: () => _push(const UpdatePage()),
-                          ),
-                          if (!kIsWeb)
-                            _DrawerTile(
-                              label: 'APP升级',
-                              icon: shadcn.LucideIcons.circleArrowUp,
-                              onTap: () => _pushRoute('/app-upgrade'),
-                            ),
-                          _DrawerTile(
-                            label: '日志中心',
-                            icon: shadcn.LucideIcons.terminal,
-                            onTap: _openLogs,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                ColoredBox(
-                  color: cs.border.withValues(alpha: 0.72),
-                  child: const SizedBox(height: 1),
-                ),
-                Padding(
-                  padding: tokens.edgeOnly(
-                    left: 8,
+                    left: 12,
                     top: 8,
-                    right: 8,
-                    bottom: 8,
+                    right: 12,
+                    bottom: 10,
                   ),
-                  child: Column(
-                    children: [
-                      if (showAccountSwitcher)
-                        _DrawerTile(
-                          label: '切换账号',
-                          icon: shadcn.LucideIcons.users,
-                          onTap: _switchAccount,
+                  constraints: BoxConstraints.tightFor(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                  ),
+                  selectedKey: selectedKey,
+                  header: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: tokens.edgeOnly(
+                          left: 14,
+                          top: 10,
+                          right: 8,
+                          bottom: 8,
                         ),
-                      _DrawerTile(
-                        label: '退出登录',
-                        icon: shadcn.LucideIcons.logOut,
-                        onTap: _logout,
-                        destructive: true,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _GlobalDrawerAccountHeader(
+                                user: user,
+                                server: AppConfig.baseUrl,
+                              ),
+                            ),
+                            shadcn.IconButton.ghost(
+                              size: shadcn.ButtonSize.small,
+                              density: shadcn.ButtonDensity.iconDense,
+                              onPressed: _close,
+                              icon: const SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: Icon(shadcn.LucideIcons.x, size: 20),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                    shadcn.NavigationDivider(
+                      color: cs.border.withValues(alpha: 0.72),
+                    ),
+                  ],
+                  footer: [
+                    shadcn.NavigationDivider(
+                      color: cs.border.withValues(alpha: 0.72),
+                    ),
+                    _navButton(
+                      context,
+                      label: '重启服务器',
+                      icon: shadcn.LucideIcons.serverCog,
+                      onPressed: _restartServer,
+                    ),
+                    if (showAccountSwitcher)
+                      _navButton(
+                        context,
+                        label: '切换账号',
+                        icon: shadcn.LucideIcons.users,
+                        onPressed: _switchAccount,
+                      ),
+                    _navButton(
+                      context,
+                      label: '退出登录',
+                      icon: shadcn.LucideIcons.logOut,
+                      onPressed: _logout,
+                      destructive: true,
+                    ),
+                  ],
+                  children: [
+                    _navSectionLabel(context, '主要页面'),
+                    _navItem(
+                      context,
+                      key: 'dashboard',
+                      label: '仪表',
+                      icon: shadcn.LucideIcons.layoutDashboard,
+                      onTap: () => _go('/dashboard'),
+                    ),
+                    _navButton(
+                      context,
+                      label: '搜索',
+                      icon: shadcn.LucideIcons.search,
+                      onPressed: () => _push(const UnifiedSearchPage()),
+                    ),
+                    if (showNews)
+                      _navItem(
+                        context,
+                        key: 'news',
+                        label: '资讯',
+                        icon: shadcn.LucideIcons.newspaper,
+                        onTap: () => _go('/home'),
+                      ),
+                    _navItem(
+                      context,
+                      key: 'sites',
+                      label: '站点数据',
+                      icon: shadcn.LucideIcons.globe,
+                      onTap: () => _go('/sites'),
+                    ),
+                    _navButton(
+                      context,
+                      label: '站点时间轴',
+                      icon: shadcn.LucideIcons.gitBranchPlus,
+                      onPressed: () => _push(const SiteTimelinePage()),
+                    ),
+                    _navItem(
+                      context,
+                      key: 'downloads',
+                      label: '下载器',
+                      icon: shadcn.LucideIcons.download,
+                      onTap: () => _go('/downloads'),
+                    ),
+                    _navItem(
+                      context,
+                      key: 'tasks',
+                      label: '任务列表',
+                      icon: shadcn.LucideIcons.listTodo,
+                      onTap: () => _go('/tasks'),
+                    ),
+                    _navGap(context, 8),
+                    _navSectionLabel(context, '管理与工具'),
+                    _navButton(
+                      context,
+                      label: '设置中心',
+                      icon: shadcn.LucideIcons.settings,
+                      onPressed: () => _push(const OptionPage()),
+                    ),
+                    _navButton(
+                      context,
+                      label: '用户中心',
+                      icon: shadcn.LucideIcons.user,
+                      onPressed: () => _push(const UserManagementPage()),
+                    ),
+                    if (showAdminUser)
+                      _navButton(
+                        context,
+                        label: '授权管理',
+                        icon: shadcn.LucideIcons.shieldCheck,
+                        onPressed: () => _push(const AdminUserPage()),
+                      ),
+                    _navButton(
+                      context,
+                      label: '程序更新',
+                      icon: shadcn.LucideIcons.arrowUpFromLine,
+                      onPressed: () => _push(const UpdatePage()),
+                    ),
+                    if (!kIsWeb)
+                      _navButton(
+                        context,
+                        label: 'APP升级',
+                        icon: shadcn.LucideIcons.circleArrowUp,
+                        onPressed: () => _pushRoute('/app-upgrade'),
+                      ),
+                    _navButton(
+                      context,
+                      label: '日志中心',
+                      icon: shadcn.LucideIcons.terminal,
+                      onPressed: _openLogs,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
       ),
     );
   }
+
+  Key? _selectedNavigationKey(String currentPath) {
+    if (currentPath.startsWith('/dashboard')) {
+      return const ValueKey<String>('dashboard');
+    }
+    if (currentPath.startsWith('/home')) {
+      return const ValueKey<String>('news');
+    }
+    if (currentPath.startsWith('/sites')) {
+      return const ValueKey<String>('sites');
+    }
+    if (currentPath.startsWith('/downloads')) {
+      return const ValueKey<String>('downloads');
+    }
+    if (currentPath.startsWith('/tasks')) {
+      return const ValueKey<String>('tasks');
+    }
+    return null;
+  }
+
+  Widget _navSectionLabel(BuildContext context, String label) {
+    final tokens = _GlobalDrawerTokens.of(context);
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: tokens.edgeOnly(left: 6, top: 6, right: 6, bottom: 2),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: tokens.theme.typography.small.copyWith(
+            color: tokens.cs.mutedForeground,
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navGap(BuildContext context, num height) {
+    final tokens = _GlobalDrawerTokens.of(context);
+    return SliverToBoxAdapter(child: SizedBox(height: tokens.size(height)));
+  }
+
+  Widget _navItem(
+    BuildContext context, {
+    required String key,
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final tokens = _GlobalDrawerTokens.of(context);
+    return shadcn.NavigationItem(
+      key: ValueKey<String>(key),
+      label: Text(label, style: _navLabelStyle(tokens)),
+      overflow: shadcn.NavigationOverflow.ellipsis,
+      spacing: tokens.size(10),
+      style: _navButtonStyle,
+      selectedStyle: _selectedNavButtonStyle,
+      onChanged: (selected) {
+        if (selected) onTap();
+      },
+      child: Icon(icon, size: 20),
+    );
+  }
+
+  Widget _navButton(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+    bool destructive = false,
+  }) {
+    final tokens = _GlobalDrawerTokens.of(context);
+    final color = destructive ? tokens.cs.destructive : null;
+    final labelStyle = _navLabelStyle(tokens, color: color);
+    return shadcn.NavigationButton(
+      label: Text(label, style: labelStyle),
+      overflow: shadcn.NavigationOverflow.ellipsis,
+      spacing: tokens.size(10),
+      style: _navButtonStyle,
+      onPressed: onPressed,
+      child: Icon(icon, size: 20, color: color),
+    );
+  }
+
+  TextStyle _navLabelStyle(_GlobalDrawerTokens tokens, {Color? color}) {
+    return tokens.theme.typography.base.copyWith(
+      color: color ?? tokens.cs.foreground,
+      fontWeight: FontWeight.w600,
+      height: 1.15,
+    );
+  }
 }
+
+const _navButtonStyle = shadcn.ButtonStyle.ghost();
+const _selectedNavButtonStyle = shadcn.ButtonStyle.secondary();
 
 class _GlobalDrawerTokens {
   final shadcn.ThemeData theme;
@@ -391,7 +547,7 @@ class _GlobalDrawerTokens {
     final theme = shadcn.Theme.of(context);
     final densityScale =
         ((theme.density.baseContentPadding / 16.0) * theme.scaling).clamp(
-          0.58,
+          0.72,
           1.18,
         );
     final textScale = theme.scaling.clamp(0.86, 1.22);
@@ -405,8 +561,6 @@ class _GlobalDrawerTokens {
 
   double size(num value) => value * densityScale;
 
-  double font(num value) => value * textScale;
-
   EdgeInsets edgeOnly({
     num left = 0,
     num top = 0,
@@ -418,41 +572,6 @@ class _GlobalDrawerTokens {
     right: size(right),
     bottom: size(bottom),
   );
-
-  EdgeInsets symmetric({num horizontal = 0, num vertical = 0}) =>
-      EdgeInsets.symmetric(
-        horizontal: size(horizontal),
-        vertical: size(vertical),
-      );
-}
-
-class _DrawerGroup extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _DrawerGroup({required this.title, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = _GlobalDrawerTokens.of(context);
-    final theme = tokens.theme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: tokens.edgeOnly(left: 6, right: 6, bottom: 5),
-          child: Text(
-            title,
-            style: theme.typography.xSmall.copyWith(
-              color: theme.colorScheme.mutedForeground,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        ...children,
-      ],
-    );
-  }
 }
 
 class _GlobalDrawerAccountHeader extends StatelessWidget {
@@ -475,10 +594,10 @@ class _GlobalDrawerAccountHeader extends StatelessWidget {
       children: [
         shadcn.Avatar(
           initials: initial,
-          size: tokens.size(34),
+          size: tokens.size(38),
           backgroundColor: cs.primary,
         ),
-        SizedBox(width: tokens.size(10)),
+        SizedBox(width: tokens.size(11)),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,7 +606,7 @@ class _GlobalDrawerAccountHeader extends StatelessWidget {
                 username.isEmpty ? '未登录用户' : username,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.typography.small.copyWith(
+                style: theme.typography.base.copyWith(
                   color: cs.foreground,
                   fontWeight: FontWeight.w800,
                 ),
@@ -497,7 +616,7 @@ class _GlobalDrawerAccountHeader extends StatelessWidget {
                 server,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.typography.xSmall.copyWith(
+                style: theme.typography.small.copyWith(
                   color: cs.mutedForeground,
                 ),
               ),
@@ -505,78 +624,6 @@ class _GlobalDrawerAccountHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DrawerTile extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final bool destructive;
-  final VoidCallback onTap;
-
-  const _DrawerTile({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.selected = false,
-    this.destructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = _GlobalDrawerTokens.of(context);
-    final theme = tokens.theme;
-    final cs = tokens.cs;
-    final fg = destructive
-        ? cs.destructive
-        : selected
-        ? cs.primary
-        : cs.foreground;
-
-    return Padding(
-      padding: tokens.edgeOnly(bottom: 3),
-      child: shadcn.Button.ghost(
-        onPressed: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: tokens.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected
-                ? cs.primary.withValues(alpha: 0.1)
-                : cs.background.withValues(alpha: 0),
-            borderRadius: BorderRadius.circular(theme.radiusMd),
-            border: Border.all(
-              color: selected
-                  ? cs.primary.withValues(alpha: 0.26)
-                  : cs.background.withValues(alpha: 0),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: tokens.font(15), color: fg),
-              SizedBox(width: tokens.size(8)),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.typography.small.copyWith(
-                    color: fg,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(
-                  shadcn.LucideIcons.chevronRight,
-                  size: tokens.font(14),
-                  color: cs.primary,
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

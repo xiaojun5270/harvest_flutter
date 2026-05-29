@@ -12,6 +12,7 @@ class API {
   static const String AUTH_INFO = "/api/auth/auth_info";
   static const String AUTH_USER = "/api/auth/user";
   static const String SERVER_STATUS = "/api/auth/server/status";
+  static const String SERVER_RESTART = "/api/auth/server/restart";
   static const String ADMIN_USER = "/api/auth/admin/users";
   static const String ADMIN_SEND_TOKEN = "/api/auth/admin/send";
   static const String ADMIN_RESET_TOKEN = "/api/auth/admin/reset/token";
@@ -238,6 +239,7 @@ const _apiEndpointNames = <String, String>{
   API.AUTH_INFO: '认证信息接口',
   API.AUTH_USER: '认证用户接口',
   API.SERVER_STATUS: '服务器状态接口',
+  API.SERVER_RESTART: '服务器重启接口',
   API.ADMIN_USER: '管理员用户接口',
   API.ADMIN_SEND_TOKEN: '授权邮件接口',
   API.ADMIN_RESET_TOKEN: '重置令牌接口',

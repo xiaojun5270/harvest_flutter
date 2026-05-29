@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:harvest/core/config/app_config.dart';
 import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/modules/admin_user/admin_user_access.dart';
 import 'package:harvest/modules/auth/auth_provider.dart';
@@ -31,11 +30,11 @@ import '../option/provider/update_provider.dart';
 import '../option/widgets/option_page.dart';
 import '../option/widgets/update_page.dart';
 import '../site/site_page.dart';
-import '../site/site_timeline_page.dart';
 import '../task/task_page.dart';
 import '../user/provider/user_management_provider.dart';
 import '../user/user_management_page.dart';
 import 'provider/screenshot_provider.dart';
+import 'widgets/global_drawer_swipe_area.dart';
 import 'widgets/log_floating_overlay.dart';
 import 'widgets/shell_scaffold.dart';
 import 'widgets/theme_dialog.dart';
@@ -80,9 +79,8 @@ class _ShellPageState extends ConsumerState<ShellPage> {
 
   final _screenshotKey = GlobalKey();
   bool _capturing = false;
-  bool _drawerOpen = false;
+  bool _drawerOpening = false;
   bool _exitDialogOpen = false;
-  double _drawerEdgeDragDistance = 0;
   int? _suppressedPageChangedIndex;
 
   @override
@@ -236,43 +234,13 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   // ── 抽屉 ──
 
   void _openDrawer() {
-    if (mounted && !_drawerOpen) setState(() => _drawerOpen = true);
-  }
-
-  void _closeDrawer() {
-    if (mounted && _drawerOpen) setState(() => _drawerOpen = false);
-  }
-
-  void _startDrawerEdgeDrag(DragStartDetails d) {
-    _drawerEdgeDragDistance = 0;
-  }
-
-  void _handleDrawerEdgeDrag(DragUpdateDetails d) {
-    if (_drawerOpen) return;
-    final delta = d.primaryDelta ?? 0;
-    if (delta <= 0) {
-      _drawerEdgeDragDistance = 0;
-      return;
-    }
-    _drawerEdgeDragDistance += delta;
-    if (_drawerEdgeDragDistance > 24) {
-      _drawerEdgeDragDistance = 0;
-      _openDrawer();
-    }
-  }
-
-  void _endDrawerEdgeDrag(DragEndDetails d) {
-    _drawerEdgeDragDistance = 0;
-  }
-
-  Future<void> _openDrawerPage(Widget page) async {
-    _closeDrawer();
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
-  }
-
-  void _openDrawerTab(int index) {
-    _closeDrawer();
-    _onTap(index);
+    if (!mounted || _drawerOpening) return;
+    _drawerOpening = true;
+    unawaited(
+      showGlobalDrawer(context, ref).whenComplete(() {
+        _drawerOpening = false;
+      }),
+    );
   }
 
   void _openAppUpgradeFromHeader() {
@@ -305,9 +273,6 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         if (!n.isRead) n,
     ];
     final colors = shadcn.Theme.of(context).colorScheme;
-    final drawerWidth = (MediaQuery.sizeOf(context).width * 0.72)
-        .clamp(248.0, 288.0)
-        .toDouble();
 
     if (!showNews && currentIndex == 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -326,152 +291,66 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       },
       child: EscapeBackScope(
         onBack: () => unawaited(_confirmExitApp()),
-        child: shadcn.DrawerOverlay(
+        child: ShellScaffold(
+          index: currentIndex,
+          onChange: _onTap,
+          dashboardChrome: false,
+          showNews: showNews,
+          header: _ShellHeader(
+            title: _pageTitles[currentIndex],
+            subtitle: _pageSubtitles[currentIndex],
+            unreadCount: unreadCount,
+            unreadNotices: unread,
+            onOpenNotices: () => Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (_, __, ___) => const NoticeHistoryPage(),
+              ),
+            ),
+            onOpenDrawer: _openDrawer,
+            hasAppUpgrade: hasAppUpgrade,
+            onAppUpgrade: _openAppUpgradeFromHeader,
+            updateState: updateState,
+            avatar: _AccountMenuButton(
+              user: user,
+              showAdminUser: showAdminUser,
+              showAccountSwitcher: ref.watch(loginHistoryProvider).length >= 2,
+              hasAppUpgrade: hasAppUpgrade,
+              updateState: updateState,
+              onScreenshot: _takeScreenshot,
+              appUpgradeController: _appUpgradeController,
+            ),
+          ),
           child: Stack(
             children: [
-              // ── 主体 ──
-              ShellScaffold(
-                index: currentIndex,
-                onChange: _onTap,
-                dashboardChrome: false,
-                showNews: showNews,
-                header: _ShellHeader(
-                  title: _pageTitles[currentIndex],
-                  subtitle: _pageSubtitles[currentIndex],
-                  unreadCount: unreadCount,
-                  unreadNotices: unread,
-                  onOpenNotices: () => Navigator.push(
-                    context,
-                    PageRouteBuilder(
-                      pageBuilder: (_, __, ___) => const NoticeHistoryPage(),
-                    ),
-                  ),
-                  onOpenDrawer: _openDrawer,
-                  hasAppUpgrade: hasAppUpgrade,
-                  onAppUpgrade: _openAppUpgradeFromHeader,
-                  updateState: updateState,
-                  avatar: _AccountMenuButton(
-                    user: user,
-                    showAdminUser: showAdminUser,
-                    showAccountSwitcher:
-                        ref.watch(loginHistoryProvider).length >= 2,
-                    hasAppUpgrade: hasAppUpgrade,
-                    updateState: updateState,
-                    onScreenshot: _takeScreenshot,
-                    appUpgradeController: _appUpgradeController,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    RepaintBoundary(
-                      key: _screenshotKey,
-                      child: PageView(
-                        controller: _pageController,
-                        onPageChanged: _onPageChanged,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: _pages,
-                      ),
-                    ),
-                    if (!kIsWeb)
-                      IgnorePointer(
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: AppUpgradePage(
-                            controller: _appUpgradeController,
-                            child: const SizedBox.shrink(),
-                          ),
-                        ),
-                      ),
-                    if (_capturing)
-                      Positioned.fill(
-                        child: ColoredBox(
-                          color: colors.foreground.withValues(alpha: 0.08),
-                          child: const Center(
-                            child: shadcn.CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+              RepaintBoundary(
+                key: _screenshotKey,
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: _onPageChanged,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: _pages,
                 ),
               ),
-
-              // ── 边缘滑动热区 ──
-              if (!_drawerOpen)
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 32,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onHorizontalDragStart: _startDrawerEdgeDrag,
-                    onHorizontalDragUpdate: _handleDrawerEdgeDrag,
-                    onHorizontalDragEnd: _endDrawerEdgeDrag,
-                    onHorizontalDragCancel: () => _drawerEdgeDragDistance = 0,
-                  ),
-                ),
-
-              // ── 抽屉遮罩 + 面板 ──
-              if (_drawerOpen) ...[
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _closeDrawer,
-                    child: ColoredBox(
-                      color: colors.foreground.withValues(alpha: 0.12),
+              if (!kIsWeb)
+                IgnorePointer(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: AppUpgradePage(
+                      controller: _appUpgradeController,
+                      child: const SizedBox.shrink(),
                     ),
                   ),
                 ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: drawerWidth,
-                  child: _ShellDrawerPanel(
-                    user: user,
-                    server: AppConfig.baseUrl,
-                    currentIndex: currentIndex,
-                    showAdminUser: showAdminUser,
-                    showNews: showNews,
-                    showAccountSwitcher:
-                        ref.watch(loginHistoryProvider).length >= 2,
-                    onClose: _closeDrawer,
-                    onDashboard: () => _openDrawerTab(2),
-                    onNews: () => _openDrawerTab(0),
-                    onSites: () => _openDrawerTab(1),
-                    onSiteTimeline: () =>
-                        _openDrawerPage(const SiteTimelinePage()),
-                    onDownloads: () => _openDrawerTab(3),
-                    onTasks: () => _openDrawerTab(4),
-                    onOptions: () => _openDrawerPage(const OptionPage()),
-                    onUsers: () => _openDrawerPage(const UserManagementPage()),
-                    onAdminUsers: () => _openDrawerPage(const AdminUserPage()),
-                    onUpdate: () => _openDrawerPage(const UpdatePage()),
-                    onAppUpgrade: () {
-                      _closeDrawer();
-                      context.push('/app-upgrade');
-                    },
-                    onLogs: () {
-                      _closeDrawer();
-                      LogOverlayManager.toggle(context);
-                    },
-                    onSwitchAccount: () {
-                      _closeDrawer();
-                      ref
-                          .read(authNotifierProvider.notifier)
-                          .logout(redirectTo: '/login-history');
-                    },
-                    onLogout: () {
-                      _closeDrawer();
-                      ref.read(authNotifierProvider.notifier).logout();
-                    },
+              if (_capturing)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: colors.foreground.withValues(alpha: 0.08),
+                    child: const Center(
+                      child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
         ),
@@ -1230,452 +1109,4 @@ class _UpdateBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  抽屉面板
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-class _ShellDrawerPanel extends StatelessWidget {
-  final dynamic user;
-  final String server;
-  final int currentIndex;
-  final bool showAdminUser;
-  final bool showNews;
-  final bool showAccountSwitcher;
-  final VoidCallback onClose;
-  final VoidCallback onDashboard, onNews, onSites, onDownloads, onTasks;
-  final VoidCallback onSiteTimeline;
-  final VoidCallback onOptions,
-      onUsers,
-      onAdminUsers,
-      onUpdate,
-      onAppUpgrade,
-      onLogs;
-  final VoidCallback onSwitchAccount, onLogout;
-
-  const _ShellDrawerPanel({
-    required this.user,
-    required this.server,
-    required this.currentIndex,
-    required this.showAdminUser,
-    required this.showNews,
-    required this.showAccountSwitcher,
-    required this.onClose,
-    required this.onDashboard,
-    required this.onNews,
-    required this.onSites,
-    required this.onSiteTimeline,
-    required this.onDownloads,
-    required this.onTasks,
-    required this.onOptions,
-    required this.onUsers,
-    required this.onAdminUsers,
-    required this.onUpdate,
-    required this.onAppUpgrade,
-    required this.onLogs,
-    required this.onSwitchAccount,
-    required this.onLogout,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = _ShellDrawerTokens.of(context);
-    final theme = tokens.theme;
-    final cs = tokens.cs;
-
-    return Material(
-      color: cs.background,
-      child: SafeArea(
-        right: false,
-        child: Container(
-          margin: tokens.edgeOnly(top: 6, right: 6, bottom: 6),
-          decoration: BoxDecoration(
-            color: cs.background,
-            border: Border.all(
-              color: cs.border.withValues(alpha: 0.7),
-              width: 0.8,
-            ),
-            borderRadius: BorderRadius.circular(theme.radiusLg),
-            boxShadow: [
-              BoxShadow(
-                color: cs.foreground.withValues(alpha: 0.08),
-                blurRadius: 24,
-                offset: const Offset(8, 0),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: tokens.edgeOnly(
-                  left: 14,
-                  top: PlatformTool.isDesktopOS() ? 33 : 10,
-                  right: 8,
-                  bottom: 8,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _DrawerAccountHeader(user: user, server: server),
-                    ),
-                    shadcn.IconButton.ghost(
-                      size: shadcn.ButtonSize.small,
-                      density: shadcn.ButtonDensity.iconDense,
-                      onPressed: onClose,
-                      icon: const SizedBox(
-                        width: _headerActionBoxSize,
-                        height: _headerActionBoxSize,
-                        child: Icon(
-                          shadcn.LucideIcons.x,
-                          size: _headerActionIconSize,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ColoredBox(
-                color: cs.border.withValues(alpha: 0.72),
-                child: const SizedBox(height: 1),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: tokens.edgeOnly(
-                    left: 8,
-                    top: 8,
-                    right: 8,
-                    bottom: 12,
-                  ),
-                  children: [
-                    _DrawerGroup(
-                      title: '主要页面',
-                      children: [
-                        _DrawerTile(
-                          label: '仪表',
-                          icon: shadcn.LucideIcons.layoutDashboard,
-                          selected: currentIndex == 2,
-                          onTap: onDashboard,
-                        ),
-                        if (showNews)
-                          _DrawerTile(
-                            label: '资讯',
-                            icon: shadcn.LucideIcons.newspaper,
-                            selected: currentIndex == 0,
-                            onTap: onNews,
-                          ),
-                        _DrawerTile(
-                          label: '站点数据',
-                          icon: shadcn.LucideIcons.globe,
-                          selected: currentIndex == 1,
-                          onTap: onSites,
-                        ),
-                        _DrawerTile(
-                          label: '站点时间轴',
-                          icon: shadcn.LucideIcons.gitBranchPlus,
-                          onTap: onSiteTimeline,
-                        ),
-                        _DrawerTile(
-                          label: '下载器',
-                          icon: shadcn.LucideIcons.download,
-                          selected: currentIndex == 3,
-                          onTap: onDownloads,
-                        ),
-                        _DrawerTile(
-                          label: '任务列表',
-                          icon: shadcn.LucideIcons.listTodo,
-                          selected: currentIndex == 4,
-                          onTap: onTasks,
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: tokens.size(8)),
-                    _DrawerGroup(
-                      title: '管理与工具',
-                      children: [
-                        _DrawerTile(
-                          label: '设置中心',
-                          icon: shadcn.LucideIcons.settings,
-                          onTap: onOptions,
-                        ),
-                        _DrawerTile(
-                          label: '用户中心',
-                          icon: shadcn.LucideIcons.user,
-                          onTap: onUsers,
-                        ),
-                        if (showAdminUser)
-                          _DrawerTile(
-                            label: '授权管理',
-                            icon: shadcn.LucideIcons.shieldCheck,
-                            onTap: onAdminUsers,
-                          ),
-                        _DrawerTile(
-                          label: '程序更新',
-                          icon: shadcn.LucideIcons.arrowUpFromLine,
-                          onTap: onUpdate,
-                        ),
-                        if (!kIsWeb)
-                          _DrawerTile(
-                            label: 'APP升级',
-                            icon: shadcn.LucideIcons.circleArrowUp,
-                            onTap: onAppUpgrade,
-                          ),
-                        _DrawerTile(
-                          label: '日志中心',
-                          icon: shadcn.LucideIcons.terminal,
-                          onTap: onLogs,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              ColoredBox(
-                color: cs.border.withValues(alpha: 0.72),
-                child: const SizedBox(height: 1),
-              ),
-              Padding(
-                padding: tokens.edgeOnly(left: 8, top: 8, right: 8, bottom: 8),
-                child: Column(
-                  children: [
-                    if (showAccountSwitcher)
-                      _DrawerTile(
-                        label: '切换账号',
-                        icon: shadcn.LucideIcons.users,
-                        onTap: onSwitchAccount,
-                      ),
-                    _DrawerTile(
-                      label: '退出登录',
-                      icon: shadcn.LucideIcons.logOut,
-                      onTap: onLogout,
-                      destructive: true,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ShellDrawerTokens {
-  final shadcn.ThemeData theme;
-  final shadcn.ColorScheme cs;
-  final double densityScale;
-  final double textScale;
-
-  const _ShellDrawerTokens._({
-    required this.theme,
-    required this.cs,
-    required this.densityScale,
-    required this.textScale,
-  });
-
-  factory _ShellDrawerTokens.of(BuildContext context) {
-    final theme = shadcn.Theme.of(context);
-    final densityScale =
-        ((theme.density.baseContentPadding / 16.0) * theme.scaling).clamp(
-          0.58,
-          1.18,
-        );
-    final textScale = theme.scaling.clamp(0.86, 1.22);
-    return _ShellDrawerTokens._(
-      theme: theme,
-      cs: theme.colorScheme,
-      densityScale: densityScale.toDouble(),
-      textScale: textScale.toDouble(),
-    );
-  }
-
-  double size(num value) => value * densityScale;
-
-  double font(num value) => value * textScale;
-
-  EdgeInsets edgeOnly({
-    num left = 0,
-    num top = 0,
-    num right = 0,
-    num bottom = 0,
-  }) => EdgeInsets.only(
-    left: size(left),
-    top: size(top),
-    right: size(right),
-    bottom: size(bottom),
-  );
-
-  EdgeInsets symmetric({num horizontal = 0, num vertical = 0}) =>
-      EdgeInsets.symmetric(
-        horizontal: size(horizontal),
-        vertical: size(vertical),
-      );
-}
-
-class _DrawerGroup extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _DrawerGroup({required this.title, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = _ShellDrawerTokens.of(context);
-    final theme = tokens.theme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: tokens.edgeOnly(left: 6, right: 6, bottom: 5),
-          child: Text(
-            title,
-            style: theme.typography.xSmall.copyWith(
-              color: theme.colorScheme.mutedForeground,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        ...children,
-      ],
-    );
-  }
-}
-
-class _DrawerAccountHeader extends StatelessWidget {
-  final dynamic user;
-  final String server;
-
-  const _DrawerAccountHeader({required this.user, required this.server});
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = _ShellDrawerTokens.of(context);
-    final theme = tokens.theme;
-    final cs = tokens.cs;
-    final username = _userName(user);
-    final initial = username.isNotEmpty
-        ? username.characters.first.toUpperCase()
-        : '?';
-
-    return Row(
-      children: [
-        shadcn.Avatar(
-          initials: initial,
-          size: tokens.size(34),
-          backgroundColor: cs.primary,
-        ),
-        SizedBox(width: tokens.size(10)),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                username.isEmpty ? '未登录用户' : username,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.typography.small.copyWith(
-                  color: cs.foreground,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: tokens.size(2)),
-              Text(
-                server,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.typography.xSmall.copyWith(
-                  color: cs.mutedForeground,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DrawerTile extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final bool destructive;
-  final VoidCallback onTap;
-
-  const _DrawerTile({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.selected = false,
-    this.destructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = _ShellDrawerTokens.of(context);
-    final theme = tokens.theme;
-    final cs = tokens.cs;
-    final fg = destructive
-        ? cs.destructive
-        : selected
-        ? cs.primary
-        : cs.foreground;
-
-    return Padding(
-      padding: tokens.edgeOnly(bottom: 3),
-      child: shadcn.Button.ghost(
-        onPressed: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: tokens.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected
-                ? cs.primary.withValues(alpha: 0.1)
-                : cs.background.withValues(alpha: 0),
-            borderRadius: BorderRadius.circular(theme.radiusMd),
-            border: Border.all(
-              color: selected
-                  ? cs.primary.withValues(alpha: 0.26)
-                  : cs.background.withValues(alpha: 0),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: tokens.font(15), color: fg),
-              SizedBox(width: tokens.size(8)),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.typography.small.copyWith(
-                    color: fg,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(
-                  shadcn.LucideIcons.chevronRight,
-                  size: tokens.font(14),
-                  color: cs.primary,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  工具函数
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-String _userName(dynamic user) {
-  try {
-    final v = user?.username;
-    if (v != null) return v.toString();
-  } catch (_) {}
-  return '';
 }
