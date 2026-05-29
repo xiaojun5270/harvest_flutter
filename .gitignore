@@ -51,3 +51,5 @@ android/key.properties
 /Output/harvest_2026.0113.01+209_x86_64-windows.exe
 /setup.iss
 /build_iss.ps1
+/skills-lock.json
+/.agents

@@ -2948,7 +2948,7 @@ class SiteCard4 extends SiteCard3 {
             const SizedBox(width: 5),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
@@ -2956,10 +2956,11 @@ class SiteCard4 extends SiteCard3 {
                     width: double.infinity,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
+                      alignment: Alignment.center,
                       child: Text(
                         item.label,
                         maxLines: 1,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: item.color,
                           fontSize: 12,
