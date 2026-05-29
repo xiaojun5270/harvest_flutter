@@ -370,11 +370,6 @@ class _BrowserPageState extends State<BrowserPage> {
 
   Future<void> _refreshReadableCookieState([String? url]) async {
     if (_closing || !mounted) return;
-    final configuredCookie = widget.cookie?.trim();
-    if (configuredCookie != null && configuredCookie.isNotEmpty) {
-      if (!_hasReadableCookie) setState(() => _hasReadableCookie = true);
-      return;
-    }
 
     final targetUrl = (url ?? _currentUrl).trim();
     final uri = Uri.tryParse(targetUrl);
@@ -809,6 +804,15 @@ class _BrowserPageState extends State<BrowserPage> {
             },
             child: const Text('浏览器打开'),
           ),
+          const shadcn.MenuDivider(),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.cookie),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              unawaited(_clearCurrentSiteCookies());
+            },
+            child: const Text('清理当前站点 Cookie'),
+          ),
         ],
       ),
     );
@@ -822,6 +826,93 @@ class _BrowserPageState extends State<BrowserPage> {
     }
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened) Toast.warning('无法打开系统浏览器');
+  }
+
+  Future<void> _clearCurrentSiteCookies() async {
+    final controller = _controller;
+    if (controller == null || _closing) {
+      Toast.warning('页面尚未加载完成');
+      return;
+    }
+
+    final currentUrl = _currentUrl.trim();
+    final uri = Uri.tryParse(currentUrl);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      Toast.warning('当前链接无效');
+      return;
+    }
+
+    final origin = uri.origin;
+    final webUri = WebUri(origin);
+    final cookieManager = CookieManager.instance();
+
+    try {
+      final cookies = await cookieManager.getCookies(url: webUri, webViewController: controller);
+
+      var deletedAny = false;
+      for (final cookie in cookies) {
+        final name = cookie.name.trim();
+        if (name.isEmpty) continue;
+
+        final domain = cookie.domain?.trim();
+        final path = cookie.path?.trim();
+        final deleted = await cookieManager.deleteCookie(
+          url: webUri,
+          name: name,
+          domain: domain != null && domain.isNotEmpty ? domain : null,
+          path: path != null && path.isNotEmpty ? path : '/',
+          webViewController: controller,
+        );
+        deletedAny = deletedAny || deleted;
+      }
+
+      final domainCandidates = <String?>{null, uri.host};
+      if (!_isIpHost(uri.host)) {
+        domainCandidates.add('.${uri.host}');
+      }
+
+      for (final domain in domainCandidates) {
+        final deleted = await cookieManager.deleteCookies(url: webUri, domain: domain, webViewController: controller);
+        deletedAny = deletedAny || deleted;
+      }
+
+      await _clearCurrentSiteBrowserStorage(controller);
+
+      if (mounted && !_closing) {
+        setState(() => _hasReadableCookie = false);
+      }
+
+      AppLogger.info('已清理内置浏览器当前站点 Cookie: origin=$origin, count=${cookies.length}, deleted=$deletedAny');
+      Toast.success('已清理当前站点 Cookie');
+      try {
+        await controller.loadUrl(urlRequest: URLRequest(url: WebUri(currentUrl)));
+      } catch (e, st) {
+        AppLogger.warn('清理 Cookie 后刷新当前页面失败: $e\n$st');
+        if (mounted && !_closing) Toast.warning('Cookie 已清理，刷新页面失败');
+      }
+    } catch (e, st) {
+      AppLogger.error('清理内置浏览器当前站点 Cookie 失败', e, st);
+      if (mounted && !_closing) Toast.error('清理 Cookie 失败');
+    }
+  }
+
+  Future<void> _clearCurrentSiteBrowserStorage(InAppWebViewController controller) async {
+    try {
+      await controller.evaluateJavascript(
+        source: r'''
+(() => {
+  try { window.localStorage.clear(); } catch (_) {}
+  try { window.sessionStorage.clear(); } catch (_) {}
+})();
+''',
+      );
+    } catch (e, st) {
+      AppLogger.warn('清理当前页面本地存储失败: $e\n$st');
+    }
+  }
+
+  bool _isIpHost(String host) {
+    return RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host) || host.contains(':');
   }
 
   Future<void> _captureBrowserLongScreenshot() async {
