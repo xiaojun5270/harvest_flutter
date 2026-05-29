@@ -4967,19 +4967,12 @@ JSON.stringify({
 (() => {
   try {
     const keys = [];
-    const shouldKeepAuth = (key, value) => /auth|token|session|jwt|access|refresh/i.test(`${key} ${value || ''}`);
-    const shouldSkip = (key, value) =>
-      !shouldKeepAuth(key, value) &&
-      (key.startsWith('user.') ||
-        key.startsWith('_') ||
-        key.startsWith('persist:') ||
-        key.startsWith('sysinfo'));
+    const shouldSkip = (key) => key === 'mySite' || key === 'myUid' || key === 'sysinfo.setNews';
     for (let i = 0; i < window.localStorage.length; i += 1) {
       const key = window.localStorage.key(i);
-      const value = key ? window.localStorage.getItem(key) : '';
-      if (key && !shouldSkip(key, value)) keys.push(key);
+      if (key && !shouldSkip(key)) keys.push(key);
     }
-    const pairs = keys.sort().map((key) => {
+    const pairs = keys.map((key) => {
       const value = window.localStorage.getItem(key);
       return `${key}=${value === undefined || value === null ? '' : String(value)}`;
     });
