@@ -110,6 +110,7 @@ class DownloaderSpeedNotifier
   StreamSubscription? _subscription;
   Timer? _autoStopTimer;
   Timer? _countdownTimer;
+  final Map<String, bool> _alternativeSpeedOverrides = {};
 
   DownloaderSpeedNotifier(this.ref) : super({}) {
     // 监听暂停状态
@@ -165,12 +166,81 @@ class DownloaderSpeedNotifier
     required bool enabled,
     String? wsKey,
   }) {
-    final matchedKey = _findStateKey(downloaderId: downloaderId, wsKey: wsKey);
-    if (matchedKey == null) return;
+    _alternativeSpeedOverrides[downloaderId.toString().toLowerCase()] = enabled;
+    final normalizedWsKey = wsKey?.trim().toLowerCase();
+    if (normalizedWsKey != null && normalizedWsKey.isNotEmpty) {
+      _alternativeSpeedOverrides[normalizedWsKey] = enabled;
+    }
 
-    final data = state[matchedKey];
-    if (data == null) return;
+    final nextState = Map<String, DownloaderSpeedData>.from(state);
+    var updated = false;
 
+    for (final entry in state.entries) {
+      if (!_matchesDownloaderKey(
+        entry,
+        downloaderId: downloaderId,
+        wsKey: wsKey,
+      )) {
+        continue;
+      }
+
+      final data = entry.value;
+      nextState[entry.key] = _copyWithAlternativeSpeedMode(data, enabled);
+      updated = true;
+    }
+
+    if (updated) state = nextState;
+  }
+
+  bool _matchesDownloaderKey(
+    MapEntry<String, DownloaderSpeedData> entry, {
+    required int downloaderId,
+    String? wsKey,
+  }) {
+    final id = downloaderId.toString().toLowerCase();
+    final normalizedWsKey = wsKey?.toLowerCase();
+    final key = entry.key.toLowerCase();
+    final dataId = entry.value.downloaderId.toLowerCase();
+    if (key == id || dataId == id) return true;
+    if (normalizedWsKey != null &&
+        (key == normalizedWsKey || dataId == normalizedWsKey)) {
+      return true;
+    }
+    return false;
+  }
+
+  Map<String, DownloaderSpeedData> _applyAlternativeSpeedOverrides(
+    Map<String, DownloaderSpeedData> data,
+  ) {
+    if (_alternativeSpeedOverrides.isEmpty || data.isEmpty) return data;
+
+    final next = <String, DownloaderSpeedData>{};
+    var changed = false;
+    for (final entry in data.entries) {
+      final override = _alternativeSpeedOverrideFor(entry);
+      if (override == null) {
+        next[entry.key] = entry.value;
+        continue;
+      }
+      next[entry.key] = _copyWithAlternativeSpeedMode(entry.value, override);
+      changed = true;
+    }
+    return changed ? next : data;
+  }
+
+  bool? _alternativeSpeedOverrideFor(
+    MapEntry<String, DownloaderSpeedData> entry,
+  ) {
+    final key = entry.key.toLowerCase();
+    final dataId = entry.value.downloaderId.toLowerCase();
+    return _alternativeSpeedOverrides[key] ??
+        _alternativeSpeedOverrides[dataId];
+  }
+
+  DownloaderSpeedData _copyWithAlternativeSpeedMode(
+    DownloaderSpeedData data,
+    bool enabled,
+  ) {
     final prefs = Map<String, dynamic>.from(data.prefs)
       ..['use_alt_speed_limits'] = enabled
       ..['alternative_speed_enabled'] = enabled
@@ -180,34 +250,14 @@ class DownloaderSpeedNotifier
       ..['slow_mode'] = enabled
       ..['slowMode'] = enabled;
 
-    state = {
-      ...state,
-      matchedKey: data.copyWith(
-        info: data.info.copyWith(
-          alternativeSpeedEnabled: enabled,
-          speedLimitEnabled:
-              enabled ||
-              data.info.uploadLimit > 0 ||
-              data.info.downloadLimit > 0,
-        ),
-        prefs: prefs,
+    return data.copyWith(
+      info: data.info.copyWith(
+        alternativeSpeedEnabled: enabled,
+        speedLimitEnabled:
+            enabled || data.info.uploadLimit > 0 || data.info.downloadLimit > 0,
       ),
-    };
-  }
-
-  String? _findStateKey({required int downloaderId, String? wsKey}) {
-    final id = downloaderId.toString().toLowerCase();
-    final normalizedWsKey = wsKey?.toLowerCase();
-    for (final entry in state.entries) {
-      final key = entry.key.toLowerCase();
-      final dataId = entry.value.downloaderId.toLowerCase();
-      if (key == id || dataId == id) return entry.key;
-      if (normalizedWsKey != null &&
-          (key == normalizedWsKey || dataId == normalizedWsKey)) {
-        return entry.key;
-      }
-    }
-    return null;
+      prefs: prefs,
+    );
   }
 
   void _connect() {
@@ -235,7 +285,7 @@ class DownloaderSpeedNotifier
     _subscription = stream.listen(
       (data) {
         if (!mounted) return;
-        state = {...state, ...data};
+        state = {...state, ..._applyAlternativeSpeedOverrides(data)};
       },
       onError: (e) {
         debugPrint('[Speed] error: $e');

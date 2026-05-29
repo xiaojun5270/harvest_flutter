@@ -224,8 +224,13 @@ class _TorrentListPageState extends ConsumerState<TorrentListPage>
                     ),
                     TorrentRefreshBar(
                       downloaderId: _currentDownloaderId,
+                      downloader: downloader,
                       onRefresh: _refreshTorrentList,
                       onRefreshStateChanged: syncTorrentRefreshState,
+                      onToggleSpeedMode: downloader == null
+                          ? null
+                          : (enabled) =>
+                                _toggleDownloaderSpeedMode(downloader, enabled),
                     ),
                     StatsBar(
                       downloaderId: _currentDownloaderId,
@@ -233,10 +238,6 @@ class _TorrentListPageState extends ConsumerState<TorrentListPage>
                       onOpenSpeedSettings: downloader == null
                           ? null
                           : () => _showDownloaderSpeedLimitSettings(downloader),
-                      onToggleSpeedMode: downloader == null
-                          ? null
-                          : (enabled) =>
-                                _toggleDownloaderSpeedMode(downloader, enabled),
                     ),
                     Expanded(
                       child: TorrentListMobile(

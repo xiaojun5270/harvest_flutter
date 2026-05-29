@@ -1,3 +1,5 @@
+import 'package:harvest/core/utils/parsers/size_parser.dart';
+
 // ═══════════════════════════════════════════════════════════════
 // 下载器实时速度数据
 // ═══════════════════════════════════════════════════════════════
@@ -26,13 +28,16 @@ class DownloaderSpeedData {
   }
 
   factory DownloaderSpeedData.fromJson(String id, Map<String, dynamic> json) {
+    final payload = _asStringMap(_pick(json, const ['data'])) ?? json;
     final prefsJson =
-        _asStringMap(_pick(json, const ['prefs', 'preferences'])) ?? {};
+        _asStringMap(_pick(payload, const ['prefs', 'preferences'])) ?? {};
     final infoJson =
-        _asStringMap(_pick(json, const ['info', 'status', 'server_state'])) ??
-        (Map<String, dynamic>.from(json)..remove('prefs'));
+        _asStringMap(
+          _pick(payload, const ['info', 'status', 'server_state']),
+        ) ??
+        (Map<String, dynamic>.from(payload)..remove('prefs'));
     final topLevelVersion = _cleanVersion(
-      _pick(json, const [
+      _pick(payload, const [
         'version',
         'app_version',
         'appVersion',
@@ -198,13 +203,7 @@ class DownloaderInfo {
         totalTorrentCount: _safeInt(
           _pick(json, const ['torrentCount', 'torrent_count']),
         ),
-        freeSpace: _safeInt(
-          _pick(json, const [
-            'free_space_on_disk',
-            'freeSpaceOnDisk',
-            'free_space',
-          ]),
-        ),
+        freeSpace: _safeInt(_pickFreeSpace(json) ?? _pickFreeSpace(prefs)),
         ratio: _safeDouble(
           _pick(json, const ['global_ratio', 'globalRatio', 'ratio']),
         ),
@@ -274,8 +273,7 @@ class DownloaderInfo {
       totalTorrentCount: _safeInt(
         _pick(json, const ['torrentCount', 'torrent_count']),
       ),
-      // 从 prefs 取剩余空间
-      freeSpace: _safeInt(prefs['download-dir-free-space']),
+      freeSpace: _safeInt(_pickFreeSpace(json) ?? _pickFreeSpace(prefs)),
       downloadedSession: _safeInt(currentStats['downloadedBytes']),
       uploadedSession: _safeInt(currentStats['uploadedBytes']),
       version: version,
@@ -309,6 +307,48 @@ dynamic _pick(Map<String, dynamic> json, List<String> keys) {
   return null;
 }
 
+dynamic _pickFreeSpace(Map<String, dynamic> json) {
+  final direct = _pick(json, const [
+    'free_space_on_disk',
+    'freeSpaceOnDisk',
+    'free_space',
+    'freeSpace',
+    'download-dir-free-space',
+    'downloadDirFreeSpace',
+    'download_dir_free_space',
+    'downloadDirFree',
+    'downloadDirFreeSpaceBytes',
+    'freeSpaceBytes',
+    'free_space_bytes',
+    'disk_free_space',
+    'diskFreeSpace',
+    'available_space',
+    'availableSpace',
+  ]);
+  if (direct != null) return direct;
+
+  for (final value in json.values) {
+    if (value is Map<String, dynamic>) {
+      final nested = _pickFreeSpace(value);
+      if (_safeInt(nested) > 0) return nested;
+    } else if (value is Map) {
+      final nested = _pickFreeSpace(Map<String, dynamic>.from(value));
+      if (_safeInt(nested) > 0) return nested;
+    } else if (value is List) {
+      for (final item in value) {
+        if (item is Map<String, dynamic>) {
+          final nested = _pickFreeSpace(item);
+          if (_safeInt(nested) > 0) return nested;
+        } else if (item is Map) {
+          final nested = _pickFreeSpace(Map<String, dynamic>.from(item));
+          if (_safeInt(nested) > 0) return nested;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 String _cleanVersion(dynamic value) {
   var text = value?.toString().trim() ?? '';
   if (text.isEmpty || text.toLowerCase() == 'null') return '';
@@ -327,7 +367,9 @@ int _safeInt(dynamic value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   if (value is String) {
-    return int.tryParse(value) ?? double.tryParse(value)?.toInt() ?? 0;
+    return int.tryParse(value) ??
+        double.tryParse(value)?.toInt() ??
+        parseSizeToBytes(value);
   }
   return 0;
 }

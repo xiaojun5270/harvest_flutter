@@ -12,83 +12,26 @@ class StatsBar extends ConsumerWidget {
   final int downloaderId;
   final Downloader? downloader;
   final VoidCallback? onOpenSpeedSettings;
-  final ValueChanged<bool>? onToggleSpeedMode;
 
   const StatsBar({
     super.key,
     required this.downloaderId,
     this.downloader,
     this.onOpenSpeedSettings,
-    this.onToggleSpeedMode,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = shadcn.Theme.of(context).colorScheme;
-    final data = ref.watch(torrentListProvider(downloaderId)).valueOrNull;
-    final status = data?.status;
-    final speedMap = ref.watch(downloaderSpeedProvider);
+    final items = buildTorrentStatsBarItems(
+      context: context,
+      ref: ref,
+      downloaderId: downloaderId,
+      downloader: downloader,
+      onOpenSpeedSettings: onOpenSpeedSettings,
+    );
 
-    var liveInfo = speedMap['$downloaderId']?.info;
-    if (liveInfo == null) {
-      final id = downloaderId.toString().toLowerCase();
-      final wsKey = downloader?.wsKey.toLowerCase();
-      for (final entry in speedMap.entries) {
-        final key = entry.key.toLowerCase();
-        final dataId = entry.value.downloaderId.toLowerCase();
-        if (key == id ||
-            dataId == id ||
-            (wsKey != null && (key == wsKey || dataId == wsKey))) {
-          liveInfo = entry.value.info;
-          break;
-        }
-      }
-    }
-
-    if (status == null && liveInfo == null && data == null) {
-      return const SizedBox.shrink();
-    }
-
-    final torrents = data?.torrents ?? const <Torrent>[];
-    final activeCount = torrents.isEmpty
-        ? liveInfo?.activeTorrentCount ?? status?.activeTorrentCount ?? 0
-        : torrents.where((t) => t.rateDownload > 0 || t.rateUpload > 0).length;
-    final pausedCount =
-        status?.pausedTorrentCount ?? liveInfo?.pausedTorrentCount ?? 0;
-    final totalCount =
-        status?.torrentCount ?? liveInfo?.totalTorrentCount ?? torrents.length;
-    final downloadSpeed = _firstPositive([
-      liveInfo?.downloadSpeed ?? 0,
-      status?.downloadSpeed ?? 0,
-      _sumDownloadSpeed(torrents),
-    ]);
-    final uploadSpeed = _firstPositive([
-      liveInfo?.uploadSpeed ?? 0,
-      status?.uploadSpeed ?? 0,
-      _sumUploadSpeed(torrents),
-    ]);
-    final sessionUploaded = _firstPositive([
-      liveInfo?.uploadedSession ?? 0,
-      status?.currentStats.uploadedBytes ?? 0,
-    ]);
-    final sessionDownloaded = _firstPositive([
-      liveInfo?.downloadedSession ?? 0,
-      status?.currentStats.downloadedBytes ?? 0,
-    ]);
-    final totalUploaded = _firstPositive([
-      status?.cumulativeStats.uploadedBytes ?? 0,
-      _sumUploadedEver(torrents),
-    ]);
-    final totalDownloaded = _firstPositive([
-      status?.cumulativeStats.downloadedBytes ?? 0,
-      _sumDownloadedEver(torrents),
-    ]);
-    final uploadLimit = liveInfo?.uploadLimit ?? 0;
-    final downloadLimit = liveInfo?.downloadLimit ?? 0;
-    final limited = liveInfo?.hasLimit ?? false;
-    final slowMode = liveInfo?.alternativeSpeedEnabled ?? false;
-    final modeText = '${slowMode ? '龟速' : '极速'} · ${limited ? '限速' : '不限速'}';
-    final freeSpace = liveInfo?.freeSpace ?? 0;
+    if (items.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -102,70 +45,102 @@ class StatsBar extends ConsumerWidget {
           spacing: 14,
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.arrowDown,
-              label: '下载',
-              value: TorrentUtils.formatSpeed(downloadSpeed),
-              color: colorDownloading,
-            ),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.arrowUp,
-              label: '上传',
-              value: TorrentUtils.formatSpeed(uploadSpeed),
-              color: colorSeeding,
-            ),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.activity,
-              label: '活动',
-              value: '$activeCount',
-              color: const Color(0xFF0D9488),
-            ),
-            StatusBarCount(label: '暂停', count: pausedCount),
-            StatusBarCount(label: '总数', count: totalCount),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.database,
-              label: '本次',
-              value: _formatTransferPair(sessionUploaded, sessionDownloaded),
-              color: cs.foreground,
-            ),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.hardDrive,
-              label: '总计',
-              value: _formatTransferPair(totalUploaded, totalDownloaded),
-              color: cs.foreground,
-            ),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.zap,
-              label: '模式',
-              value: modeText,
-              color: limited ? const Color(0xFFD97706) : colorDownloading,
-              tooltip: onToggleSpeedMode == null
-                  ? null
-                  : (slowMode ? '切换为极速模式' : '切换为龟速模式'),
-              onTap: onToggleSpeedMode == null
-                  ? null
-                  : () => onToggleSpeedMode!(!slowMode),
-            ),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.gauge,
-              label: '限速',
-              value: _formatLimitPair(uploadLimit, downloadLimit),
-              color: limited ? const Color(0xFFD97706) : cs.mutedForeground,
-              tooltip: onOpenSpeedSettings == null ? null : '打开限速设置',
-              onTap: onOpenSpeedSettings,
-            ),
-            StatusBarMetric(
-              icon: shadcn.LucideIcons.hardDrive,
-              label: '剩余',
-              value: freeSpace > 0 ? TorrentUtils.formatBytes(freeSpace) : '-',
-              color: cs.mutedForeground,
-            ),
-          ],
+          children: items,
         ),
       ),
     );
   }
+}
+
+List<Widget> buildTorrentStatsBarItems({
+  required BuildContext context,
+  required WidgetRef ref,
+  required int downloaderId,
+  Downloader? downloader,
+  VoidCallback? onOpenSpeedSettings,
+}) {
+  final cs = shadcn.Theme.of(context).colorScheme;
+  final data = ref.watch(torrentListProvider(downloaderId)).valueOrNull;
+  final status = data?.status;
+  final speedMap = ref.watch(downloaderSpeedProvider);
+
+  var liveInfo = speedMap['$downloaderId']?.info;
+  if (liveInfo == null) {
+    final id = downloaderId.toString().toLowerCase();
+    final wsKey = downloader?.wsKey.toLowerCase();
+    for (final entry in speedMap.entries) {
+      final key = entry.key.toLowerCase();
+      final dataId = entry.value.downloaderId.toLowerCase();
+      if (key == id ||
+          dataId == id ||
+          (wsKey != null && (key == wsKey || dataId == wsKey))) {
+        liveInfo = entry.value.info;
+        break;
+      }
+    }
+  }
+
+  if (status == null && liveInfo == null && data == null) return const [];
+
+  final torrents = data?.torrents ?? const <Torrent>[];
+  final activeCount = torrents.isEmpty
+      ? liveInfo?.activeTorrentCount ?? status?.activeTorrentCount ?? 0
+      : torrents.where((t) => t.rateDownload > 0 || t.rateUpload > 0).length;
+  final pausedCount =
+      status?.pausedTorrentCount ?? liveInfo?.pausedTorrentCount ?? 0;
+  final totalCount =
+      status?.torrentCount ?? liveInfo?.totalTorrentCount ?? torrents.length;
+  final sessionUploaded = _firstPositive([
+    liveInfo?.uploadedSession ?? 0,
+    status?.currentStats.uploadedBytes ?? 0,
+  ]);
+  final sessionDownloaded = _firstPositive([
+    liveInfo?.downloadedSession ?? 0,
+    status?.currentStats.downloadedBytes ?? 0,
+  ]);
+  final totalUploaded = _firstPositive([
+    status?.cumulativeStats.uploadedBytes ?? 0,
+    _sumUploadedEver(torrents),
+  ]);
+  final totalDownloaded = _firstPositive([
+    status?.cumulativeStats.downloadedBytes ?? 0,
+    _sumDownloadedEver(torrents),
+  ]);
+  final uploadLimit = liveInfo?.uploadLimit ?? 0;
+  final downloadLimit = liveInfo?.downloadLimit ?? 0;
+  final limited = liveInfo?.hasLimit ?? false;
+
+  return [
+    StatusBarCount(label: '总数', count: totalCount),
+    StatusBarMetric(
+      icon: shadcn.LucideIcons.activity,
+      label: '活动',
+      value: '$activeCount',
+      color: const Color(0xFF0D9488),
+      tooltip: '活动',
+      showLabel: false,
+    ),
+    StatusBarMetric(
+      icon: shadcn.LucideIcons.pause,
+      label: '暂停',
+      value: '$pausedCount',
+      color: cs.mutedForeground,
+      tooltip: '暂停',
+      showLabel: false,
+    ),
+    if (limited)
+      StatusBarLimitMetric(
+        icon: shadcn.LucideIcons.gauge,
+        uploadValue: _formatLimitValue(uploadLimit),
+        downloadValue: _formatLimitValue(downloadLimit),
+        tooltip: onOpenSpeedSettings == null ? null : '打开限速设置',
+        onTap: onOpenSpeedSettings,
+      ),
+    StatusBarTrafficGroup(
+      uploadValue: _formatTrafficTotal(totalUploaded, sessionUploaded),
+      downloadValue: _formatTrafficTotal(totalDownloaded, sessionDownloaded),
+    ),
+  ];
 }
 
 // ── 工具函数 ──
@@ -193,31 +168,12 @@ int _sumDownloadedEver(List<Torrent> torrents) {
   return sum;
 }
 
-int _sumDownloadSpeed(List<Torrent> torrents) {
-  var sum = 0;
-  for (final t in torrents) {
-    sum += t.rateDownload;
-  }
-  return sum;
+String _formatTrafficTotal(int total, int session) {
+  return '${TorrentUtils.formatBytes(total)} (${TorrentUtils.formatBytes(session)})';
 }
 
-int _sumUploadSpeed(List<Torrent> torrents) {
-  var sum = 0;
-  for (final t in torrents) {
-    sum += t.rateUpload;
-  }
-  return sum;
-}
-
-String _formatTransferPair(int up, int down) {
-  return '↑${TorrentUtils.formatBytes(up)} ↓${TorrentUtils.formatBytes(down)}';
-}
-
-String _formatLimitPair(int upLimit, int downLimit) {
-  final up = upLimit <= 0 ? '不限' : TorrentUtils.formatSpeed(upLimit);
-  final down = downLimit <= 0 ? '不限' : TorrentUtils.formatSpeed(downLimit);
-  return '↑$up ↓$down';
-}
+String _formatLimitValue(int value) =>
+    value <= 0 ? '不限' : TorrentUtils.formatSpeed(value);
 
 // ── 子组件 ──
 
@@ -228,6 +184,7 @@ class StatusBarMetric extends StatelessWidget {
   final Color color;
   final String? tooltip;
   final VoidCallback? onTap;
+  final bool showLabel;
 
   const StatusBarMetric({
     super.key,
@@ -237,6 +194,7 @@ class StatusBarMetric extends StatelessWidget {
     required this.color,
     this.tooltip,
     this.onTap,
+    this.showLabel = true,
   });
 
   @override
@@ -247,10 +205,11 @@ class StatusBarMetric extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
-        Text(
-          '$label ',
-          style: TextStyle(fontSize: 11, color: cs.mutedForeground),
-        ),
+        if (showLabel)
+          Text(
+            '$label ',
+            style: TextStyle(fontSize: 11, color: cs.mutedForeground),
+          ),
         Text(
           value,
           style: TextStyle(
@@ -263,17 +222,132 @@ class StatusBarMetric extends StatelessWidget {
       ],
     );
 
-    if (tooltip != null && onTap != null) {
-      return shadcn.Tooltip(
-        tooltip: (_) => Text(tooltip!),
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: content,
-        ),
-      );
+    final child = onTap == null
+        ? content
+        : GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: content,
+          );
+
+    if (tooltip != null) {
+      return shadcn.Tooltip(tooltip: (_) => Text(tooltip!), child: child);
     }
-    return content;
+    return child;
+  }
+}
+
+class StatusBarLimitMetric extends StatelessWidget {
+  final IconData icon;
+  final String uploadValue;
+  final String downloadValue;
+  final String? tooltip;
+  final VoidCallback? onTap;
+
+  const StatusBarLimitMetric({
+    super.key,
+    required this.icon,
+    required this.uploadValue,
+    required this.downloadValue,
+    this.tooltip,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = shadcn.Theme.of(context).colorScheme;
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: const Color(0xFFD97706)),
+        const SizedBox(width: 4),
+        Text('限速 ', style: TextStyle(fontSize: 11, color: cs.mutedForeground)),
+        Text(
+          '↑$uploadValue',
+          style: const TextStyle(
+            fontSize: 11,
+            color: colorSeeding,
+            fontWeight: FontWeight.w600,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          '↓$downloadValue',
+          style: const TextStyle(
+            fontSize: 11,
+            color: colorDownloading,
+            fontWeight: FontWeight.w600,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+
+    final child = onTap == null
+        ? content
+        : GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: content,
+          );
+
+    if (tooltip != null) {
+      return shadcn.Tooltip(tooltip: (_) => Text(tooltip!), child: child);
+    }
+    return child;
+  }
+}
+
+class StatusBarTrafficGroup extends StatelessWidget {
+  final String uploadValue;
+  final String downloadValue;
+
+  const StatusBarTrafficGroup({
+    super.key,
+    required this.uploadValue,
+    required this.downloadValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = shadcn.Theme.of(context).colorScheme;
+    final labelStyle = TextStyle(
+      fontSize: 11,
+      color: cs.mutedForeground,
+      fontWeight: FontWeight.w500,
+    );
+    const valueStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
+
+    return shadcn.Tooltip(
+      tooltip: (_) =>
+          const Text('数据量详情：箭头向上为总上传量（括号内为本次上传），箭头向下为总下载量（括号内为本次下载）'),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('数据量', style: labelStyle),
+          const SizedBox(width: 8),
+          const Icon(shadcn.LucideIcons.arrowUp, size: 12, color: colorSeeding),
+          const SizedBox(width: 4),
+          Text(uploadValue, style: valueStyle.copyWith(color: colorSeeding)),
+          const SizedBox(width: 10),
+          const Icon(
+            shadcn.LucideIcons.arrowDown,
+            size: 12,
+            color: colorDownloading,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            downloadValue,
+            style: valueStyle.copyWith(color: colorDownloading),
+          ),
+        ],
+      ),
+    );
   }
 }
 

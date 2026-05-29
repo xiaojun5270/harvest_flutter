@@ -9,7 +9,6 @@ import 'desktop_torrent_detail_panel.dart';
 import 'desktop_torrent_sidebar.dart';
 import 'desktop_torrent_table.dart';
 import 'torrent_refresh_bar.dart';
-import 'torrent_stats_bar.dart';
 
 class DesktopTorrentLayout extends ConsumerStatefulWidget {
   final int downloaderId;
@@ -74,12 +73,9 @@ class _DesktopTorrentLayoutState extends ConsumerState<DesktopTorrentLayout> {
         children: [
           TorrentRefreshBar(
             downloaderId: widget.downloaderId,
+            downloader: widget.downloader,
             onRefresh: widget.onRefresh,
             onRefreshStateChanged: widget.onRefreshStateChanged,
-          ),
-          StatsBar(
-            downloaderId: widget.downloaderId,
-            downloader: widget.downloader,
             onOpenSpeedSettings: widget.onOpenSpeedSettings,
             onToggleSpeedMode: widget.onToggleSpeedMode,
           ),
