@@ -428,6 +428,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
     showAppSheet(
       context: context,
       isScrollControlled: true,
+      showDragHandle: false,
       backgroundColor: Colors.transparent,
       builder: (_) => const SearchSettingsSheet(),
     );

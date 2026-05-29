@@ -1,9 +1,10 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:harvest/core/theme/app_surface.dart';
-import 'package:harvest/widgets/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:harvest/core/theme/app_surface.dart';
+import 'package:harvest/core/utils/feedback/toast.dart';
+import 'package:harvest/widgets/app_sheet.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../../site/model/site_info.dart';
@@ -21,16 +22,21 @@ class SearchSettingsSheet extends ConsumerStatefulWidget {
 class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
   late int _maxCount;
   late bool _sitesEnabled;
+  late bool _savedSitesEnabled;
   late List<String> _storedSites;
+  late List<String> _savedStoredSites;
   late List<String> _selectedSites;
 
   @override
   void initState() {
     super.initState();
     final settings = SearchSettings.load();
+    final persistedSettings = SearchSettings.loadPersisted();
     _maxCount = settings.maxCount;
     _sitesEnabled = settings.sitesEnabled;
+    _savedSitesEnabled = persistedSettings.sitesEnabled;
     _storedSites = List.from(settings.storedSites);
+    _savedStoredSites = List.from(persistedSettings.storedSites);
     _selectedSites = List.from(settings.sites);
   }
 
@@ -42,6 +48,7 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     final availableSites = _availableSearchSites();
     final availableSiteKeys = availableSites.map(_siteKey).toSet();
+    final actionColors = _actionButtonColors(cs.primary);
     final selectedCount = _selectedSites
         .where((site) => availableSiteKeys.contains(site))
         .length;
@@ -159,7 +166,11 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
                         style: typo.xSmall.copyWith(color: cs.primary),
                       ),
                       const SizedBox(width: 10),
-                      Switch(value: _sitesEnabled, onChanged: _setSitesEnabled),
+                      Switch(
+                        value: _sitesEnabled,
+                        onChanged: (value) =>
+                            _setSitesEnabled(value, availableSites),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -169,32 +180,42 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
                         child: _buildActionButton(
                           icon: shadcn.LucideIcons.refreshCw,
                           label: '加载',
-                          color: Colors.blue,
+                          color: actionColors[0],
                           onPress: availableSites.isEmpty
                               ? null
                               : () => _loadStoredSites(availableSites),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: _buildActionButton(
                           icon: shadcn.LucideIcons.checkCheck,
                           label: '全部',
-                          color: Colors.green,
+                          color: actionColors[1],
                           onPress: availableSites.isEmpty
                               ? null
                               : () => _selectAllSites(availableSites),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: _buildActionButton(
                           icon: shadcn.LucideIcons.dices,
                           label: '随机',
-                          color: Colors.orange,
+                          color: actionColors[2],
                           onPress: availableSites.isEmpty
                               ? null
                               : () => _selectRandomSites(availableSites),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _buildActionButton(
+                          icon: shadcn.LucideIcons.save,
+                          label: '保存',
+                          color: actionColors[3],
+                          prominent: true,
+                          onPress: () => _saveSites(availableSites),
                         ),
                       ),
                     ],
@@ -334,14 +355,23 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
   Widget _buildActionButton({
     required IconData icon,
     required String label,
-    required Color color,
+    Color? color,
+    bool prominent = false,
     required VoidCallback? onPress,
   }) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
     final typo = theme.typography;
     final enabled = onPress != null;
-    final effectiveColor = enabled ? color : cs.mutedForeground;
+    final baseColor = color ?? cs.primary;
+    final contentColor = enabled ? baseColor : cs.mutedForeground;
+    final iconColor = enabled ? baseColor : cs.mutedForeground;
+    final backgroundColor = prominent
+        ? baseColor.withValues(alpha: enabled ? 0.13 : 0.06)
+        : baseColor.withValues(alpha: enabled ? 0.09 : 0.04);
+    final borderColor = prominent
+        ? baseColor.withValues(alpha: enabled ? 0.46 : 0.22)
+        : baseColor.withValues(alpha: enabled ? 0.28 : 0.16);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -351,27 +381,27 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
         child: Container(
           height: 30,
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 5),
           decoration: BoxDecoration(
-            color: effectiveColor.withValues(alpha: 0.1),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: effectiveColor.withValues(alpha: 0.45)),
+            border: Border.all(color: borderColor),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 12, color: effectiveColor),
-              const SizedBox(width: 3),
+              Icon(icon, size: 13, color: iconColor),
+              const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: typo.xSmall.copyWith(
-                    color: effectiveColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                    color: contentColor,
+                    fontSize: 11,
+                    fontWeight: prominent ? FontWeight.w700 : FontWeight.w600,
                   ),
                 ),
               ),
@@ -380,6 +410,23 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
         ),
       ),
     );
+  }
+
+  List<Color> _actionButtonColors(Color primary) {
+    final hsl = HSLColor.fromColor(primary);
+    final base = hsl.withSaturation(
+      hsl.saturation.clamp(0.52, 0.74).toDouble(),
+    );
+    final tuned = base.withLightness(
+      base.lightness.clamp(0.42, 0.58).toDouble(),
+    );
+
+    Color shifted(double offset) {
+      final hue = (tuned.hue + offset) % 360;
+      return tuned.withHue(hue < 0 ? hue + 360 : hue).toColor();
+    }
+
+    return [shifted(-144), shifted(-96), shifted(-48), primary];
   }
 
   Widget _buildSiteChip(SiteInfo site) {
@@ -441,15 +488,20 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
 
   void _setMaxCount(int value) {
     setState(() => _maxCount = value);
-    _save();
+    _saveMaxCount();
   }
 
-  void _setSitesEnabled(bool value) {
+  void _setSitesEnabled(bool value, List<SiteInfo> availableSites) {
     setState(() {
       _sitesEnabled = value;
-      if (!value) _selectedSites = <String>[];
+      if (value) {
+        _selectedSites = _normalizeSiteKeys(_storedSites, availableSites);
+      } else {
+        _storedSites = List.from(_selectedSites);
+        _selectedSites = <String>[];
+      }
     });
-    _save();
+    _updateSiteDraft();
   }
 
   void _toggleSite(String site) {
@@ -462,17 +514,17 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
       }
       _storedSites = List.from(_selectedSites);
     });
-    _save();
+    _updateSiteDraft();
   }
 
   void _loadStoredSites(List<SiteInfo> availableSites) {
-    final stored = _normalizeSiteKeys(_storedSites, availableSites);
+    final stored = _normalizeSiteKeys(_savedStoredSites, availableSites);
     setState(() {
       _sitesEnabled = true;
       _selectedSites = stored;
       _storedSites = List.from(stored);
     });
-    _save();
+    _updateSiteDraft();
   }
 
   void _selectAllSites(List<SiteInfo> availableSites) {
@@ -481,7 +533,7 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
       _selectedSites = availableSites.map(_siteKey).toList();
       _storedSites = List.from(_selectedSites);
     });
-    _save();
+    _updateSiteDraft();
   }
 
   void _selectRandomSites(List<SiteInfo> availableSites) {
@@ -495,7 +547,7 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
       _selectedSites = shuffled.take(count).map(_siteKey).toList();
       _storedSites = List.from(_selectedSites);
     });
-    _save();
+    _updateSiteDraft();
   }
 
   List<String> _normalizeSiteKeys(List<String> values, List<SiteInfo> sites) {
@@ -510,12 +562,40 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
     return normalized;
   }
 
-  void _save() {
+  void _saveMaxCount() {
     SearchSettings(
       maxCount: _maxCount,
-      sites: _sitesEnabled ? _selectedSites : const [],
-      storedSites: _storedSites,
+      sites: _savedSitesEnabled ? _savedStoredSites : const [],
+      storedSites: _savedStoredSites,
+      sitesEnabled: _savedSitesEnabled,
+    ).save(clearDraft: false);
+  }
+
+  void _updateSiteDraft() {
+    SearchSettings.setSiteDraft(
+      sitesEnabled: _sitesEnabled,
+      storedSites: _sitesEnabled ? _selectedSites : _storedSites,
+    );
+  }
+
+  void _saveSites(List<SiteInfo> availableSites) {
+    final formattedSites = _normalizeSiteKeys(
+      _sitesEnabled ? _selectedSites : _storedSites,
+      availableSites,
+    );
+    final effectiveSites = _sitesEnabled ? formattedSites : <String>[];
+    setState(() {
+      _selectedSites = List.from(effectiveSites);
+      _storedSites = List.from(formattedSites);
+      _savedStoredSites = List.from(formattedSites);
+      _savedSitesEnabled = _sitesEnabled;
+    });
+    SearchSettings(
+      maxCount: _maxCount,
+      sites: effectiveSites,
+      storedSites: formattedSites,
       sitesEnabled: _sitesEnabled,
     ).save();
+    Toast.success('搜索站点已保存');
   }
 }
