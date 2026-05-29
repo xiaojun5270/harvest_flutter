@@ -252,14 +252,14 @@ class DownloaderInfo {
     final uploadLimitEnabled = _safeBool(prefs['speed-limit-up-enabled']);
     final downloadLimitEnabled = _safeBool(prefs['speed-limit-down-enabled']);
     final uploadLimit = alternativeSpeedEnabled
-        ? _safeInt(prefs['alt-speed-up']) * 1024
+        ? _safeInt(prefs['alt-speed-up'])
         : uploadLimitEnabled
-        ? _safeInt(prefs['speed-limit-up']) * 1024
+        ? _safeInt(prefs['speed-limit-up'])
         : 0;
     final downloadLimit = alternativeSpeedEnabled
-        ? _safeInt(prefs['alt-speed-down']) * 1024
+        ? _safeInt(prefs['alt-speed-down'])
         : downloadLimitEnabled
-        ? _safeInt(prefs['speed-limit-down']) * 1024
+        ? _safeInt(prefs['speed-limit-down'])
         : 0;
 
     return DownloaderInfo(

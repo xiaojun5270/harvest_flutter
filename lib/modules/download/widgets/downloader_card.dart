@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:harvest/core/utils/ui/responsive.dart';
+import 'package:harvest/core/utils/utils.dart';
 import 'package:harvest/modules/dashboard/provider/privacy_provider.dart';
 import 'package:harvest/modules/torrents/torrent_list_page.dart';
 import 'package:harvest/widgets/app_menu.dart';
@@ -43,17 +44,14 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
   Widget build(BuildContext context) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
-    final typo = theme.typography;
     final typeColor = isQb ? cs.primary : const Color(0xFFF97316);
     final successColor = const Color(0xFF10B981);
     final inactiveColor = cs.destructive;
     final active = d.isActive;
     final privacy = ref.watch(privacyModeProvider);
-    final mutedPanel = cs.muted.withValues(alpha: 0.22);
     final typeLabel = isQb ? 'QB' : 'TR';
     final typeName = isQb ? 'qBittorrent' : 'Transmission';
 
-    // 实时数据
     final speedMap = ref.watch(downloaderSpeedProvider);
     DownloaderSpeedData? liveData;
     DownloaderInfo? liveInfo;
@@ -65,14 +63,14 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
         break;
       }
     }
+
     final connected = liveInfo != null;
     final version = _versionFor(liveInfo, liveData);
-    final headerTint = active
-        ? typeColor.withValues(alpha: connected ? 0.11 : 0.07)
-        : cs.muted.withValues(alpha: 0.24);
     final cardBorder = active
-        ? typeColor.withValues(alpha: _hovered ? 0.32 : 0.18)
+        ? typeColor.withValues(alpha: _hovered ? 0.28 : 0.14)
         : cs.border.withValues(alpha: 0.72);
+    final tokens = _DownloaderCardTokens.of(context);
+    final cardRadius = BorderRadius.circular(theme.radiusMd);
 
     final menu = DownloaderCardMenu(
       downloader: d,
@@ -85,6 +83,7 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
     final card = AppContextMenu(
       items: menu.buildContextMenuItems(context),
       child: MouseRegion(
+        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
@@ -94,177 +93,95 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
             decoration: BoxDecoration(
-              color: cs.card.withValues(alpha: 0.98),
-              borderRadius: BorderRadius.circular(8),
+              color: cs.card,
+              borderRadius: cardRadius,
               border: Border.all(color: cardBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: _hovered ? 0.10 : 0.055),
-                  blurRadius: _hovered ? 18 : 10,
-                  offset: Offset(0, _hovered ? 8 : 4),
+                  color: typeColor.withValues(alpha: _hovered ? 0.045 : 0.018),
+                  blurRadius: tokens.size(_hovered ? 12 : 8),
+                  offset: Offset(0, tokens.size(_hovered ? 5 : 3)),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? 0.12
+                        : 0.022,
+                  ),
+                  blurRadius: tokens.size(8),
+                  offset: Offset(0, tokens.size(3)),
                 ),
               ],
             ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              children: [
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  right: 0,
-                  height: theme.scaling * 70,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: headerTint,
-                      border: Border(
-                        bottom: BorderSide(color: cs.border.withValues(alpha: 0.48)),
-                      ),
+            child: ClipRRect(
+              borderRadius: cardRadius,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: tokens.size(3),
+                      color: active
+                          ? typeColor
+                          : cs.mutedForeground.withValues(alpha: 0.24),
                     ),
                   ),
-                ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 3,
-                    color: active ? typeColor : cs.mutedForeground.withValues(alpha: 0.24),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    theme.density.baseContentPadding * theme.scaling * 0.95,
-                    theme.density.baseContentPadding * theme.scaling * 0.85,
-                    theme.density.baseContentPadding * theme.scaling * 0.85,
-                    theme.density.baseContentPadding * theme.scaling * 0.85,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _typeMark(typeLabel, typeColor, active, connected),
-                          SizedBox(width: theme.density.baseGap * theme.scaling),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        d.name.isEmpty ? '未命名下载器' : d.name,
-                                        style: typo.small.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          color: cs.foreground,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (version.isNotEmpty)
-                                      _miniBadge(version, typeColor, cs),
-                                  ],
-                                ),
-                                SizedBox(height: theme.density.baseGap * theme.scaling * 0.45),
-                                Wrap(
-                                  spacing: theme.density.baseGap * theme.scaling * 0.55,
-                                  runSpacing: theme.density.baseGap * theme.scaling * 0.45,
-                                  children: [
-                                    _statusPill(
-                                      icon: connected ? shadcn.LucideIcons.link : shadcn.LucideIcons.unlink,
-                                      label: connected ? '已连接' : '未连接',
-                                      color: connected ? successColor : inactiveColor,
-                                    ),
-                                    _statusPill(
-                                      icon: active ? shadcn.LucideIcons.power : shadcn.LucideIcons.powerOff,
-                                      label: active ? '已启用' : '已停用',
-                                      color: active ? successColor : inactiveColor,
-                                    ),
-                                    _statusPill(
-                                      icon: shadcn.LucideIcons.zap,
-                                      label: d.brush ? '辅种关闭' : '辅种开启',
-                                      color: d.brush ? cs.mutedForeground : typeColor,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: theme.density.baseGap * theme.scaling),
-                      Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: theme.density.baseContentPadding * theme.scaling * 0.65,
-                          vertical: theme.density.baseGap * theme.scaling * 0.7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: mutedPanel,
-                          borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: cs.border.withValues(alpha: 0.58)),
-                        ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact =
+                          context.isMobile || constraints.maxWidth < 360;
+                      final tokens = _DownloaderCardTokens.of(
+                        context,
+                        compact: compact,
+                      );
+                      return Padding(
+                        padding: tokens.edgeFromLTRB(12, 12, 10, 10),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _infoLine(
-                              icon: shadcn.LucideIcons.server,
-                              label: typeName,
-                              value: _downloaderAddress(privacy),
-                              accent: typeColor,
+                            _header(
+                              typeLabel: typeLabel,
+                              typeColor: typeColor,
+                              successColor: successColor,
+                              inactiveColor: inactiveColor,
+                              active: active,
+                              connected: connected,
+                              version: version,
+                              compact: compact,
                             ),
-                            SizedBox(height: theme.density.baseGap * theme.scaling * 0.55),
-                            _infoLine(
-                              icon: shadcn.LucideIcons.folder,
-                              label: '种子路径',
-                              value: d.torrentPath.isEmpty ? '-' : d.torrentPath,
-                              accent: cs.mutedForeground,
+                            SizedBox(height: tokens.size(8)),
+                            _connectionPanel(
+                              context,
+                              privacy: privacy,
+                              typeName: typeName,
+                              typeColor: typeColor,
+                              compact: compact,
                             ),
+                            SizedBox(height: tokens.size(8)),
+                            if (liveInfo != null)
+                              DownloaderLiveInfo(
+                                info: liveInfo,
+                                isQb: isQb,
+                                compact: compact,
+                              )
+                            else
+                              _emptyLivePanel(
+                                context,
+                                color: inactiveColor,
+                                compact: compact,
+                              ),
                           ],
                         ),
-                      ),
-
-                      if (liveInfo != null) ...[
-                        SizedBox(height: theme.density.baseGap * theme.scaling),
-                        DownloaderLiveInfo(info: liveInfo, isQb: isQb),
-                      ] else ...[
-                        const Spacer(),
-                        Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: theme.density.baseContentPadding * theme.scaling * 0.65,
-                            vertical: theme.density.baseGap * theme.scaling * 0.65,
-                          ),
-                          decoration: BoxDecoration(
-                            color: inactiveColor.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(7),
-                            border: Border.all(color: inactiveColor.withValues(alpha: 0.18)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(shadcn.LucideIcons.activity, size: theme.scaling * 13, color: inactiveColor),
-                              SizedBox(width: theme.density.baseGap * theme.scaling * 0.65),
-                              Expanded(
-                                child: Text(
-                                  '暂无实时状态',
-                                  style: typo.xSmall.copyWith(color: inactiveColor, fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
+                      );
+                    },
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
 
@@ -276,6 +193,232 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
       menuHandler: const shadcn.PopoverOverlayHandler(),
       child: card,
     );
+  }
+
+  Widget _header({
+    required String typeLabel,
+    required Color typeColor,
+    required Color successColor,
+    required Color inactiveColor,
+    required bool active,
+    required bool connected,
+    required String version,
+    required bool compact,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final typo = theme.typography;
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
+    final title = d.name.isEmpty ? '未命名下载器' : d.name;
+    final pills = [
+      _statusPill(
+        icon: connected ? shadcn.LucideIcons.link : shadcn.LucideIcons.unlink,
+        label: connected ? '已连接' : '未连接',
+        color: connected ? successColor : inactiveColor,
+        compact: compact,
+      ),
+      _statusPill(
+        icon: active ? shadcn.LucideIcons.power : shadcn.LucideIcons.powerOff,
+        label: active ? '已启用' : '已停用',
+        color: active ? successColor : inactiveColor,
+        compact: compact,
+      ),
+      _statusPill(
+        icon: shadcn.LucideIcons.zap,
+        label: d.brush ? '辅种关闭' : '辅种开启',
+        color: d.brush ? cs.mutedForeground : typeColor,
+        compact: compact,
+      ),
+    ];
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _typeMark(typeLabel, typeColor, active, connected, compact: compact),
+        SizedBox(width: tokens.size(12)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: typo.normal.copyWith(
+                        color: cs.foreground,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (version.isNotEmpty) ...[
+                    SizedBox(width: tokens.size(8)),
+                    _miniBadge(version, typeColor, compact: compact),
+                  ],
+                ],
+              ),
+              SizedBox(height: tokens.size(5)),
+              Wrap(
+                spacing: tokens.size(5),
+                runSpacing: tokens.size(4),
+                children: pills,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _connectionPanel(
+    BuildContext context, {
+    required bool privacy,
+    required String typeName,
+    required Color typeColor,
+    required bool compact,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
+    final address = _downloaderAddress(privacy);
+    final path = d.torrentPath.isEmpty ? '-' : d.torrentPath;
+
+    return Container(
+      width: double.infinity,
+      padding: tokens.edgeSymmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: cs.muted.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(theme.radiusMd),
+        border: Border.all(color: cs.border.withValues(alpha: 0.62)),
+      ),
+      child: compact
+          ? Column(
+              children: [
+                _infoLine(
+                  icon: shadcn.LucideIcons.link,
+                  label: typeName,
+                  value: address,
+                  accent: typeColor,
+                  copyValue: address,
+                  compact: compact,
+                ),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: tokens.size(32),
+                    top: tokens.size(5),
+                    bottom: tokens.size(5),
+                  ),
+                  child: Divider(
+                    height: 1,
+                    color: cs.border.withValues(alpha: 0.55),
+                  ),
+                ),
+                _infoLine(
+                  icon: shadcn.LucideIcons.folder,
+                  label: '种子路径',
+                  value: path,
+                  accent: cs.mutedForeground,
+                  copyValue: d.torrentPath,
+                  compact: compact,
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: _infoBlock(
+                    icon: shadcn.LucideIcons.link,
+                    label: typeName,
+                    value: address,
+                    accent: typeColor,
+                    copyValue: address,
+                    compact: compact,
+                  ),
+                ),
+                SizedBox(width: tokens.size(8)),
+                Expanded(
+                  child: _infoBlock(
+                    icon: shadcn.LucideIcons.folder,
+                    label: '种子路径',
+                    value: path,
+                    accent: cs.mutedForeground,
+                    copyValue: d.torrentPath,
+                    compact: compact,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _emptyLivePanel(
+    BuildContext context, {
+    required Color color,
+    required bool compact,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
+    final panel = Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: tokens.size(compact ? 70 : 84)),
+      padding: tokens.edgeAll(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.024),
+        borderRadius: BorderRadius.circular(theme.radiusMd),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: tokens.size(34),
+            height: tokens.size(34),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.card.withValues(alpha: 0.78),
+              borderRadius: BorderRadius.circular(theme.radiusMd),
+              border: Border.all(color: color.withValues(alpha: 0.12)),
+            ),
+            child: Icon(
+              shadcn.LucideIcons.activity,
+              size: tokens.icon(17),
+              color: color,
+            ),
+          ),
+          SizedBox(width: tokens.size(10)),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '暂无实时状态',
+                  style: theme.typography.small.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: tokens.size(2)),
+                Text(
+                  '等待实时连接后显示速度与累计数据',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.typography.xSmall.copyWith(
+                    color: cs.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (compact) return panel;
+    return Expanded(child: panel);
   }
 
   Future<void> _openTorrentList() async {
@@ -348,10 +491,7 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
     if (!privacy) return address;
     final uri = Uri.tryParse(address);
     if (uri == null || uri.host.isEmpty) return _maskText(address);
-    final maskedHost = uri.host
-        .split('.')
-        .map(_maskText)
-        .join('.');
+    final maskedHost = uri.host.split('.').map(_maskText).join('.');
     final authority = uri.hasPort ? '$maskedHost:${uri.port}' : maskedHost;
     return uri.hasScheme ? '${uri.scheme}://$authority' : authority;
   }
@@ -362,39 +502,73 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
     return '${text[0]}*${text[text.length - 1]}';
   }
 
-  Widget _typeMark(String label, Color color, bool active, bool connected) {
+  Future<void> _copyValue(String value) async {
+    final text = value.trim();
+    if (text.isEmpty || text == '-') return;
+    await Clipboard.setData(ClipboardData(text: text));
+    Toast.success('已复制');
+  }
+
+  Widget _typeMark(
+    String label,
+    Color color,
+    bool active,
+    bool connected, {
+    required bool compact,
+  }) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: theme.scaling * 42,
-          height: theme.scaling * 42,
+          width: tokens.size(52),
+          height: tokens.size(52),
           decoration: BoxDecoration(
-            color: active ? color.withValues(alpha: 0.14) : cs.muted.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? color.withValues(alpha: 0.32) : cs.border),
+            gradient: active
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [color.withValues(alpha: 0.78), color],
+                  )
+                : null,
+            color: active ? null : cs.muted.withValues(alpha: 0.30),
+            borderRadius: BorderRadius.circular(theme.radiusMd),
+            border: Border.all(
+              color: active
+                  ? color.withValues(alpha: 0.32)
+                  : cs.border.withValues(alpha: 0.82),
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.26),
+                      blurRadius: tokens.size(12),
+                      offset: Offset(0, tokens.size(6)),
+                    ),
+                  ]
+                : null,
           ),
           alignment: Alignment.center,
           child: Text(
             label,
-            style: theme.typography.small.copyWith(
-              color: active ? color : cs.mutedForeground,
+            style: theme.typography.normal.copyWith(
+              color: active ? Colors.white : cs.mutedForeground,
               fontWeight: FontWeight.w900,
             ),
           ),
         ),
         Positioned(
-          right: -1,
-          bottom: -1,
+          right: -tokens.size(1),
+          bottom: -tokens.size(1),
           child: Container(
-            width: theme.scaling * 10,
-            height: theme.scaling * 10,
+            width: tokens.size(14),
+            height: tokens.size(14),
             decoration: BoxDecoration(
               color: connected ? const Color(0xFF10B981) : cs.mutedForeground,
               shape: BoxShape.circle,
-              border: Border.all(color: cs.card, width: theme.scaling * 1.5),
+              border: Border.all(color: cs.card, width: tokens.size(1.5)),
             ),
           ),
         ),
@@ -406,23 +580,22 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
     required IconData icon,
     required String label,
     required Color color,
+    required bool compact,
   }) {
     final theme = shadcn.Theme.of(context);
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: theme.density.baseGap * theme.scaling * 0.62,
-        vertical: theme.density.baseGap * theme.scaling * 0.28,
-      ),
+      padding: tokens.edgeSymmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: theme.scaling * 10, color: color),
-          SizedBox(width: theme.density.baseGap * theme.scaling * 0.38),
+          Icon(icon, size: tokens.icon(12), color: color),
+          SizedBox(width: tokens.size(4)),
           Text(
             label,
             style: theme.typography.xSmall.copyWith(
@@ -435,17 +608,15 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
     );
   }
 
-  Widget _miniBadge(String label, Color color, shadcn.ColorScheme cs) {
+  Widget _miniBadge(String label, Color color, {required bool compact}) {
     final theme = shadcn.Theme.of(context);
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: theme.density.baseGap * theme.scaling * 0.6,
-        vertical: theme.density.baseGap * theme.scaling * 0.25,
-      ),
+      padding: tokens.edgeSymmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
+        borderRadius: BorderRadius.circular(theme.radiusSm),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Text(
         label,
@@ -462,47 +633,173 @@ class _DownloaderCardState extends ConsumerState<DownloaderCard> {
     required String label,
     required String value,
     required Color accent,
+    required String copyValue,
+    required bool compact,
   }) {
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
     return Row(
       children: [
         Container(
-          width: theme.scaling * 20,
-          height: theme.scaling * 20,
+          width: tokens.size(24),
+          height: tokens.size(24),
           decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(6),
+            color: accent.withValues(alpha: 0.09),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: accent.withValues(alpha: 0.10)),
           ),
           alignment: Alignment.center,
-          child: Icon(icon, size: theme.scaling * 12, color: accent),
+          child: Icon(icon, size: tokens.icon(13), color: accent),
         ),
-        SizedBox(width: theme.density.baseGap * theme.scaling * 0.55),
+        SizedBox(width: tokens.size(10)),
         SizedBox(
-          width: theme.scaling * 74,
+          width: tokens.size(92),
           child: Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.typography.xSmall.copyWith(
-              color: cs.mutedForeground,
-              fontWeight: FontWeight.w600,
+              color: cs.foreground.withValues(alpha: 0.78),
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
-        SizedBox(width: theme.density.baseGap * theme.scaling * 0.45),
+        SizedBox(width: tokens.size(8)),
         Expanded(
           child: Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.typography.xSmall.copyWith(
-              color: cs.foreground.withValues(alpha: 0.82),
+              color: cs.foreground.withValues(alpha: 0.88),
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ),
+        SizedBox(width: tokens.size(6)),
+        shadcn.IconButton.ghost(
+          size: shadcn.ButtonSize.small,
+          onPressed: copyValue.trim().isEmpty || copyValue == '-'
+              ? null
+              : () => _copyValue(copyValue),
+          icon: Icon(
+            shadcn.LucideIcons.copy,
+            size: tokens.icon(14),
+            color: cs.mutedForeground,
           ),
         ),
       ],
     );
   }
+
+  Widget _infoBlock({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color accent,
+    required String copyValue,
+    required bool compact,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final tokens = _DownloaderCardTokens.of(context, compact: compact);
+    return Row(
+      children: [
+        Container(
+          width: tokens.size(24),
+          height: tokens.size(24),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.09),
+            borderRadius: BorderRadius.circular(theme.radiusSm),
+            border: Border.all(color: accent.withValues(alpha: 0.10)),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: tokens.icon(13), color: accent),
+        ),
+        SizedBox(width: tokens.size(8)),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.typography.xSmall.copyWith(
+                  color: cs.foreground.withValues(alpha: 0.70),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: tokens.size(1)),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.typography.xSmall.copyWith(
+                  color: cs.foreground.withValues(alpha: 0.88),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: tokens.size(4)),
+        shadcn.IconButton.ghost(
+          size: shadcn.ButtonSize.small,
+          onPressed: copyValue.trim().isEmpty || copyValue == '-'
+              ? null
+              : () => _copyValue(copyValue),
+          icon: Icon(
+            shadcn.LucideIcons.copy,
+            size: tokens.icon(14),
+            color: cs.mutedForeground,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DownloaderCardTokens {
+  final double densityScale;
+  final double iconScale;
+
+  const _DownloaderCardTokens._({
+    required this.densityScale,
+    required this.iconScale,
+  });
+
+  factory _DownloaderCardTokens.of(
+    BuildContext context, {
+    bool compact = false,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final densityScale =
+        ((theme.density.baseContentPadding / 16.0) *
+                theme.scaling *
+                (compact ? 0.92 : 1.0))
+            .clamp(0.68, 1.28)
+            .toDouble();
+    return _DownloaderCardTokens._(
+      densityScale: densityScale,
+      iconScale: theme.scaling.clamp(0.82, 1.24).toDouble(),
+    );
+  }
+
+  double size(num value) => value * densityScale;
+
+  double icon(num value) => value * iconScale;
+
+  EdgeInsets edgeAll(num value) => EdgeInsets.all(size(value));
+
+  EdgeInsets edgeFromLTRB(num left, num top, num right, num bottom) =>
+      EdgeInsets.fromLTRB(size(left), size(top), size(right), size(bottom));
+
+  EdgeInsets edgeSymmetric({num horizontal = 0, num vertical = 0}) =>
+      EdgeInsets.symmetric(
+        horizontal: size(horizontal),
+        vertical: size(vertical),
+      );
 }

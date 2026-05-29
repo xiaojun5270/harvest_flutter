@@ -28,6 +28,7 @@ class _TrSettingsDialogState extends ConsumerState<TrSettingsDialog> {
   bool _saving = false;
   String? _error;
   TransmissionPreferences? _prefs;
+  Map<String, dynamic> _rawPrefs = const {};
   int _tabIndex = 0;
 
   // ── 存储 ──
@@ -112,6 +113,7 @@ class _TrSettingsDialogState extends ConsumerState<TrSettingsDialog> {
         });
         return;
       }
+      _rawPrefs = prefs;
       _prefs = TransmissionPreferences.fromJson(prefs);
       _fillControllers();
       setState(() => _loading = false);
@@ -133,12 +135,24 @@ class _TrSettingsDialogState extends ConsumerState<TrSettingsDialog> {
     _renamePartial = p.renamePartialFiles;
 
     // 限速
-    _speedDownCtrl.text = p.speedLimitDown.toString();
-    _speedUpCtrl.text = p.speedLimitUp.toString();
+    _speedDownCtrl.text = _speedLimitDisplay(
+      'speed-limit-down',
+      p.speedLimitDown,
+    ).toString();
+    _speedUpCtrl.text = _speedLimitDisplay(
+      'speed-limit-up',
+      p.speedLimitUp,
+    ).toString();
     _speedDownEnabled = p.speedLimitDownEnabled;
     _speedUpEnabled = p.speedLimitUpEnabled;
-    _altSpeedDownCtrl.text = p.altSpeedDown.toString();
-    _altSpeedUpCtrl.text = p.altSpeedUp.toString();
+    _altSpeedDownCtrl.text = _speedLimitDisplay(
+      'alt-speed-down',
+      p.altSpeedDown,
+    ).toString();
+    _altSpeedUpCtrl.text = _speedLimitDisplay(
+      'alt-speed-up',
+      p.altSpeedUp,
+    ).toString();
     _altSpeedEnabled = p.altSpeedEnabled;
 
     // 备用带宽调度
@@ -205,6 +219,18 @@ class _TrSettingsDialogState extends ConsumerState<TrSettingsDialog> {
       return null;
     }
     return h * 60 + m;
+  }
+
+  int _speedLimitDisplay(String key, int fallback) {
+    if (!_rawPrefs.containsKey(key)) return fallback;
+    final raw = _rawPrefs[key];
+    final value = raw is int
+        ? raw
+        : raw is num
+        ? raw.toInt()
+        : int.tryParse(raw?.toString() ?? '') ?? fallback;
+    if (value <= 0) return 0;
+    return value ~/ 1000;
   }
 
   bool _isDaySelected(int dayIndex) =>

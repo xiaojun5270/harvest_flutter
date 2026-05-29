@@ -214,16 +214,9 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                           ? shadcn.LucideIcons.pause
                           : shadcn.LucideIcons.radio,
                       label: '实时',
-                      value: paused ? '已暂停' : '接收中',
+                      value: !paused && countdown.isNotEmpty ? countdown : '',
                       color: paused ? cs.destructive : cs.primary,
                     ),
-                    if (!paused && remaining > 0)
-                      StatusBarMetric(
-                        icon: shadcn.LucideIcons.timer,
-                        label: '剩余',
-                        value: countdown,
-                        color: cs.primary,
-                      ),
                     StatusBarCount(label: '启用', count: activeCount),
                     StatusBarCount(label: '辅种', count: brushCount),
                     StatusBarCount(label: '总数', count: downloaders.length),
@@ -235,26 +228,23 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                 onTap: () => showSpeedSettings(context, ref),
                 icon: shadcn.LucideIcons.settings,
                 tooltip: '刷新设置',
+                color: cs.mutedForeground,
               ),
-              StatusBarPillButton(
+              StatusBarIconButton(
                 onTap: () {
                   ref.read(speedPausedProvider.notifier).state = !paused;
                 },
                 icon: paused
                     ? shadcn.LucideIcons.play
                     : shadcn.LucideIcons.pause,
-                label: paused ? '恢复' : '暂停',
-                color: paused
-                    ? const Color(0xFF10B981)
-                    : const Color(0xFFF59E0B),
                 tooltip: paused ? '恢复实时状态' : '暂停实时状态',
+                color: cs.mutedForeground,
               ),
-              shadcn.IconButton.ghost(
-                onPressed: () => _showEditor(),
-                icon: shadcn.Tooltip(
-                  tooltip: (_) => const Text('添加下载器'),
-                  child: const Icon(shadcn.LucideIcons.plus, size: 18),
-                ),
+              StatusBarIconButton(
+                onTap: () => _showEditor(),
+                icon: shadcn.LucideIcons.plus,
+                tooltip: '添加下载器',
+                color: cs.mutedForeground,
               ),
             ],
           );
