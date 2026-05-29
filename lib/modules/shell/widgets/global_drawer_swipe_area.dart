@@ -15,7 +15,6 @@ import 'package:harvest/modules/login/login_history_provider.dart';
 import 'package:harvest/modules/news/provider/media_info_settings_provider.dart';
 import 'package:harvest/modules/option/widgets/option_page.dart';
 import 'package:harvest/modules/option/widgets/update_page.dart';
-import 'package:harvest/modules/search/unified_search_page.dart';
 import 'package:harvest/modules/shell/widgets/log_floating_overlay.dart';
 import 'package:harvest/modules/site/site_timeline_page.dart';
 import 'package:harvest/modules/user/provider/user_management_provider.dart';
@@ -342,11 +341,12 @@ class _GlobalDrawerPanel extends StatelessWidget {
                       icon: shadcn.LucideIcons.layoutDashboard,
                       onTap: () => _go('/dashboard'),
                     ),
-                    _navButton(
+                    _navItem(
                       context,
+                      key: 'search',
                       label: '搜索',
                       icon: shadcn.LucideIcons.search,
-                      onPressed: () => _push(const UnifiedSearchPage()),
+                      onTap: () => _go('/search'),
                     ),
                     if (showNews)
                       _navItem(
@@ -436,6 +436,9 @@ class _GlobalDrawerPanel extends StatelessWidget {
   Key? _selectedNavigationKey(String currentPath) {
     if (currentPath.startsWith('/dashboard')) {
       return const ValueKey<String>('dashboard');
+    }
+    if (currentPath.startsWith('/search')) {
+      return const ValueKey<String>('search');
     }
     if (currentPath.startsWith('/home')) {
       return const ValueKey<String>('news');

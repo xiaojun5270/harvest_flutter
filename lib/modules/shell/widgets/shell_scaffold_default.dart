@@ -1,9 +1,7 @@
-import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
-import '../../search/unified_search_page.dart';
 import 'shell_bottom_navigation.dart';
 
 class ShellScaffold extends ConsumerWidget {
@@ -11,8 +9,10 @@ class ShellScaffold extends ConsumerWidget {
   final Widget child;
   final int index;
   final ValueChanged<int> onChange;
+  final VoidCallback onSearchPress;
   final Object? scaffoldStyle;
   final bool dashboardChrome;
+  final bool showBottomControls;
   final bool showNews;
 
   const ShellScaffold({
@@ -21,16 +21,12 @@ class ShellScaffold extends ConsumerWidget {
     required this.child,
     required this.index,
     required this.onChange,
+    required this.onSearchPress,
     this.scaffoldStyle,
     this.dashboardChrome = false,
+    this.showBottomControls = true,
     this.showNews = true,
   });
-
-  void _openSearchPage(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const UnifiedSearchPage()));
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,18 +49,19 @@ class ShellScaffold extends ConsumerWidget {
             ),
           ),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: ShellBottomControls(
-            index: index,
-            onChange: onChange,
-            onSearchPress: () => _openSearchPage(context),
-            dashboardChrome: dashboardChrome,
-            showNews: showNews,
+        if (showBottomControls)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ShellBottomControls(
+              index: index,
+              onChange: onChange,
+              onSearchPress: onSearchPress,
+              dashboardChrome: dashboardChrome,
+              showNews: showNews,
+            ),
           ),
-        ),
       ],
     );
   }

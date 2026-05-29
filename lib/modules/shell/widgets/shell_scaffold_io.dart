@@ -1,10 +1,8 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
-import '../../search/unified_search_page.dart';
 import 'shell_bottom_navigation.dart';
 
 class ShellScaffold extends ConsumerWidget {
@@ -12,8 +10,10 @@ class ShellScaffold extends ConsumerWidget {
   final Widget child;
   final int index;
   final ValueChanged<int> onChange;
+  final VoidCallback onSearchPress;
   final Object? scaffoldStyle;
   final bool dashboardChrome;
+  final bool showBottomControls;
   final bool showNews;
 
   const ShellScaffold({
@@ -22,8 +22,10 @@ class ShellScaffold extends ConsumerWidget {
     required this.child,
     required this.index,
     required this.onChange,
+    required this.onSearchPress,
     this.scaffoldStyle,
     this.dashboardChrome = false,
+    this.showBottomControls = true,
     this.showNews = true,
   });
 
@@ -96,15 +98,9 @@ class ShellScaffold extends ConsumerWidget {
 
   int get _searchIndex => _visibleItems.length - 1;
 
-  void _openSearchPage(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const UnifiedSearchPage()));
-  }
-
   void _handleNavigationTap(BuildContext context, int tappedIndex) {
     if (tappedIndex == _searchIndex) {
-      _openSearchPage(context);
+      onSearchPress();
       return;
     }
 
@@ -124,22 +120,25 @@ class ShellScaffold extends ConsumerWidget {
       return AdaptiveScaffold(
         minimizeBehavior: TabBarMinimizeBehavior.never,
         enableBlur: false,
-        bottomNavigationBar: AdaptiveBottomNavigationBar(
-          useNativeBottomBar: true,
-          selectedIndex: _selectedIndex,
-          onTap: (tappedIndex) => _handleNavigationTap(context, tappedIndex),
-          selectedItemColor: colors.primary,
-          unselectedItemColor: colors.foreground.withValues(alpha: 0.58),
-          items: [
-            for (final item in _visibleItems)
-              AdaptiveNavigationDestination(
-                icon: item.icon,
-                selectedIcon: item.selectedIcon,
-                label: item.label,
-                isSearch: item.isSearch,
-              ),
-          ],
-        ),
+        bottomNavigationBar: showBottomControls
+            ? AdaptiveBottomNavigationBar(
+                useNativeBottomBar: true,
+                selectedIndex: _selectedIndex,
+                onTap: (tappedIndex) =>
+                    _handleNavigationTap(context, tappedIndex),
+                selectedItemColor: colors.primary,
+                unselectedItemColor: colors.foreground.withValues(alpha: 0.58),
+                items: [
+                  for (final item in _visibleItems)
+                    AdaptiveNavigationDestination(
+                      icon: item.icon,
+                      selectedIcon: item.selectedIcon,
+                      label: item.label,
+                      isSearch: item.isSearch,
+                    ),
+                ],
+              )
+            : null,
         body: _ShellBackground(
           child: shadcn.ComponentTheme(
             data: shadcn.ScaffoldTheme(backgroundColor: colors.background),
@@ -162,8 +161,9 @@ class ShellScaffold extends ConsumerWidget {
       header: header,
       selectedIndex: _selectedPageIndex,
       onChange: onChange,
-      onSearchPress: () => _openSearchPage(context),
+      onSearchPress: onSearchPress,
       dashboardChrome: effectiveDashboardChrome,
+      showBottomControls: showBottomControls,
       showNews: showNews,
       useShaderLiquidGlass: false,
       child: child,
@@ -178,6 +178,7 @@ class _CustomShellScaffoldBody extends StatelessWidget {
   final ValueChanged<int> onChange;
   final VoidCallback onSearchPress;
   final bool dashboardChrome;
+  final bool showBottomControls;
   final bool showNews;
   final bool useShaderLiquidGlass;
 
@@ -188,6 +189,7 @@ class _CustomShellScaffoldBody extends StatelessWidget {
     required this.onChange,
     required this.onSearchPress,
     required this.dashboardChrome,
+    required this.showBottomControls,
     required this.showNews,
     required this.useShaderLiquidGlass,
   });
@@ -214,19 +216,20 @@ class _CustomShellScaffoldBody extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: ShellBottomControls(
-            index: selectedIndex,
-            onChange: onChange,
-            onSearchPress: onSearchPress,
-            dashboardChrome: dashboardChrome,
-            showNews: showNews,
-            useShaderLiquidGlass: useShaderLiquidGlass,
+        if (showBottomControls)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ShellBottomControls(
+              index: selectedIndex,
+              onChange: onChange,
+              onSearchPress: onSearchPress,
+              dashboardChrome: dashboardChrome,
+              showNews: showNews,
+              useShaderLiquidGlass: useShaderLiquidGlass,
+            ),
           ),
-        ),
       ],
     );
   }

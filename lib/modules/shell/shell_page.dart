@@ -29,6 +29,7 @@ import '../news/provider/media_info_settings_provider.dart';
 import '../option/provider/update_provider.dart';
 import '../option/widgets/option_page.dart';
 import '../option/widgets/update_page.dart';
+import '../search/unified_search_page.dart';
 import '../site/site_page.dart';
 import '../task/task_page.dart';
 import '../user/provider/user_management_provider.dart';
@@ -60,33 +61,26 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     '/dashboard',
     '/downloads',
     '/tasks',
+    '/search',
   ];
-  static final _pages = [
-    NewsPage(),
-    SitePage(),
-    const DashboardPage(),
-    DownloaderPage(),
-    TaskPage(),
-  ];
-  static const _pageTitles = ['资讯', '站点', '仪表盘', '下载器', '任务中心'];
+  static const _primaryPageCount = 5;
+  static const _defaultPrimaryPageIndex = 2;
+  static const _searchPageIndex = 5;
+  static const _pageTitles = ['资讯', '站点', '仪表盘', '下载器', '任务中心', '搜索'];
   static const _pageSubtitles = [
     '跟踪最新动态与公告',
     '维护站点配置与状态',
     '查看关键运行指标',
     '管理下载器与传输任务',
     '处理自动化与后台任务',
+    '检索影视信息与站点资源',
   ];
 
   final _screenshotKey = GlobalKey();
   bool _capturing = false;
   bool _drawerOpening = false;
   bool _exitDialogOpen = false;
-  int? _suppressedPageChangedIndex;
-
-  @override
-  void initState() {
-    super.initState();
-  }
+  int _lastPrimaryIndex = _defaultPrimaryPageIndex;
 
   @override
   void didChangeDependencies() {
@@ -102,23 +96,45 @@ class _ShellPageState extends ConsumerState<ShellPage> {
 
   void _onTap(int index) {
     final target = index.clamp(0, _routes.length - 1).toInt();
-    _suppressedPageChangedIndex = target;
-    _pageController?.jumpToPage(target);
+    _jumpToPage(target);
     context.go(_routes[target]);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _suppressedPageChangedIndex == target) {
-        _suppressedPageChangedIndex = null;
-      }
-    });
   }
 
-  void _onPageChanged(int index) {
-    final target = index.clamp(0, _routes.length - 1).toInt();
-    if (_suppressedPageChangedIndex == target) {
-      _suppressedPageChangedIndex = null;
-      return;
-    }
-    context.go(_routes[target]);
+  void _openSearchPage() {
+    _onTap(_searchPageIndex);
+  }
+
+  void _closeSearchPage() {
+    final target = _lastPrimaryIndex.clamp(0, _primaryPageCount - 1).toInt();
+    _onTap(target);
+  }
+
+  List<Widget> _buildPages() {
+    return [
+      const _KeepAlivePage(child: NewsPage()),
+      const _KeepAlivePage(child: SitePage()),
+      const _KeepAlivePage(child: DashboardPage()),
+      const _KeepAlivePage(child: DownloaderPage()),
+      const _KeepAlivePage(child: TaskPage()),
+      _KeepAlivePage(child: UnifiedSearchPage(onClose: _closeSearchPage)),
+    ];
+  }
+
+  void _jumpToPage(int index) {
+    final controller = _pageController;
+    if (controller == null || !controller.hasClients) return;
+    controller.jumpToPage(index);
+  }
+
+  void _syncPageController(int index) {
+    final controller = _pageController;
+    if (controller == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !controller.hasClients) return;
+      final currentPage = controller.page?.round();
+      if (currentPage == index) return;
+      controller.jumpToPage(index);
+    });
   }
 
   @override
@@ -231,6 +247,14 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     await SystemNavigator.pop(animated: true);
   }
 
+  void _handleBack(int currentIndex) {
+    if (currentIndex == _searchPageIndex) {
+      _closeSearchPage();
+      return;
+    }
+    unawaited(_confirmExitApp());
+  }
+
   // ── 抽屉 ──
 
   void _openDrawer() {
@@ -273,12 +297,18 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         if (!n.isRead) n,
     ];
     final colors = shadcn.Theme.of(context).colorScheme;
+    if (currentIndex < _primaryPageCount) {
+      _lastPrimaryIndex = currentIndex;
+    }
+    final navigationIndex = currentIndex < _primaryPageCount
+        ? currentIndex
+        : _lastPrimaryIndex.clamp(0, _primaryPageCount - 1).toInt();
+    final isSearchPage = currentIndex == _searchPageIndex;
+    _syncPageController(currentIndex);
 
     if (!showNews && currentIndex == 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _suppressedPageChangedIndex = 2;
-        _pageController?.jumpToPage(2);
         context.go('/dashboard');
       });
     }
@@ -287,49 +317,53 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        unawaited(_confirmExitApp());
+        _handleBack(currentIndex);
       },
       child: EscapeBackScope(
-        onBack: () => unawaited(_confirmExitApp()),
+        onBack: () => _handleBack(currentIndex),
         child: ShellScaffold(
-          index: currentIndex,
+          index: navigationIndex,
           onChange: _onTap,
+          onSearchPress: _openSearchPage,
           dashboardChrome: false,
+          showBottomControls: !isSearchPage,
           showNews: showNews,
-          header: _ShellHeader(
-            title: _pageTitles[currentIndex],
-            subtitle: _pageSubtitles[currentIndex],
-            unreadCount: unreadCount,
-            unreadNotices: unread,
-            onOpenNotices: () => Navigator.push(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (_, __, ___) => const NoticeHistoryPage(),
-              ),
-            ),
-            onOpenDrawer: _openDrawer,
-            hasAppUpgrade: hasAppUpgrade,
-            onAppUpgrade: _openAppUpgradeFromHeader,
-            updateState: updateState,
-            avatar: _AccountMenuButton(
-              user: user,
-              showAdminUser: showAdminUser,
-              showAccountSwitcher: ref.watch(loginHistoryProvider).length >= 2,
-              hasAppUpgrade: hasAppUpgrade,
-              updateState: updateState,
-              onScreenshot: _takeScreenshot,
-              appUpgradeController: _appUpgradeController,
-            ),
-          ),
+          header: isSearchPage
+              ? const SizedBox.shrink()
+              : _ShellHeader(
+                  title: _pageTitles[currentIndex],
+                  subtitle: _pageSubtitles[currentIndex],
+                  unreadCount: unreadCount,
+                  unreadNotices: unread,
+                  onOpenNotices: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (_, __, ___) => const NoticeHistoryPage(),
+                    ),
+                  ),
+                  onOpenDrawer: _openDrawer,
+                  hasAppUpgrade: hasAppUpgrade,
+                  onAppUpgrade: _openAppUpgradeFromHeader,
+                  updateState: updateState,
+                  avatar: _AccountMenuButton(
+                    user: user,
+                    showAdminUser: showAdminUser,
+                    showAccountSwitcher:
+                        ref.watch(loginHistoryProvider).length >= 2,
+                    hasAppUpgrade: hasAppUpgrade,
+                    updateState: updateState,
+                    onScreenshot: _takeScreenshot,
+                    appUpgradeController: _appUpgradeController,
+                  ),
+                ),
           child: Stack(
             children: [
               RepaintBoundary(
                 key: _screenshotKey,
                 child: PageView(
                   controller: _pageController,
-                  onPageChanged: _onPageChanged,
                   physics: const NeverScrollableScrollPhysics(),
-                  children: _pages,
+                  children: _buildPages(),
                 ),
               ),
               if (!kIsWeb)
@@ -356,6 +390,27 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         ),
       ),
     );
+  }
+}
+
+class _KeepAlivePage extends StatefulWidget {
+  final Widget child;
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+
+  const _KeepAlivePage({required this.child});
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 

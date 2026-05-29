@@ -56,7 +56,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         redirect: (_, __) => kIsWeb ? '/dashboard' : null,
         builder: (_, __) => const AppUpgradePage(),
       ),
-      GoRoute(path: '/:tab', builder: (context, state) => const ShellPage()),
+      GoRoute(
+        path: '/:tab',
+        pageBuilder: (context, state) => const NoTransitionPage<void>(
+          key: ValueKey<String>('shell-page'),
+          child: ShellPage(),
+        ),
+      ),
 
       /// ⭐ Shell 主框架
       // ShellRoute(

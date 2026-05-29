@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,11 +39,13 @@ const _resourceResolutionValues = ['720P', '1080P', '2160P', '4K', '8K'];
 class UnifiedSearchPage extends ConsumerStatefulWidget {
   final String? initialQuery;
   final SearchMode initialMode;
+  final VoidCallback? onClose;
 
   const UnifiedSearchPage({
     super.key,
     this.initialQuery,
     this.initialMode = SearchMode.media,
+    this.onClose,
   });
 
   @override
@@ -51,7 +55,9 @@ class UnifiedSearchPage extends ConsumerStatefulWidget {
 class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
   final _ctrl = TextEditingController();
   final _focusNode = FocusNode();
-  final _scrollController = ScrollController();
+  final _historyScrollController = ScrollController();
+  final _mediaScrollController = ScrollController();
+  final _resourceScrollController = ScrollController();
 
   SearchMode _mode = SearchMode.media;
   String _query = '';
@@ -119,7 +125,9 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
     _closeResourceFilterPopover();
     _ctrl.dispose();
     _focusNode.dispose();
-    _scrollController.dispose();
+    _historyScrollController.dispose();
+    _mediaScrollController.dispose();
+    _resourceScrollController.dispose();
     super.dispose();
   }
 
@@ -128,7 +136,17 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
   // ═══════════════════════════════════════════════
 
   void _bindActiveScrollController() {
-    ref.read(activeScrollControllerProvider.notifier).state = _scrollController;
+    ref
+        .read(activeScrollControllerProvider.notifier)
+        .state = _mode == SearchMode.media
+        ? _mediaScrollController
+        : _resourceScrollController;
+  }
+
+  void _queueBindActiveScrollController() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _bindActiveScrollController();
+    });
   }
 
   void _onTextChanged(String value) {
@@ -197,6 +215,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
     } else {
       _searchResource(q);
     }
+    _queueBindActiveScrollController();
   }
 
   Future<void> _searchMedia(String q) async {
@@ -275,6 +294,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
         selection: TextSelection.collapsed(offset: nextQuery.length),
       );
     });
+    _queueBindActiveScrollController();
   }
 
   void _onClear() {
@@ -434,6 +454,15 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
     );
   }
 
+  Future<void> _closePage() async {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    await closeAppSheet(context);
+  }
+
   // ═══════════════════════════════════════════════
   // Build
   // ═══════════════════════════════════════════════
@@ -455,7 +484,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
     final headerTrailingInset = appHeaderTrailingInset(context);
 
     return EscapeBackScope(
-      onBack: () => closeAppSheet(context),
+      onBack: () => unawaited(_closePage()),
       child: GlobalDrawerSwipeArea(
         child: AppBackground(
           child: shadcn.OverlayManagerLayer(
@@ -479,7 +508,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
                       size: 18,
                       color: cs.foreground,
                     ),
-                    onPressed: () => closeAppSheet(context),
+                    onPressed: _closePage,
                   ),
                 ),
                 leadingWidth: 48 + appHeaderLeadingInset(context),
@@ -684,7 +713,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
             constraints: const BoxConstraints(maxHeight: 240),
             child: ListView.builder(
               shrinkWrap: true,
-              controller: _scrollController,
+              controller: _historyScrollController,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               itemCount: history.length,
               itemBuilder: (_, i) {
@@ -742,16 +771,37 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
   // ═══════════════════════════════════════════════
 
   Widget _buildBody(BuildContext context, ResourceSearchState resourceState) {
-    if (_query.isEmpty) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _SearchModePane(
+          active: _mode == SearchMode.media,
+          child: _buildModeBody(context, SearchMode.media, resourceState),
+        ),
+        _SearchModePane(
+          active: _mode == SearchMode.resource,
+          child: _buildModeBody(context, SearchMode.resource, resourceState),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeBody(
+    BuildContext context,
+    SearchMode mode,
+    ResourceSearchState resourceState,
+  ) {
+    final query = _modeQuery(mode);
+    if (query.isEmpty) {
       return _buildEmptyHint(
-        '输入${_mode == SearchMode.media ? '影视名称' : '资源关键词'}开始搜索',
+        '输入${mode == SearchMode.media ? '影视名称' : '资源关键词'}开始搜索',
       );
     }
-    final activeSubmittedQuery = _modeSubmittedQuery(_mode);
-    if (activeSubmittedQuery.isEmpty || _query != activeSubmittedQuery) {
+    final activeSubmittedQuery = _modeSubmittedQuery(mode);
+    if (activeSubmittedQuery.isEmpty || query != activeSubmittedQuery) {
       return _buildEmptyHint('按回车开始搜索');
     }
-    if (_mode == SearchMode.media) return _buildMediaBody(context);
+    if (mode == SearchMode.media) return _buildMediaBody(context);
     return _buildResourceBody(context, resourceState);
   }
 
@@ -799,7 +849,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
     }
     final mobile = context.isMobile;
     return ListView(
-      controller: _scrollController,
+      controller: _mediaScrollController,
       padding: EdgeInsets.fromLTRB(mobile ? 12 : 16, 8, mobile ? 12 : 16, 80),
       children: [
         if (_tmdbResults.isNotEmpty)
@@ -1314,7 +1364,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
       );
     }
     return ListView.separated(
-      controller: _scrollController,
+      controller: _resourceScrollController,
       padding: EdgeInsets.fromLTRB(mobile ? 8 : 16, 8, mobile ? 8 : 16, 80),
       itemCount: results.length,
       separatorBuilder: (_, __) => const SizedBox(height: 6),
@@ -2643,6 +2693,31 @@ class _ResourceFilterChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SearchModePane extends StatefulWidget {
+  final bool active;
+  final Widget child;
+
+  const _SearchModePane({required this.active, required this.child});
+
+  @override
+  State<_SearchModePane> createState() => _SearchModePaneState();
+}
+
+class _SearchModePaneState extends State<_SearchModePane>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Offstage(
+      offstage: !widget.active,
+      child: TickerMode(enabled: widget.active, child: widget.child),
     );
   }
 }
