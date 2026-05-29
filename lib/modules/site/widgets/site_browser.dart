@@ -142,6 +142,7 @@ Future<void> openSiteInternalBrowser(BuildContext context, SiteInfo site, {Strin
     url: targetUrl,
     title: title ?? (site.nickname.isNotEmpty ? site.nickname : site.site),
     cookie: site.cookie,
+    localStorage: site.localStorage,
     userAgent: site.userAgent,
     siteId: site.site,
   );

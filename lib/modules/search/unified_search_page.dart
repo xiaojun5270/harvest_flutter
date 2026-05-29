@@ -1942,6 +1942,7 @@ class _UnifiedSearchPageState extends ConsumerState<UnifiedSearchPage> {
           url: item.detailUrl,
           title: item.title,
           cookie: site?.cookie,
+          localStorage: site?.localStorage,
           userAgent: site?.userAgent,
           siteId: site?.site ?? item.siteId,
         ),

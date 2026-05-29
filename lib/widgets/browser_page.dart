@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -30,16 +32,27 @@ const _safariIphoneUserAgent =
     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 const _safariMacosUserAgent =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+const _localStorageInjectedKey = '__harvest_local_storage_injected__';
 
 class BrowserPage extends StatefulWidget {
   final String url;
   final String? title;
   final String? cookie;
+  final String? localStorage;
   final String? userAgent;
   final String? siteId;
   final WebSite? website;
 
-  const BrowserPage({super.key, required this.url, this.title, this.cookie, this.userAgent, this.siteId, this.website});
+  const BrowserPage({
+    super.key,
+    required this.url,
+    this.title,
+    this.cookie,
+    this.localStorage,
+    this.userAgent,
+    this.siteId,
+    this.website,
+  });
 
   /// 快捷打开
   static void open(
@@ -47,6 +60,7 @@ class BrowserPage extends StatefulWidget {
     required String url,
     String? title,
     String? cookie,
+    String? localStorage,
     String? userAgent,
     String? siteId,
     WebSite? website,
@@ -58,6 +72,7 @@ class BrowserPage extends StatefulWidget {
           url: normalizedUrl,
           title: title,
           cookie: cookie,
+          localStorage: localStorage,
           userAgent: userAgent,
           siteId: siteId,
           website: website,
@@ -75,7 +90,6 @@ class BrowserCookieQuickMenu extends StatelessWidget {
   final ValueChanged<SiteBrowseTarget> onSelected;
   final Widget? badge;
   final String menuLabel;
-  final VoidCallback? onExtractCookie;
 
   const BrowserCookieQuickMenu({
     super.key,
@@ -83,14 +97,13 @@ class BrowserCookieQuickMenu extends StatelessWidget {
     required this.onSelected,
     this.badge,
     this.menuLabel = '快速跳转',
-    this.onExtractCookie,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
     // 检查是否有任何可显示的内容
-    final hasContent = targets.isNotEmpty || onExtractCookie != null;
+    final hasContent = targets.isNotEmpty;
     final effectiveBadge = badge ?? _defaultCookieBadge(hasContent);
 
     if (!hasContent) return effectiveBadge;
@@ -126,29 +139,25 @@ class BrowserCookieQuickMenu extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(target.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(
+                            target.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             _browserDisplayUrl(target.url),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 10, color: cs.foreground.withValues(alpha: 0.48)),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: cs.foreground.withValues(alpha: 0.48),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                if (onExtractCookie != null) ...[
-                  const shadcn.MenuDivider(),
-                  shadcn.MenuButton(
-                    leading: const Icon(shadcn.LucideIcons.cloudDownload),
-                    onPressed: (itemContext) {
-                      shadcn.closeOverlay(itemContext);
-                      onExtractCookie!();
-                    },
-                    child: const Text('提取并同步 Cookie'),
-                  ),
-                ],
               ],
             ),
           ),
@@ -171,16 +180,27 @@ class BrowserCookieQuickMenu extends StatelessWidget {
           Container(
             width: 5,
             height: 5,
-            decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+              color: Color(0xFF10B981),
+              shape: BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 4),
           const Text(
             'Cookie',
-            style: TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Color(0xFF10B981),
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (hasTargets) ...[
             const SizedBox(width: 3),
-            const Icon(shadcn.LucideIcons.chevronDown, size: 10, color: Color(0xFF10B981)),
+            const Icon(
+              shadcn.LucideIcons.chevronDown,
+              size: 10,
+              color: Color(0xFF10B981),
+            ),
           ],
         ],
       ),
@@ -193,7 +213,9 @@ String _normalizeInitialBrowserUrl(String value) {
   final uri = Uri.tryParse(text);
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) return text;
   final normalizedPath = uri.path.replaceAll(RegExp(r'/+'), '/');
-  return uri.replace(path: normalizedPath.isEmpty ? null : normalizedPath).toString();
+  return uri
+      .replace(path: normalizedPath.isEmpty ? null : normalizedPath)
+      .toString();
 }
 
 String _browserDisplayUrl(String url) {
@@ -201,7 +223,9 @@ String _browserDisplayUrl(String url) {
   try {
     final uri = Uri.parse(url);
     final display = uri.host + uri.path;
-    return display.endsWith('/') ? display.substring(0, display.length - 1) : display;
+    return display.endsWith('/')
+        ? display.substring(0, display.length - 1)
+        : display;
   } catch (_) {
     return url;
   }
@@ -212,8 +236,8 @@ class _BrowserPageState extends State<BrowserPage> {
   String _currentUrl = '';
   String _lastLoadedPageUrl = '';
   String _currentTitle = '';
-  String? _activeUserAgent = _safariIphoneUserAgent;
-  String _activeUserAgentId = 'safari_iphone';
+  String? _activeUserAgent = _safariMacosUserAgent;
+  String _activeUserAgentId = 'safari_macos';
   String? _defaultUserAgent;
   double _progress = 0;
   bool _canGoBack = false;
@@ -221,8 +245,10 @@ class _BrowserPageState extends State<BrowserPage> {
   bool _isLoading = true;
   bool _cookiesReady = false;
   bool _hasReadableCookie = false;
+  bool _hasReadableLocalStorage = false;
   bool _closing = false;
   bool _torrentSheetOpen = false;
+  bool _retriedInitialUrlAfterLocalStorageInjection = false;
   String? _activeTorrentUrl;
   String? _error;
   bool _extractingTorrentList = false;
@@ -234,12 +260,30 @@ class _BrowserPageState extends State<BrowserPage> {
   @override
   void initState() {
     super.initState();
+    _enableWebViewDebugging();
     _currentUrl = widget.url;
     _lastLoadedPageUrl = widget.url;
     _currentTitle = widget.title ?? '';
     _hasReadableCookie = widget.cookie?.trim().isNotEmpty == true;
+    _hasReadableLocalStorage = widget.localStorage?.trim().isNotEmpty == true;
     _prepareCookies();
     _loadDefaultUserAgent();
+  }
+
+  void _enableWebViewDebugging() {
+    if (!kDebugMode ||
+        kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    unawaited(
+      InAppWebViewController.setWebContentsDebuggingEnabled(true).catchError((
+        Object e,
+        StackTrace st,
+      ) {
+        AppLogger.warn('开启 Android WebView 调试失败: $e\n$st');
+      }),
+    );
   }
 
   @override
@@ -368,6 +412,334 @@ class _BrowserPageState extends State<BrowserPage> {
     if (mounted && !_closing) setState(() => _cookiesReady = true);
   }
 
+  UnmodifiableListView<UserScript>? _configuredLocalStorageUserScripts() {
+    final source = _configuredLocalStorageInjectionScript();
+    if (source == null) return null;
+    return UnmodifiableListView([
+      UserScript(
+        source: source,
+        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+      ),
+    ]);
+  }
+
+  InAppWebViewInitialData? _configuredLocalStorageBootstrapInitialData() {
+    final source = _configuredLocalStorageInjectionScript(url: widget.url);
+    if (source == null) return null;
+
+    final targetUrl = widget.url.trim();
+    if (targetUrl.isEmpty) return null;
+
+    return InAppWebViewInitialData(
+      baseUrl: WebUri(targetUrl),
+      historyUrl: WebUri(targetUrl),
+      data: _buildLocalStorageBootstrapHtml(
+        injectionScript: source,
+        targetUrl: targetUrl,
+      ),
+    );
+  }
+
+  String _buildLocalStorageBootstrapHtml({
+    required String injectionScript,
+    required String targetUrl,
+  }) {
+    final encodedTargetUrl = jsonEncode(targetUrl);
+    return '''
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (() => {
+      try {
+        $injectionScript
+      } catch (_) {}
+      window.location.replace($encodedTargetUrl);
+    })();
+  </script>
+</head>
+<body></body>
+</html>
+''';
+  }
+
+  Future<int> _injectConfiguredLocalStorage(
+    InAppWebViewController controller,
+    String? url,
+  ) async {
+    if (_closing) return 0;
+    final source = _configuredLocalStorageInjectionScript(url: url);
+    if (source == null) return 0;
+
+    try {
+      final raw = await controller.evaluateJavascript(source: source);
+      final count = _javascriptInt(raw);
+      AppLogger.info(
+        '注入内置浏览器 localStorage: url=${url ?? _currentUrl}, count=$count, configuredLength=${widget.localStorage?.trim().length ?? 0}',
+      );
+      return count;
+    } catch (e, st) {
+      AppLogger.warn('注入内置浏览器 localStorage 失败: $e\n$st');
+      return 0;
+    }
+  }
+
+  int _javascriptInt(Object? value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim()) ?? 0;
+    return 0;
+  }
+
+  String? _configuredLocalStorageInjectionScript({String? url}) {
+    final localStorage = widget.localStorage?.trim();
+    if (localStorage == null || localStorage.isEmpty) return null;
+
+    final allowedHosts = _configuredLocalStorageHosts();
+    if (allowedHosts.isEmpty) {
+      return null;
+    }
+    if (url?.trim().isNotEmpty == true) {
+      final currentUri = Uri.tryParse(url!.trim());
+      if (currentUri == null || !_isConfiguredLocalStorageHost(currentUri.host))
+        return null;
+    }
+    return _buildLocalStorageInjectionScript(
+      localStorage,
+      allowedHosts: allowedHosts,
+      installAuthBridge: _shouldInstallLocalStorageAuthBridge(localStorage),
+    );
+  }
+
+  Set<String> _configuredLocalStorageHosts() {
+    final hosts = <String>{};
+    void addHost(String? value) {
+      final uri = Uri.tryParse(value?.trim() ?? '');
+      if (uri == null ||
+          (uri.scheme != 'http' && uri.scheme != 'https') ||
+          uri.host.isEmpty) {
+        return;
+      }
+      final host = uri.host.toLowerCase();
+      hosts.add(host);
+      var baseHost = host;
+      if (baseHost.startsWith('www.')) {
+        baseHost = baseHost.substring(4);
+      } else if (baseHost.startsWith('m.')) {
+        baseHost = baseHost.substring(2);
+      }
+      hosts.add(baseHost);
+      hosts.add('www.$baseHost');
+      hosts.add('m.$baseHost');
+    }
+
+    addHost(widget.url);
+    for (final url in widget.website?.url ?? const <String>[]) {
+      addHost(url);
+    }
+    return hosts;
+  }
+
+  bool _isConfiguredLocalStorageHost(String host) {
+    return _configuredLocalStorageHosts().contains(host.toLowerCase());
+  }
+
+  bool _shouldInstallLocalStorageAuthBridge(String localStorage) {
+    final storageText = localStorage.toLowerCase();
+    if (!storageText.contains('auth') && !storageText.contains('token'))
+      return false;
+
+    final siteText = [
+      widget.url,
+      widget.title,
+      widget.siteId,
+      widget.website?.name,
+      widget.website?.nickname,
+      widget.website?.tracker,
+      ...?widget.website?.url,
+    ].whereType<String>().join(' ').toLowerCase();
+
+    return siteText.contains('m-team') ||
+        siteText.contains('mteam') ||
+        siteText.contains('rousi') ||
+        siteText.contains('肉丝');
+  }
+
+  String _buildLocalStorageInjectionScript(
+    String localStorage, {
+    required Set<String> allowedHosts,
+    required bool installAuthBridge,
+  }) {
+    final encodedHosts = jsonEncode(allowedHosts.toList()..sort());
+    final encodedMarker = jsonEncode(_localStorageInjectedKey);
+    final encodedStorage = jsonEncode(localStorage);
+    final authBridgeEnabled = installAuthBridge ? 'true' : 'false';
+    return '''
+(() => {
+  const allowedHosts = new Set($encodedHosts);
+  if (allowedHosts.size > 0 && !allowedHosts.has(window.location.hostname.toLowerCase())) return 0;
+
+  const marker = $encodedMarker;
+  try {
+    if (window.sessionStorage.getItem(marker) === 'cleared') return 0;
+  } catch (_) {}
+
+  const raw = $encodedStorage;
+  const valueText = (value) => {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') {
+      try { return JSON.stringify(value); } catch (_) {}
+    }
+    return String(value);
+  };
+  const setItem = (key, value) => {
+    if (key === undefined || key === null) return 0;
+    const textKey = String(key);
+    if (textKey.length === 0) return 0;
+    window.localStorage.setItem(textKey, valueText(value));
+    return 1;
+  };
+
+  const applyObject = (data) => {
+    let count = 0;
+    if (Array.isArray(data)) {
+      data.forEach((item) => {
+        if (Array.isArray(item) && item.length >= 2) count += setItem(item[0], item[1]);
+      });
+      return count;
+    }
+    if (!data || typeof data !== 'object') return count;
+    Object.keys(data).forEach((key) => count += setItem(key, data[key]));
+    return count;
+  };
+
+  const applyStorageText = (text) => {
+    let count = 0;
+    text.split(';').forEach((part) => {
+      const index = part.indexOf('=');
+      if (index <= 0) return;
+      count += setItem(part.slice(0, index).trim(), part.slice(index + 1).trim());
+    });
+    return count;
+  };
+
+  let count = 0;
+  const text = String(raw || '').trim();
+  if (text.startsWith('{') || text.startsWith('[')) {
+    try {
+      count = applyObject(JSON.parse(text));
+    } catch (_) {
+      count = applyStorageText(text);
+    }
+  } else {
+    count = applyStorageText(text);
+  }
+
+  if (count > 0) {
+    try { window.sessionStorage.setItem(marker, 'injected'); } catch (_) {}
+  }
+
+  const installAuthBridge = $authBridgeEnabled;
+  const installApiAuthBridge = () => {
+    if (!installAuthBridge || window.__harvest_api_auth_bridge_installed__) return;
+    window.__harvest_api_auth_bridge_installed__ = true;
+
+    const tokenFromStorage = () => {
+      const keys = ['auth', 'token', 'accessToken', 'access_token', 'jwt'];
+      for (const key of keys) {
+        try {
+          const value = window.localStorage.getItem(key);
+          if (value && String(value).trim().length > 0) return String(value).trim();
+        } catch (_) {}
+      }
+      return '';
+    };
+    const authHeader = () => {
+      const token = tokenFromStorage();
+      if (!token) return '';
+      return token.toLowerCase().startsWith('bearer ') ? token : `Bearer \${token}`;
+    };
+    const apiHosts = () => {
+      const hosts = new Set();
+      const addHost = (value) => {
+        if (!value) return;
+        try {
+          const url = new URL(String(value), window.location.href);
+          if (url.host) hosts.add(url.host.toLowerCase());
+        } catch (_) {}
+      };
+      ['apiHost', 'api_host', 'baseApi', 'base_api', 'apiBase', 'api_base'].forEach((key) => {
+        try { addHost(window.localStorage.getItem(key)); } catch (_) {}
+      });
+      const currentHost = window.location.hostname.toLowerCase();
+      if (currentHost.includes('m-team')) {
+        hosts.add('api.m-team.cc');
+        hosts.add('api2.m-team.cc');
+      }
+      return hosts;
+    };
+    const shouldAttachAuth = (value) => {
+      if (!value) return false;
+      try {
+        const url = new URL(String(value), window.location.href);
+        return apiHosts().has(url.host.toLowerCase());
+      } catch (_) {
+        return false;
+      }
+    };
+
+    if (typeof window.fetch === 'function') {
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        try {
+          const target = input && typeof input === 'object' && 'url' in input ? input.url : input;
+          const headerValue = authHeader();
+          if (!headerValue || !shouldAttachAuth(target)) return nativeFetch(input, init);
+          const headers = new Headers(typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined);
+          if (init && init.headers) new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+          if (!headers.has('authorization')) headers.set('Authorization', headerValue);
+          return nativeFetch(input, Object.assign({}, init || {}, { headers }));
+        } catch (_) {
+          return nativeFetch(input, init);
+        }
+      };
+    }
+
+    const xhr = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+    if (xhr && xhr.open && xhr.send && xhr.setRequestHeader) {
+      const nativeOpen = xhr.open;
+      const nativeSend = xhr.send;
+      const nativeSetRequestHeader = xhr.setRequestHeader;
+      xhr.open = function(method, url) {
+        this.__harvest_auth_url = url;
+        this.__harvest_has_auth_header = false;
+        return nativeOpen.apply(this, arguments);
+      };
+      xhr.setRequestHeader = function(name, value) {
+        if (String(name || '').toLowerCase() === 'authorization') {
+          this.__harvest_has_auth_header = true;
+        }
+        return nativeSetRequestHeader.apply(this, arguments);
+      };
+      xhr.send = function() {
+        try {
+          const headerValue = authHeader();
+          if (headerValue && !this.__harvest_has_auth_header && shouldAttachAuth(this.__harvest_auth_url)) {
+            nativeSetRequestHeader.call(this, 'Authorization', headerValue);
+          }
+        } catch (_) {}
+        return nativeSend.apply(this, arguments);
+      };
+    }
+  };
+  installApiAuthBridge();
+  return count;
+})();
+''';
+  }
+
   Future<void> _refreshReadableCookieState([String? url]) async {
     if (_closing || !mounted) return;
 
@@ -381,13 +753,34 @@ class _BrowserPageState extends State<BrowserPage> {
     }
 
     try {
-      final cookies = await CookieManager.instance().getCookies(url: WebUri(targetUrl));
+      final cookies = await CookieManager.instance().getCookies(
+        url: WebUri(targetUrl),
+      );
       final hasCookie = cookies.any((cookie) => cookie.name.isNotEmpty);
       if (mounted && !_closing && _hasReadableCookie != hasCookie) {
         setState(() => _hasReadableCookie = hasCookie);
       }
     } catch (e, st) {
       AppLogger.warn('检查内置浏览器 Cookie 失败: $e\n$st');
+    }
+  }
+
+  Future<void> _refreshReadableLocalStorageState([String? url]) async {
+    if (_closing || !mounted) return;
+
+    final targetUrl = (url ?? _currentUrl).trim();
+    final uri = Uri.tryParse(targetUrl);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      if (_hasReadableLocalStorage && mounted && !_closing) {
+        setState(() => _hasReadableLocalStorage = false);
+      }
+      return;
+    }
+
+    final localStorage = await _localStorageSnapshotFor(targetUrl);
+    final hasLocalStorage = _optionalBrowserStorage(localStorage ?? '') != null;
+    if (mounted && !_closing && _hasReadableLocalStorage != hasLocalStorage) {
+      setState(() => _hasReadableLocalStorage = hasLocalStorage);
     }
   }
 
@@ -422,7 +815,10 @@ class _BrowserPageState extends State<BrowserPage> {
     final torrentWebsite = _currentTorrentWebsiteConfig();
     final detailWebsite = _currentDetailWebsiteConfig();
     final userWebsite = _currentUserWebsiteConfig();
-    final showTorrentFab = (torrentWebsite != null || detailWebsite != null) && !_closing && !_isLoading;
+    final showTorrentFab =
+        (torrentWebsite != null || detailWebsite != null) &&
+        !_closing &&
+        !_isLoading;
     final showUserProfileFab = userWebsite != null && !_closing && !_isLoading;
 
     final pageBackground = appSurfaceColor(context, cs.background);
@@ -460,7 +856,9 @@ class _BrowserPageState extends State<BrowserPage> {
                           ? const SizedBox.shrink()
                           : _cookiesReady
                           ? _buildWebView()
-                          : const Center(child: shadcn.CircularProgressIndicator()),
+                          : const Center(
+                              child: shadcn.CircularProgressIndicator(),
+                            ),
                     ),
                     _buildBottomBar(cs),
                   ],
@@ -475,7 +873,9 @@ class _BrowserPageState extends State<BrowserPage> {
                         if (showUserProfileFab) ...[
                           FloatingActionButton.small(
                             heroTag: 'browser_user_profile_fab',
-                            onPressed: _extractingUserProfile ? null : () => _extractUserProfile(userWebsite),
+                            onPressed: _extractingUserProfile
+                                ? null
+                                : () => _extractUserProfile(userWebsite),
                             backgroundColor: cs.primary,
                             foregroundColor: cs.primaryForeground,
                             child: _extractingUserProfile
@@ -487,7 +887,10 @@ class _BrowserPageState extends State<BrowserPage> {
                                       color: cs.primaryForeground,
                                     ),
                                   )
-                                : const Icon(shadcn.LucideIcons.userRound, size: 18),
+                                : const Icon(
+                                    shadcn.LucideIcons.userRound,
+                                    size: 18,
+                                  ),
                           ),
                           if (showTorrentFab) const SizedBox(height: 10),
                         ],
@@ -498,7 +901,9 @@ class _BrowserPageState extends State<BrowserPage> {
                                 ? null
                                 : () async {
                                     if (detailWebsite != null) {
-                                      await _extractSingleTorrentDetail(detailWebsite);
+                                      await _extractSingleTorrentDetail(
+                                        detailWebsite,
+                                      );
                                       return;
                                     }
                                     if (torrentWebsite != null) {
@@ -517,7 +922,9 @@ class _BrowserPageState extends State<BrowserPage> {
                                     ),
                                   )
                                 : Icon(
-                                    detailWebsite != null ? shadcn.LucideIcons.download : shadcn.LucideIcons.listChecks,
+                                    detailWebsite != null
+                                        ? shadcn.LucideIcons.download
+                                        : shadcn.LucideIcons.listChecks,
                                     size: 18,
                                   ),
                           ),
@@ -534,7 +941,13 @@ class _BrowserPageState extends State<BrowserPage> {
 
   Widget _buildTopBar(shadcn.ColorScheme cs) {
     return Container(
-      padding: appHeaderPadding(context, left: 12, top: 8, right: 12, bottom: 8),
+      padding: appHeaderPadding(
+        context,
+        left: 12,
+        top: 8,
+        right: 12,
+        bottom: 8,
+      ),
       decoration: BoxDecoration(
         color: appSurfaceColor(context, cs.background),
         border: Border(bottom: BorderSide(color: cs.border, width: 0.5)),
@@ -549,7 +962,11 @@ class _BrowserPageState extends State<BrowserPage> {
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.all(4),
-                child: Icon(shadcn.LucideIcons.x, size: 18, color: cs.foreground),
+                child: Icon(
+                  shadcn.LucideIcons.x,
+                  size: 18,
+                  color: cs.foreground,
+                ),
               ),
             ),
           ),
@@ -562,13 +979,20 @@ class _BrowserPageState extends State<BrowserPage> {
                 if (_currentTitle.isNotEmpty)
                   Text(
                     _currentTitle,
-                    style: TextStyle(color: cs.foreground, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: cs.foreground,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 Text(
                   _displayUrl(_currentUrl),
-                  style: TextStyle(color: cs.foreground.withValues(alpha: 0.4), fontSize: 10),
+                  style: TextStyle(
+                    color: cs.foreground.withValues(alpha: 0.4),
+                    fontSize: 10,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -580,11 +1004,22 @@ class _BrowserPageState extends State<BrowserPage> {
           // 加载状态
           if (_isLoading) ...[
             const SizedBox(width: 8),
-            SizedBox(width: 14, height: 14, child: shadcn.CircularProgressIndicator(strokeWidth: 2, color: cs.primary)),
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: shadcn.CircularProgressIndicator(
+                strokeWidth: 2,
+                color: cs.primary,
+              ),
+            ),
           ],
           if (_error != null) ...[
             const SizedBox(width: 8),
-            Icon(shadcn.LucideIcons.circleAlert, size: 14, color: const Color(0xFFF85149)),
+            Icon(
+              shadcn.LucideIcons.circleAlert,
+              size: 14,
+              color: const Color(0xFFF85149),
+            ),
           ],
         ],
       ),
@@ -596,14 +1031,13 @@ class _BrowserPageState extends State<BrowserPage> {
     return BrowserCookieQuickMenu(
       targets: targets,
       onSelected: _openQuickBrowseTarget,
-      onExtractCookie: _shouldShowExtractCookieButton() ? _extractAndSyncCookie : null,
     );
   }
 
   bool _shouldShowExtractCookieButton() {
     final website = _websiteConfigForCurrentSite();
     final siteInfo = _currentSiteInfoForQuickLinks(website);
-    return siteInfo != null && _hasReadableCookie;
+    return siteInfo != null && (_hasReadableCookie || _hasReadableLocalStorage);
   }
 
   Future<void> _extractAndSyncCookie() async {
@@ -616,27 +1050,119 @@ class _BrowserPageState extends State<BrowserPage> {
     }
 
     AppLogger.info('开始提取 Cookie: site=${siteInfo.site}, url=$_currentUrl');
-    final notifier = ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider.notifier);
+    final notifier = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(siteInfoListProvider.notifier);
     final cookie = await _cookieHeaderFor(_currentUrl);
+    final cookieText = cookie?.trim();
+    final localStorage = await _localStorageSnapshotFor(_currentUrl);
+    final hasCookie = cookieText?.isNotEmpty == true;
+    final normalizedLocalStorage = localStorage == null
+        ? null
+        : _optionalBrowserStorage(localStorage);
 
-    if (cookie == null || cookie.isEmpty) {
-      Toast.warning('未检测到 Cookie');
-      AppLogger.warn('Cookie 提取失败或为空');
+    if (!hasCookie && normalizedLocalStorage == null) {
+      Toast.warning('未检测到 Cookie 或 localStorage');
+      AppLogger.warn('Cookie/localStorage 提取失败或为空');
       return;
     }
 
-    AppLogger.info('提取到的 Cookie 长度: ${cookie.length} 字符');
-    AppLogger.info('Cookie 内容预览: ${cookie.substring(0, cookie.length > 200 ? 200 : cookie.length)}...');
+    if (hasCookie) {
+      AppLogger.info('提取到的 Cookie 长度: ${cookieText!.length} 字符');
+      AppLogger.info(
+        'Cookie 内容预览: ${cookieText.substring(0, cookieText.length > 200 ? 200 : cookieText.length)}...',
+      );
+    }
+
+    var copied = false;
+    final clipboardText = _browserStorageClipboardJson(
+      cookie: hasCookie ? cookieText : null,
+      localStorage: normalizedLocalStorage,
+    );
+    try {
+      await Clipboard.setData(ClipboardData(text: clipboardText));
+      copied = true;
+    } catch (e, st) {
+      AppLogger.warn('复制提取的 Cookie/localStorage 失败: $e\n$st');
+    }
 
     try {
-      final updated = siteInfo.copyWith(cookie: cookie);
+      final updated = siteInfo.copyWith(
+        cookie: hasCookie ? cookieText : siteInfo.cookie,
+        localStorage: localStorage == null
+            ? siteInfo.localStorage
+            : normalizedLocalStorage,
+      );
       await notifier.updateSite(updated);
 
-      AppLogger.info('Cookie 已同步到后端: site=${siteInfo.site}, cookieLength=${cookie.length}');
-      Toast.success('Cookie 已同步到后端 (${cookie.length} 字符)');
+      AppLogger.info(
+        'Cookie/localStorage 已同步到后端: site=${siteInfo.site}, cookieLength=${cookie?.length ?? -1}, localStorageLength=${localStorage?.length ?? -1}',
+      );
+      if (hasCookie && normalizedLocalStorage == null) {
+        Toast.success(
+          copied
+              ? '数据已复制，Cookie 已同步 (${cookieText!.length} 字符)'
+              : 'Cookie 已同步，复制失败 (${cookieText!.length} 字符)',
+        );
+      } else if (hasCookie) {
+        Toast.success(
+          copied
+              ? '数据已复制，Cookie/localStorage 已同步'
+              : 'Cookie/localStorage 已同步，复制失败',
+        );
+      } else {
+        Toast.success(
+          copied ? '数据已复制，localStorage 已同步' : 'localStorage 已同步，复制失败',
+        );
+      }
     } catch (e, st) {
-      AppLogger.error('同步 Cookie 失败', e, st);
-      Toast.error('同步 Cookie 失败');
+      AppLogger.error('同步 Cookie/localStorage 失败', e, st);
+      Toast.error(copied ? '数据已复制，同步失败' : '同步 Cookie/localStorage 失败');
+    }
+  }
+
+  String? _optionalBrowserStorage(String value) {
+    final text = value.trim();
+    return text.isEmpty ? null : text;
+  }
+
+  String _browserStorageClipboardJson({
+    required String? cookie,
+    required String? localStorage,
+  }) {
+    return jsonEncode(<String, Object?>{
+      'cookie': cookie?.trim() ?? '',
+      'localstorage': localStorage?.trim() ?? '',
+    });
+  }
+
+  Future<void> _copyBrowserStorageClipboardJson() async {
+    final cookie = await _cookieHeaderFor(_currentUrl);
+    final localStorage = await _localStorageSnapshotFor(_currentUrl);
+    final cookieText = cookie?.trim();
+    final localStorageText = localStorage?.trim();
+    final hasCookie = cookieText?.isNotEmpty == true;
+    final hasLocalStorage = localStorageText?.isNotEmpty == true;
+
+    if (!hasCookie && !hasLocalStorage) {
+      Toast.warning('未检测到 Cookie 或 localStorage');
+      return;
+    }
+
+    try {
+      await Clipboard.setData(
+        ClipboardData(
+          text: _browserStorageClipboardJson(
+            cookie: hasCookie ? cookieText : null,
+            localStorage: hasLocalStorage ? localStorageText : null,
+          ),
+        ),
+      );
+      Toast.success('授权信息已复制');
+    } catch (e, st) {
+      AppLogger.warn('复制授权信息失败: $e\n$st');
+      Toast.warning('授权信息复制失败');
     }
   }
 
@@ -664,11 +1190,14 @@ class _BrowserPageState extends State<BrowserPage> {
     for (final site in sites) {
       final siteName = site.site.trim().toLowerCase();
       final nickname = site.nickname.trim().toLowerCase();
-      if (siteId.isNotEmpty && (siteName == siteId || nickname == siteId)) return site;
-      if (websiteName.isNotEmpty && (siteName == websiteName || nickname == websiteName)) {
+      if (siteId.isNotEmpty && (siteName == siteId || nickname == siteId))
+        return site;
+      if (websiteName.isNotEmpty &&
+          (siteName == websiteName || nickname == websiteName)) {
         return site;
       }
-      if (websiteNickname.isNotEmpty && (siteName == websiteNickname || nickname == websiteNickname)) {
+      if (websiteNickname.isNotEmpty &&
+          (siteName == websiteNickname || nickname == websiteNickname)) {
         return site;
       }
     }
@@ -684,7 +1213,9 @@ class _BrowserPageState extends State<BrowserPage> {
     AppLogger.info('快速跳转: label=${target.label}, url=${target.url}');
     final controller = _controller;
     if (controller == null || _closing) {
-      AppLogger.warn('无法跳转: controller=${controller == null ? "null" : "ok"}, _closing=$_closing');
+      AppLogger.warn(
+        '无法跳转: controller=${controller == null ? "null" : "ok"}, _closing=$_closing',
+      );
       return;
     }
     try {
@@ -720,20 +1251,26 @@ class _BrowserPageState extends State<BrowserPage> {
           ),
           shadcn.MenuButton(
             leading: const Icon(shadcn.LucideIcons.cookie),
-            enabled: _hasReadableCookie,
-            onPressed: _hasReadableCookie
-                ? (itemContext) async {
-                    shadcn.closeOverlay(itemContext);
-                    final cookie = await _cookieHeaderFor(_currentUrl);
-                    if (cookie != null && cookie.isNotEmpty) {
-                      Clipboard.setData(ClipboardData(text: cookie));
-                      Toast.success('Cookie 已复制 (${cookie.length} 字符)');
-                    } else {
-                      Toast.warning('未检测到 Cookie');
-                    }
-                  }
-                : null,
+            onPressed: (itemContext) async {
+              shadcn.closeOverlay(itemContext);
+              final cookie = await _cookieHeaderFor(_currentUrl);
+              if (cookie != null && cookie.isNotEmpty) {
+                Clipboard.setData(ClipboardData(text: cookie));
+                Toast.success('Cookie 已复制 (${cookie.length} 字符)');
+              } else {
+                Toast.warning('未检测到 Cookie');
+              }
+            },
             child: const Text('复制 Cookie'),
+          ),
+          const shadcn.MenuDivider(),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.clipboardList),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              unawaited(_copyBrowserStorageClipboardJson());
+            },
+            child: const Text('复制授权信息'),
           ),
         ],
       ),
@@ -759,11 +1296,41 @@ class _BrowserPageState extends State<BrowserPage> {
               _closeBrowser();
             }
           }),
-          _bottomBtn(cs, shadcn.LucideIcons.arrowRight, '前进', _canGoForward, () => _controller?.goForward()),
-          _bottomBtn(cs, shadcn.LucideIcons.refreshCw, '刷新', true, () => _controller?.reload()),
-          _bottomBtn(cs, shadcn.LucideIcons.copy, '复制', true, () => _showCopyMenu()),
-          _bottomBtn(cs, shadcn.LucideIcons.globe, 'UA', true, _showUserAgentPicker),
-          _bottomBtn(cs, shadcn.LucideIcons.ellipsisVertical, '操作', true, _showBrowserActionMenu),
+          _bottomBtn(
+            cs,
+            shadcn.LucideIcons.arrowRight,
+            '前进',
+            _canGoForward,
+            () => _controller?.goForward(),
+          ),
+          _bottomBtn(
+            cs,
+            shadcn.LucideIcons.refreshCw,
+            '刷新',
+            true,
+            () => _controller?.reload(),
+          ),
+          _bottomBtn(
+            cs,
+            shadcn.LucideIcons.copy,
+            '复制',
+            true,
+            () => _showCopyMenu(),
+          ),
+          _bottomBtn(
+            cs,
+            shadcn.LucideIcons.globe,
+            'UA',
+            true,
+            _showUserAgentPicker,
+          ),
+          _bottomBtn(
+            cs,
+            shadcn.LucideIcons.ellipsisVertical,
+            '操作',
+            true,
+            _showBrowserActionMenu,
+          ),
         ],
       ),
     );
@@ -771,6 +1338,7 @@ class _BrowserPageState extends State<BrowserPage> {
 
   Future<void> _showBrowserActionMenu() async {
     if (!mounted) return;
+    final canExtractCookie = _shouldShowExtractCookieButton();
     shadcn.showDropdown<void>(
       context: context,
       alignment: Alignment.bottomCenter,
@@ -784,7 +1352,9 @@ class _BrowserPageState extends State<BrowserPage> {
             leading: const Icon(shadcn.LucideIcons.share2),
             onPressed: (itemContext) {
               shadcn.closeOverlay(itemContext);
-              SharePlus.instance.share(ShareParams(text: _currentUrl, subject: _currentTitle));
+              SharePlus.instance.share(
+                ShareParams(text: _currentUrl, subject: _currentTitle),
+              );
             },
             child: const Text('分享链接'),
           ),
@@ -804,14 +1374,50 @@ class _BrowserPageState extends State<BrowserPage> {
             },
             child: const Text('浏览器打开'),
           ),
+          if (kDebugMode)
+            shadcn.MenuButton(
+              leading: const Icon(shadcn.LucideIcons.squareTerminal),
+              onPressed: (itemContext) {
+                shadcn.closeOverlay(itemContext);
+                unawaited(_openWebViewDevTools());
+              },
+              child: const Text('开发者工具'),
+            ),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.clipboardList),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              unawaited(_copyBrowserStorageClipboardJson());
+            },
+            child: const Text('复制授权信息'),
+          ),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.shieldCheck),
+            onPressed: (itemContext) {
+              shadcn.closeOverlay(itemContext);
+              unawaited(_copyBrowserAuthDiagnostics());
+            },
+            child: const Text('授权诊断'),
+          ),
           const shadcn.MenuDivider(),
+          shadcn.MenuButton(
+            leading: const Icon(shadcn.LucideIcons.cloudDownload),
+            enabled: canExtractCookie,
+            onPressed: canExtractCookie
+                ? (itemContext) {
+                    shadcn.closeOverlay(itemContext);
+                    unawaited(_extractAndSyncCookie());
+                  }
+                : null,
+            child: const Text('同步Cookie'),
+          ),
           shadcn.MenuButton(
             leading: const Icon(shadcn.LucideIcons.cookie),
             onPressed: (itemContext) {
               shadcn.closeOverlay(itemContext);
               unawaited(_clearCurrentSiteCookies());
             },
-            child: const Text('清理当前站点 Cookie'),
+            child: const Text('清理Cookie'),
           ),
         ],
       ),
@@ -828,6 +1434,125 @@ class _BrowserPageState extends State<BrowserPage> {
     if (!opened) Toast.warning('无法打开系统浏览器');
   }
 
+  Future<void> _openWebViewDevTools() async {
+    if (!kDebugMode) return;
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      final controller = _controller;
+      if (controller == null || _closing) {
+        Toast.warning('页面尚未加载完成');
+        return;
+      }
+      try {
+        await controller.openDevTools();
+        Toast.success('开发者工具已打开');
+      } catch (e, st) {
+        AppLogger.warn('打开 WebView 开发者工具失败: $e\n$st');
+        Toast.warning('开发者工具打开失败');
+      }
+      return;
+    }
+
+    final tip = _webViewDevToolsTip();
+    try {
+      await Clipboard.setData(ClipboardData(text: tip));
+      Toast.info('调试入口已复制');
+    } catch (_) {
+      Toast.info(tip);
+    }
+  }
+
+  Future<void> _copyBrowserAuthDiagnostics() async {
+    final controller = _controller;
+    if (controller == null || _closing) {
+      Toast.warning('页面尚未加载完成');
+      return;
+    }
+
+    final injectedCount = await _injectConfiguredLocalStorage(
+      controller,
+      _currentUrl,
+    );
+    final cookie = await _cookieHeaderFor(_currentUrl);
+    final localStorage = await _localStorageRawSnapshotFor(_currentUrl);
+    final filteredLocalStorage = await _localStorageSnapshotFor(_currentUrl);
+    final data = <String, Object?>{
+      'current_url': _currentUrl,
+      'initial_url': widget.url,
+      'configured_localstorage_length': widget.localStorage?.trim().length ?? 0,
+      'configured_localstorage': widget.localStorage?.trim() ?? '',
+      'injected_localstorage_count': injectedCount,
+      'cookie_length': cookie?.length ?? 0,
+      'cookie': cookie ?? '',
+      'localstorage_length': localStorage?.length ?? 0,
+      'localstorage': localStorage ?? '',
+      'filtered_localstorage_length': filteredLocalStorage?.length ?? 0,
+      'filtered_localstorage': filteredLocalStorage ?? '',
+    };
+
+    try {
+      await Clipboard.setData(
+        ClipboardData(text: const JsonEncoder.withIndent('  ').convert(data)),
+      );
+      Toast.success('授权诊断已复制');
+    } catch (e, st) {
+      AppLogger.warn('复制授权诊断失败: $e\n$st');
+      Toast.warning('授权诊断复制失败');
+    }
+  }
+
+  String _webViewDevToolsTip() {
+    if (kIsWeb) return '使用浏览器自带开发者工具查看当前页面';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android =>
+        'Chrome 打开 chrome://inspect/#devices，选择当前 App WebView',
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS => 'Safari 开启 Develop 菜单后选择当前 WebView',
+      TargetPlatform.windows => 'Windows 可直接打开 WebView2 开发者工具',
+      _ => '当前平台暂未提供内置 WebView 开发者工具入口',
+    };
+  }
+
+  bool _shouldRetryInitialUrlAfterLocalStorageInjection(String currentUrl) {
+    if (_retriedInitialUrlAfterLocalStorageInjection) return false;
+    if (widget.localStorage?.trim().isNotEmpty != true) return false;
+
+    final currentUri = Uri.tryParse(currentUrl.trim());
+    final initialUri = Uri.tryParse(widget.url.trim());
+    if (currentUri == null ||
+        initialUri == null ||
+        (currentUri.scheme != 'http' && currentUri.scheme != 'https') ||
+        (initialUri.scheme != 'http' && initialUri.scheme != 'https')) {
+      return false;
+    }
+    if (!_isConfiguredLocalStorageHost(currentUri.host)) return false;
+    return _sameBrowserUrl(currentUri, initialUri) ||
+        _looksLikeLoginUrl(currentUri);
+  }
+
+  bool _sameBrowserUrl(Uri a, Uri b) {
+    String normalizedPath(Uri uri) {
+      final path = uri.path.isEmpty ? '/' : uri.path;
+      return path.endsWith('/') && path.length > 1
+          ? path.substring(0, path.length - 1)
+          : path;
+    }
+
+    return a.scheme == b.scheme &&
+        a.host.toLowerCase() == b.host.toLowerCase() &&
+        normalizedPath(a) == normalizedPath(b) &&
+        a.query == b.query;
+  }
+
+  bool _looksLikeLoginUrl(Uri uri) {
+    final text = '${uri.path}?${uri.query}#${uri.fragment}'.toLowerCase();
+    return text.contains('login') ||
+        text.contains('signin') ||
+        text.contains('sign-in') ||
+        text.contains('auth') ||
+        text.contains('passport');
+  }
+
   Future<void> _clearCurrentSiteCookies() async {
     final controller = _controller;
     if (controller == null || _closing) {
@@ -837,7 +1562,9 @@ class _BrowserPageState extends State<BrowserPage> {
 
     final currentUrl = _currentUrl.trim();
     final uri = Uri.tryParse(currentUrl);
-    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
       Toast.warning('当前链接无效');
       return;
     }
@@ -847,7 +1574,10 @@ class _BrowserPageState extends State<BrowserPage> {
     final cookieManager = CookieManager.instance();
 
     try {
-      final cookies = await cookieManager.getCookies(url: webUri, webViewController: controller);
+      final cookies = await cookieManager.getCookies(
+        url: webUri,
+        webViewController: controller,
+      );
 
       var deletedAny = false;
       for (final cookie in cookies) {
@@ -872,20 +1602,31 @@ class _BrowserPageState extends State<BrowserPage> {
       }
 
       for (final domain in domainCandidates) {
-        final deleted = await cookieManager.deleteCookies(url: webUri, domain: domain, webViewController: controller);
+        final deleted = await cookieManager.deleteCookies(
+          url: webUri,
+          domain: domain,
+          webViewController: controller,
+        );
         deletedAny = deletedAny || deleted;
       }
 
       await _clearCurrentSiteBrowserStorage(controller);
 
       if (mounted && !_closing) {
-        setState(() => _hasReadableCookie = false);
+        setState(() {
+          _hasReadableCookie = false;
+          _hasReadableLocalStorage = false;
+        });
       }
 
-      AppLogger.info('已清理内置浏览器当前站点 Cookie: origin=$origin, count=${cookies.length}, deleted=$deletedAny');
+      AppLogger.info(
+        '已清理内置浏览器当前站点 Cookie: origin=$origin, count=${cookies.length}, deleted=$deletedAny',
+      );
       Toast.success('已清理当前站点 Cookie');
       try {
-        await controller.loadUrl(urlRequest: URLRequest(url: WebUri(currentUrl)));
+        await controller.loadUrl(
+          urlRequest: URLRequest(url: WebUri(currentUrl)),
+        );
       } catch (e, st) {
         AppLogger.warn('清理 Cookie 后刷新当前页面失败: $e\n$st');
         if (mounted && !_closing) Toast.warning('Cookie 已清理，刷新页面失败');
@@ -896,13 +1637,18 @@ class _BrowserPageState extends State<BrowserPage> {
     }
   }
 
-  Future<void> _clearCurrentSiteBrowserStorage(InAppWebViewController controller) async {
+  Future<void> _clearCurrentSiteBrowserStorage(
+    InAppWebViewController controller,
+  ) async {
     try {
       await controller.evaluateJavascript(
-        source: r'''
+        source:
+            '''
 (() => {
+  const marker = ${jsonEncode(_localStorageInjectedKey)};
   try { window.localStorage.clear(); } catch (_) {}
   try { window.sessionStorage.clear(); } catch (_) {}
+  try { window.sessionStorage.setItem(marker, 'cleared'); } catch (_) {}
 })();
 ''',
       );
@@ -912,7 +1658,8 @@ class _BrowserPageState extends State<BrowserPage> {
   }
 
   bool _isIpHost(String host) {
-    return RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host) || host.contains(':');
+    return RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host) ||
+        host.contains(':');
   }
 
   Future<void> _captureBrowserLongScreenshot() async {
@@ -936,7 +1683,9 @@ class _BrowserPageState extends State<BrowserPage> {
     }
   }
 
-  Future<Uint8List?> _captureWebViewLongScreenshot(InAppWebViewController controller) async {
+  Future<Uint8List?> _captureWebViewLongScreenshot(
+    InAppWebViewController controller,
+  ) async {
     final metrics = await _readWebViewMetrics(controller);
     final viewportHeight = parseDouble(metrics['viewportHeight']);
     final contentHeight = parseDouble(metrics['contentHeight']);
@@ -945,7 +1694,9 @@ class _BrowserPageState extends State<BrowserPage> {
       return controller.takeScreenshot();
     }
 
-    final maxScroll = contentHeight > viewportHeight ? contentHeight - viewportHeight : 0.0;
+    final maxScroll = contentHeight > viewportHeight
+        ? contentHeight - viewportHeight
+        : 0.0;
     final offsets = <double>[0];
     if (maxScroll > 0) {
       final step = viewportHeight * 0.85;
@@ -961,7 +1712,9 @@ class _BrowserPageState extends State<BrowserPage> {
     final pieces = <_BrowserScreenshotPiece>[];
     double? scale;
     for (final offset in offsets) {
-      await controller.evaluateJavascript(source: 'window.scrollTo(0, ${offset.round()});');
+      await controller.evaluateJavascript(
+        source: 'window.scrollTo(0, ${offset.round()});',
+      );
       await Future.delayed(const Duration(milliseconds: 320));
       final bytes = await controller.takeScreenshot();
       if (bytes == null || bytes.isEmpty) continue;
@@ -970,7 +1723,9 @@ class _BrowserPageState extends State<BrowserPage> {
       pieces.add(_BrowserScreenshotPiece(image: image, offset: offset));
     }
 
-    await controller.evaluateJavascript(source: 'window.scrollTo(0, ${originalY.round()});');
+    await controller.evaluateJavascript(
+      source: 'window.scrollTo(0, ${originalY.round()});',
+    );
 
     if (pieces.isEmpty) return controller.takeScreenshot();
     return _stitchBrowserScreenshots(
@@ -980,8 +1735,11 @@ class _BrowserPageState extends State<BrowserPage> {
     );
   }
 
-  Future<Map<String, dynamic>> _readWebViewMetrics(InAppWebViewController controller) async {
-    final raw = await controller.evaluateJavascript(source: '''
+  Future<Map<String, dynamic>> _readWebViewMetrics(
+    InAppWebViewController controller,
+  ) async {
+    final raw = await controller.evaluateJavascript(
+      source: '''
 JSON.stringify({
   scrollY: window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0,
   viewportHeight: window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0,
@@ -992,9 +1750,12 @@ JSON.stringify({
     document.documentElement ? document.documentElement.offsetHeight : 0
   )
 })
-''');
+''',
+    );
     final data = raw is String ? jsonDecode(raw) : raw;
-    return data is Map ? Map<String, dynamic>.from(data) : const <String, dynamic>{};
+    return data is Map
+        ? Map<String, dynamic>.from(data)
+        : const <String, dynamic>{};
   }
 
   Future<ui.Image> _decodeImage(Uint8List bytes) async {
@@ -1019,8 +1780,18 @@ JSON.stringify({
       final remaining = totalHeight - dstY;
       if (remaining <= 0) continue;
       final srcHeight = remaining < image.height ? remaining : image.height;
-      final src = Rect.fromLTWH(0, 0, image.width.toDouble(), srcHeight.toDouble());
-      final dst = Rect.fromLTWH(0, dstY.toDouble(), width.toDouble(), srcHeight.toDouble());
+      final src = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        srcHeight.toDouble(),
+      );
+      final dst = Rect.fromLTWH(
+        0,
+        dstY.toDouble(),
+        width.toDouble(),
+        srcHeight.toDouble(),
+      );
       canvas.drawImageRect(image, src, dst, Paint());
     }
 
@@ -1030,7 +1801,13 @@ JSON.stringify({
     return byteData?.buffer.asUint8List();
   }
 
-  Widget _bottomBtn(shadcn.ColorScheme cs, IconData icon, String label, bool enabled, VoidCallback onTap) {
+  Widget _bottomBtn(
+    shadcn.ColorScheme cs,
+    IconData icon,
+    String label,
+    bool enabled,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       behavior: HitTestBehavior.opaque,
@@ -1042,14 +1819,18 @@ JSON.stringify({
             Icon(
               icon,
               size: 18,
-              color: enabled ? cs.foreground.withValues(alpha: 0.7) : cs.foreground.withValues(alpha: 0.15),
+              color: enabled
+                  ? cs.foreground.withValues(alpha: 0.7)
+                  : cs.foreground.withValues(alpha: 0.15),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
                 fontSize: 9,
-                color: enabled ? cs.foreground.withValues(alpha: 0.5) : cs.foreground.withValues(alpha: 0.15),
+                color: enabled
+                    ? cs.foreground.withValues(alpha: 0.5)
+                    : cs.foreground.withValues(alpha: 0.15),
               ),
             ),
           ],
@@ -1061,8 +1842,13 @@ JSON.stringify({
   // ────────────────── WebView ──────────────────
 
   Widget _buildWebView() {
+    final localStorageBootstrap = _configuredLocalStorageBootstrapInitialData();
     return InAppWebView(
-      initialUrlRequest: URLRequest(url: WebUri(widget.url)),
+      initialUrlRequest: localStorageBootstrap == null
+          ? URLRequest(url: WebUri(widget.url))
+          : null,
+      initialData: localStorageBootstrap,
+      initialUserScripts: _configuredLocalStorageUserScripts(),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         domStorageEnabled: true,
@@ -1082,6 +1868,7 @@ JSON.stringify({
         displayZoomControls: false,
         transparentBackground: true,
         useOnDownloadStart: true,
+        isInspectable: kDebugMode,
       ),
       onWebViewCreated: (controller) {
         if (_closing) {
@@ -1115,6 +1902,22 @@ JSON.stringify({
           }
           _isLoading = false;
         });
+        final injectedLocalStorageCount = await _injectConfiguredLocalStorage(
+          controller,
+          urlText,
+        );
+        unawaited(_refreshReadableLocalStorageState(urlText));
+        if (injectedLocalStorageCount > 0 &&
+            _shouldRetryInitialUrlAfterLocalStorageInjection(urlText)) {
+          _retriedInitialUrlAfterLocalStorageInjection = true;
+          AppLogger.info(
+            'localStorage 已写入登录页，重新打开初始地址: from=$urlText, to=${widget.url}',
+          );
+          await controller.loadUrl(
+            urlRequest: URLRequest(url: WebUri(widget.url)),
+          );
+          return;
+        }
         unawaited(_refreshReadableCookieState(url?.toString()));
         _updateNavState();
         final title = await controller.getTitle();
@@ -1178,20 +1981,25 @@ JSON.stringify({
   List<_UserAgentPreset> get _userAgentPresets {
     final configuredUserAgent = widget.userAgent?.trim();
     return [
-      const _UserAgentPreset(
-        id: 'safari_iphone',
-        label: 'Safari iPhone',
-        description: 'iOS Safari Mobile',
-        userAgent: _safariIphoneUserAgent,
-      ),
+      if (configuredUserAgent != null && configuredUserAgent.isNotEmpty)
+        _UserAgentPreset(
+          id: 'site',
+          label: '站点配置',
+          description: configuredUserAgent,
+          userAgent: configuredUserAgent,
+        ),
       const _UserAgentPreset(
         id: 'safari_macos',
         label: 'Safari macOS',
         description: 'macOS Safari Desktop',
         userAgent: _safariMacosUserAgent,
       ),
-      if (configuredUserAgent != null && configuredUserAgent.isNotEmpty)
-        _UserAgentPreset(id: 'site', label: '站点配置', description: configuredUserAgent, userAgent: configuredUserAgent),
+      const _UserAgentPreset(
+        id: 'safari_iphone',
+        label: 'Safari iPhone',
+        description: 'iOS Safari Mobile',
+        userAgent: _safariIphoneUserAgent,
+      ),
       _UserAgentPreset(
         id: 'default',
         label: '默认 WebView',
@@ -1227,7 +2035,8 @@ JSON.stringify({
       id: 'firefox_windows',
       label: 'Firefox Windows',
       description: 'Windows Firefox Desktop',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+      userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
     ),
   ];
 
@@ -1253,9 +2062,13 @@ JSON.stringify({
                 dense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                 leading: Icon(
-                  selected ? shadcn.LucideIcons.check : shadcn.LucideIcons.globe,
+                  selected
+                      ? shadcn.LucideIcons.check
+                      : shadcn.LucideIcons.globe,
                   size: 18,
-                  color: selected ? cs.primary : cs.foreground.withValues(alpha: 0.62),
+                  color: selected
+                      ? cs.primary
+                      : cs.foreground.withValues(alpha: 0.62),
                 ),
                 title: Text(
                   preset.label,
@@ -1269,7 +2082,10 @@ JSON.stringify({
                   preset.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: cs.foreground.withValues(alpha: 0.56)),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.foreground.withValues(alpha: 0.56),
+                  ),
                 ),
                 onTap: () async {
                   closeAppSheet(context);
@@ -1283,22 +2099,34 @@ JSON.stringify({
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                 children: [
-                  for (final preset in presets) ...[presetTile(preset), Divider(height: 1, color: cs.border)],
+                  for (final preset in presets) ...[
+                    presetTile(preset),
+                    Divider(height: 1, color: cs.border),
+                  ],
                   ListTile(
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                     leading: Icon(
-                      fallbackExpanded ? shadcn.LucideIcons.chevronDown : shadcn.LucideIcons.chevronRight,
+                      fallbackExpanded
+                          ? shadcn.LucideIcons.chevronDown
+                          : shadcn.LucideIcons.chevronRight,
                       size: 18,
                       color: cs.foreground.withValues(alpha: 0.62),
                     ),
                     title: Text(
                       '备选 UA',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.foreground),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: cs.foreground,
+                      ),
                     ),
                     subtitle: Text(
                       'Chrome / Edge / Firefox',
-                      style: TextStyle(fontSize: 11, color: cs.foreground.withValues(alpha: 0.56)),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: cs.foreground.withValues(alpha: 0.56),
+                      ),
                     ),
                     onTap: () {
                       setSheetState(() {
@@ -1307,7 +2135,10 @@ JSON.stringify({
                     },
                   ),
                   if (fallbackExpanded)
-                    for (final preset in fallbackPresets) ...[Divider(height: 1, color: cs.border), presetTile(preset)],
+                    for (final preset in fallbackPresets) ...[
+                      Divider(height: 1, color: cs.border),
+                      presetTile(preset),
+                    ],
                 ],
               ),
             );
@@ -1323,7 +2154,9 @@ JSON.stringify({
     if (mounted) setState(() {});
 
     try {
-      await _controller?.setSettings(settings: InAppWebViewSettings(userAgent: _activeUserAgent));
+      await _controller?.setSettings(
+        settings: InAppWebViewSettings(userAgent: _activeUserAgent),
+      );
       await _controller?.reload();
       Toast.success('已切换 UA：${preset.label}');
     } catch (e, st) {
@@ -1345,7 +2178,8 @@ JSON.stringify({
     final currentHost = _uriHost(currentUrl);
 
     for (final config in _websiteConfigs) {
-      if (config.name.toLowerCase() == siteKey || config.nickname.toLowerCase() == siteKey) {
+      if (config.name.toLowerCase() == siteKey ||
+          config.nickname.toLowerCase() == siteKey) {
         return config;
       }
     }
@@ -1366,10 +2200,13 @@ JSON.stringify({
     }
     final website = _websiteConfigForCurrentSite();
     if (website == null) return null;
-    if (website.pageTorrents.trim().isEmpty || website.torrentsRule.trim().isEmpty) {
+    if (website.pageTorrents.trim().isEmpty ||
+        website.torrentsRule.trim().isEmpty) {
       return null;
     }
-    return _matchesWebsitePage(currentUrl, website.pageTorrents) ? website : null;
+    return _matchesWebsitePage(currentUrl, website.pageTorrents)
+        ? website
+        : null;
   }
 
   WebSite? _currentDetailWebsiteConfig() {
@@ -1380,7 +2217,8 @@ JSON.stringify({
     final website = _websiteConfigForCurrentSite();
     if (website == null) return null;
     if (website.pageDetail.trim().isEmpty) return null;
-    if (website.detailDownloadUrlRule.trim().isEmpty && website.detailTitleRule.trim().isEmpty) {
+    if (website.detailDownloadUrlRule.trim().isEmpty &&
+        website.detailTitleRule.trim().isEmpty) {
       return null;
     }
     return _matchesWebsitePage(currentUrl, website.pageDetail) ? website : null;
@@ -1394,13 +2232,19 @@ JSON.stringify({
     if (!_hasUserProfileRules(website)) return null;
     final pageUser = website.pageUser.trim();
     final pageControlPanel = website.pageControlPanel.trim();
-    final matchesUser = pageUser.isNotEmpty && _matchesWebsitePage(currentUrl, pageUser);
-    final matchesControlPanel = pageControlPanel.isNotEmpty && _matchesWebsitePage(currentUrl, pageControlPanel);
+    final matchesUser =
+        pageUser.isNotEmpty && _matchesWebsitePage(currentUrl, pageUser);
+    final matchesControlPanel =
+        pageControlPanel.isNotEmpty &&
+        _matchesWebsitePage(currentUrl, pageControlPanel);
     return matchesUser || matchesControlPanel ? website : null;
   }
 
   bool _hasUserProfileRules(WebSite website) {
-    return website.pageUser.contains('{}') || _userProfileRuleSpecs(website).any((spec) => spec.rule.trim().isNotEmpty);
+    return website.pageUser.contains('{}') ||
+        _userProfileRuleSpecs(
+          website,
+        ).any((spec) => spec.rule.trim().isNotEmpty);
   }
 
   List<_BrowserUserProfileRule> _userProfileRuleSpecs(WebSite website) {
@@ -1408,47 +2252,142 @@ JSON.stringify({
       _BrowserUserProfileRule('username', '用户名', '账号', website.myUsernameRule),
       _BrowserUserProfileRule('email', '邮箱', '账号', website.myEmailRule),
       _BrowserUserProfileRule('uid', 'UID', '账号', website.myUidRule),
-      _BrowserUserProfileRule('passkey', 'Passkey', '账号', website.myPasskeyRule),
-      _BrowserUserProfileRule('time_join', '注册时间', '时间', website.myTimeJoinRule),
-      _BrowserUserProfileRule('latest_active', '最后活动', '时间', website.myLatestActiveRule),
+      _BrowserUserProfileRule(
+        'passkey',
+        'Passkey',
+        '账号',
+        website.myPasskeyRule,
+      ),
+      _BrowserUserProfileRule(
+        'time_join',
+        '注册时间',
+        '时间',
+        website.myTimeJoinRule,
+      ),
+      _BrowserUserProfileRule(
+        'latest_active',
+        '最后活动',
+        '时间',
+        website.myLatestActiveRule,
+      ),
       _BrowserUserProfileRule('level', '等级', '账号', website.myLevelRule),
       _BrowserUserProfileRule('uploaded', '上传量', '流量', website.myUploadedRule),
-      _BrowserUserProfileRule('downloaded', '下载量', '流量', website.myDownloadedRule),
+      _BrowserUserProfileRule(
+        'downloaded',
+        '下载量',
+        '流量',
+        website.myDownloadedRule,
+      ),
       _BrowserUserProfileRule('ratio', '分享率', '账号', website.myRatioRule),
       _BrowserUserProfileRule('bonus', '魔力值', '魔力/积分', website.myBonusRule),
-      _BrowserUserProfileRule('bonus_hour', '时魔', '魔力/积分', website.myPerHourBonusRule),
+      _BrowserUserProfileRule(
+        'bonus_hour',
+        '时魔',
+        '魔力/积分',
+        website.myPerHourBonusRule,
+      ),
       _BrowserUserProfileRule('score', '积分', '魔力/积分', website.myScoreRule),
-      _BrowserUserProfileRule('invitation', '邀请', '统计', website.myInvitationRule),
+      _BrowserUserProfileRule(
+        'invitation',
+        '邀请',
+        '统计',
+        website.myInvitationRule,
+      ),
       _BrowserUserProfileRule('hr', 'HR', '统计', website.myHrRule),
       _BrowserUserProfileRule('leech', '下载中', '统计', website.myLeechRule),
       _BrowserUserProfileRule('publish', '发布数', '统计', website.myPublishRule),
       _BrowserUserProfileRule('seed', '做种数', '统计', website.mySeedRule),
-      _BrowserUserProfileRule('seed_volume', '做种量', '统计', website.mySeedVolRule),
+      _BrowserUserProfileRule(
+        'seed_volume',
+        '做种量',
+        '统计',
+        website.mySeedVolRule,
+      ),
     ];
   }
 
   _BrowserUserProfileDisplay _userProfileDisplay(String key) {
     return switch (key) {
-      'username' => const _BrowserUserProfileDisplay(Icons.person_outline, Color(0xFF2563EB)),
-      'email' => const _BrowserUserProfileDisplay(Icons.alternate_email, Color(0xFF0EA5E9)),
-      'uid' => const _BrowserUserProfileDisplay(Icons.badge_outlined, Color(0xFF64748B)),
-      'passkey' => const _BrowserUserProfileDisplay(Icons.key_outlined, Color(0xFF64748B)),
-      'time_join' => const _BrowserUserProfileDisplay(Icons.event_available_outlined, Color(0xFF14B8A6)),
-      'latest_active' => const _BrowserUserProfileDisplay(Icons.schedule_outlined, Color(0xFF06B6D4)),
-      'level' => const _BrowserUserProfileDisplay(Icons.workspace_premium_outlined, Color(0xFFF59E0B)),
-      'uploaded' => const _BrowserUserProfileDisplay(Icons.cloud_upload_outlined, Color(0xFF10B981)),
-      'downloaded' => const _BrowserUserProfileDisplay(Icons.cloud_download_outlined, Color(0xFFEF4444)),
-      'ratio' => const _BrowserUserProfileDisplay(Icons.balance_outlined, Color(0xFF8B5CF6)),
-      'bonus' => const _BrowserUserProfileDisplay(Icons.diamond_outlined, Color(0xFFF59E0B)),
-      'bonus_hour' => const _BrowserUserProfileDisplay(Icons.bolt_outlined, Color(0xFFF97316)),
-      'score' => const _BrowserUserProfileDisplay(Icons.star_border_outlined, Color(0xFFEAB308)),
-      'invitation' => const _BrowserUserProfileDisplay(Icons.group_add_outlined, Color(0xFF8B5CF6)),
-      'hr' => const _BrowserUserProfileDisplay(Icons.warning_amber_outlined, Color(0xFFEF4444)),
-      'leech' => const _BrowserUserProfileDisplay(Icons.arrow_downward, Color(0xFFF97316)),
-      'publish' => const _BrowserUserProfileDisplay(Icons.rocket_launch_outlined, Color(0xFF6366F1)),
-      'seed' => const _BrowserUserProfileDisplay(Icons.grass_outlined, Color(0xFF10B981)),
-      'seed_volume' => const _BrowserUserProfileDisplay(Icons.storage_outlined, Color(0xFF0EA5E9)),
-      _ => const _BrowserUserProfileDisplay(Icons.info_outline, Color(0xFF64748B)),
+      'username' => const _BrowserUserProfileDisplay(
+        Icons.person_outline,
+        Color(0xFF2563EB),
+      ),
+      'email' => const _BrowserUserProfileDisplay(
+        Icons.alternate_email,
+        Color(0xFF0EA5E9),
+      ),
+      'uid' => const _BrowserUserProfileDisplay(
+        Icons.badge_outlined,
+        Color(0xFF64748B),
+      ),
+      'passkey' => const _BrowserUserProfileDisplay(
+        Icons.key_outlined,
+        Color(0xFF64748B),
+      ),
+      'time_join' => const _BrowserUserProfileDisplay(
+        Icons.event_available_outlined,
+        Color(0xFF14B8A6),
+      ),
+      'latest_active' => const _BrowserUserProfileDisplay(
+        Icons.schedule_outlined,
+        Color(0xFF06B6D4),
+      ),
+      'level' => const _BrowserUserProfileDisplay(
+        Icons.workspace_premium_outlined,
+        Color(0xFFF59E0B),
+      ),
+      'uploaded' => const _BrowserUserProfileDisplay(
+        Icons.cloud_upload_outlined,
+        Color(0xFF10B981),
+      ),
+      'downloaded' => const _BrowserUserProfileDisplay(
+        Icons.cloud_download_outlined,
+        Color(0xFFEF4444),
+      ),
+      'ratio' => const _BrowserUserProfileDisplay(
+        Icons.balance_outlined,
+        Color(0xFF8B5CF6),
+      ),
+      'bonus' => const _BrowserUserProfileDisplay(
+        Icons.diamond_outlined,
+        Color(0xFFF59E0B),
+      ),
+      'bonus_hour' => const _BrowserUserProfileDisplay(
+        Icons.bolt_outlined,
+        Color(0xFFF97316),
+      ),
+      'score' => const _BrowserUserProfileDisplay(
+        Icons.star_border_outlined,
+        Color(0xFFEAB308),
+      ),
+      'invitation' => const _BrowserUserProfileDisplay(
+        Icons.group_add_outlined,
+        Color(0xFF8B5CF6),
+      ),
+      'hr' => const _BrowserUserProfileDisplay(
+        Icons.warning_amber_outlined,
+        Color(0xFFEF4444),
+      ),
+      'leech' => const _BrowserUserProfileDisplay(
+        Icons.arrow_downward,
+        Color(0xFFF97316),
+      ),
+      'publish' => const _BrowserUserProfileDisplay(
+        Icons.rocket_launch_outlined,
+        Color(0xFF6366F1),
+      ),
+      'seed' => const _BrowserUserProfileDisplay(
+        Icons.grass_outlined,
+        Color(0xFF10B981),
+      ),
+      'seed_volume' => const _BrowserUserProfileDisplay(
+        Icons.storage_outlined,
+        Color(0xFF0EA5E9),
+      ),
+      _ => const _BrowserUserProfileDisplay(
+        Icons.info_outline,
+        Color(0xFF64748B),
+      ),
     };
   }
 
@@ -1459,7 +2398,10 @@ JSON.stringify({
     final rawRule = pageRule.trim();
     if (rawRule.contains('{}')) {
       const marker = '__HARVEST_PAGE_MARKER__';
-      final target = _resolveWebsitePageUri(current, rawRule.replaceAll('{}', marker));
+      final target = _resolveWebsitePageUri(
+        current,
+        rawRule.replaceAll('{}', marker),
+      );
       if (target == null || !target.toString().contains(marker)) return false;
 
       if (target.queryParameters.containsValue(marker)) {
@@ -1477,7 +2419,9 @@ JSON.stringify({
         }
       }
 
-      final escaped = RegExp.escape(target.toString()).replaceAll(RegExp.escape(marker), r'([^/?#&]+)');
+      final escaped = RegExp.escape(
+        target.toString(),
+      ).replaceAll(RegExp.escape(marker), r'([^/?#&]+)');
       return RegExp('^$escaped(?:[?#&].*)?\$').hasMatch(current.toString());
     }
 
@@ -1485,7 +2429,8 @@ JSON.stringify({
     if (target == null) return false;
     final currentPath = _normalizePath(current.path);
     final targetPath = _normalizePath(target.path);
-    return targetPath.isNotEmpty && (currentPath == targetPath || currentPath.startsWith('$targetPath/'));
+    return targetPath.isNotEmpty &&
+        (currentPath == targetPath || currentPath.startsWith('$targetPath/'));
   }
 
   Uri? _resolveWebsitePageUri(Uri current, String pageRule) {
@@ -1539,7 +2484,9 @@ JSON.stringify({
 
     setState(() => _extractingTorrentList = true);
     try {
-      final raw = await controller.evaluateJavascript(source: _buildTorrentExtractScript(website));
+      final raw = await controller.evaluateJavascript(
+        source: _buildTorrentExtractScript(website),
+      );
       if (!mounted || _closing) return;
       final items = _parseExtractedTorrents(raw);
       if (items.isEmpty) {
@@ -1562,7 +2509,9 @@ JSON.stringify({
 
     setState(() => _extractingTorrentList = true);
     try {
-      final raw = await controller.evaluateJavascript(source: _buildTorrentDetailExtractScript(website));
+      final raw = await controller.evaluateJavascript(
+        source: _buildTorrentDetailExtractScript(website),
+      );
       if (!mounted || _closing) return;
       final item = _parseExtractedTorrentDetail(raw);
       if (item == null) {
@@ -1597,7 +2546,9 @@ JSON.stringify({
 
     setState(() => _extractingUserProfile = true);
     try {
-      final raw = await controller.evaluateJavascript(source: _buildUserProfileExtractScript(website));
+      final raw = await controller.evaluateJavascript(
+        source: _buildUserProfileExtractScript(website),
+      );
       if (!mounted || _closing) return;
       final items = _parseExtractedUserProfile(raw);
       if (items.isEmpty) {
@@ -1618,8 +2569,19 @@ JSON.stringify({
 
   String _buildUserProfileExtractScript(WebSite website) {
     final specs = _userProfileRuleSpecs(website)
-        .where((spec) => spec.rule.trim().isNotEmpty || (spec.key == 'uid' && website.pageUser.contains('{}')))
-        .map((spec) => {'key': spec.key, 'label': spec.label, 'group': spec.group, 'rule': spec.rule})
+        .where(
+          (spec) =>
+              spec.rule.trim().isNotEmpty ||
+              (spec.key == 'uid' && website.pageUser.contains('{}')),
+        )
+        .map(
+          (spec) => {
+            'key': spec.key,
+            'label': spec.label,
+            'group': spec.group,
+            'rule': spec.rule,
+          },
+        )
         .toList();
     return '''
 (() => {
@@ -1831,7 +2793,10 @@ JSON.stringify({
   }
 
   String _formatUserProfileValue(String key, String rawValue) {
-    final value = rawValue.replaceAll('\u00a0', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final value = rawValue
+        .replaceAll('\u00a0', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (_isUserProfilePlaceholder(value)) return '-';
     if (key == 'uid') return value.isEmpty ? '-' : value;
     if (key == 'passkey') return maskKey(value);
@@ -1892,17 +2857,25 @@ JSON.stringify({
   }
 
   String _formatUserProfileNumber(String value) {
-    final match = RegExp(r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?').firstMatch(value);
+    final match = RegExp(
+      r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?',
+    ).firstMatch(value);
     if (match == null) return '-';
-    final number = double.tryParse(_normalizeUserProfileNumberText(match.group(0) ?? ''));
+    final number = double.tryParse(
+      _normalizeUserProfileNumberText(match.group(0) ?? ''),
+    );
     if (number == null || !number.isFinite) return '-';
     return fmtCompact(number);
   }
 
   String _formatUserProfileInteger(String value) {
-    final match = RegExp(r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?').firstMatch(value);
+    final match = RegExp(
+      r'-?\d[\d,]*(?:\.\d+)?|-?\d+(?:[.,]\d+)?',
+    ).firstMatch(value);
     if (match == null) return '-';
-    final number = double.tryParse(_normalizeUserProfileNumberText(match.group(0) ?? ''));
+    final number = double.tryParse(
+      _normalizeUserProfileNumberText(match.group(0) ?? ''),
+    );
     if (number == null || !number.isFinite || number < 0) return '-';
     final integer = number.roundToDouble();
     if (number != integer) return '-';
@@ -1921,7 +2894,9 @@ JSON.stringify({
   }
 
   String _formatUserProfileInvitation(String value) {
-    final match = RegExp(r'(\d+)\s*(?:[/（(]\s*(\d+)\s*[）)]?)?').firstMatch(value);
+    final match = RegExp(
+      r'(\d+)\s*(?:[/（(]\s*(\d+)\s*[）)]?)?',
+    ).firstMatch(value);
     if (match == null) return '-';
     final invitation = int.tryParse(match.group(1) ?? '') ?? 0;
     final temporary = int.tryParse(match.group(2) ?? '') ?? 0;
@@ -1960,7 +2935,9 @@ JSON.stringify({
     if (!mounted || items.isEmpty) return;
     final cs = shadcn.Theme.of(context).colorScheme;
     final siteInfo = _currentSiteInfoForWebsite(website);
-    final hasUid = items.any((item) => item.key == 'uid' && !_isUserProfilePlaceholder(item.rawValue));
+    final hasUid = items.any(
+      (item) => item.key == 'uid' && !_isUserProfilePlaceholder(item.rawValue),
+    );
     final grouped = <String, List<_BrowserUserProfileMetric>>{};
     for (final item in items) {
       grouped.putIfAbsent(item.group, () => []).add(item);
@@ -1982,7 +2959,10 @@ JSON.stringify({
               width: 30,
               height: 30,
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Icon(display.icon, size: 16, color: color),
             ),
             const SizedBox(width: 10),
@@ -2005,7 +2985,12 @@ JSON.stringify({
                     item.value,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: cs.foreground, fontSize: 14, fontWeight: FontWeight.w700, height: 1.2),
+                    style: TextStyle(
+                      color: cs.foreground,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
                   ),
                 ],
               ),
@@ -2021,21 +3006,31 @@ JSON.stringify({
         children: [
           Text(
             title,
-            style: TextStyle(color: cs.foreground.withValues(alpha: 0.62), fontSize: 12, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: cs.foreground.withValues(alpha: 0.62),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = metrics.length > 1 && constraints.maxWidth >= 520 ? 2 : 1;
+              final columns = metrics.length > 1 && constraints.maxWidth >= 520
+                  ? 2
+                  : 1;
               const spacing = 8.0;
-              final width = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              final width =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
                 children: [
                   for (var i = 0; i < metrics.length; i++)
                     SizedBox(
-                      width: columns == 2 && i == metrics.length - 1 && metrics.length.isOdd
+                      width:
+                          columns == 2 &&
+                              i == metrics.length - 1 &&
+                              metrics.length.isOdd
                           ? constraints.maxWidth
                           : width,
                       child: metricTile(context, metrics[i]),
@@ -2050,7 +3045,10 @@ JSON.stringify({
 
     Widget content(BuildContext dialogContext) {
       return ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 680, maxHeight: MediaQuery.of(dialogContext).size.height * 0.78),
+        constraints: BoxConstraints(
+          maxWidth: 680,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.78,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2061,16 +3059,28 @@ JSON.stringify({
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                 decoration: BoxDecoration(
                   color: cs.destructive.withValues(alpha: 0.10),
-                  border: Border(bottom: BorderSide(color: cs.destructive.withValues(alpha: 0.22))),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: cs.destructive.withValues(alpha: 0.22),
+                    ),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(shadcn.LucideIcons.triangleAlert, size: 16, color: cs.destructive),
+                    Icon(
+                      shadcn.LucideIcons.triangleAlert,
+                      size: 16,
+                      color: cs.destructive,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '未抓取到 UID',
-                        style: TextStyle(color: cs.destructive, fontSize: 13, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: cs.destructive,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -2088,7 +3098,11 @@ JSON.stringify({
                       color: cs.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(shadcn.LucideIcons.userRound, size: 20, color: cs.primary),
+                    child: Icon(
+                      shadcn.LucideIcons.userRound,
+                      size: 20,
+                      color: cs.primary,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -2097,14 +3111,21 @@ JSON.stringify({
                       children: [
                         Text(
                           '用户页信息',
-                          style: TextStyle(color: cs.foreground, fontSize: 16, fontWeight: FontWeight.w800),
+                          style: TextStyle(
+                            color: cs.foreground,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           '${items.length} 项 · ${_displayUrl(_currentUrl)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: cs.foreground.withValues(alpha: 0.52), fontSize: 12),
+                          style: TextStyle(
+                            color: cs.foreground.withValues(alpha: 0.52),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -2120,7 +3141,8 @@ JSON.stringify({
                 children: [
                   for (final entry in grouped.entries) ...[
                     section(entry.key, entry.value),
-                    if (entry.key != grouped.keys.last) const SizedBox(height: 16),
+                    if (entry.key != grouped.keys.last)
+                      const SizedBox(height: 16),
                   ],
                 ],
               ),
@@ -2140,21 +3162,36 @@ JSON.stringify({
                 ? null
                 : () async {
                     setDialogState(() => saving = true);
-                    final ok = await _saveUserProfileToSite(website, siteInfo, items, extractedCookie: extractedCookie);
+                    final ok = await _saveUserProfileToSite(
+                      website,
+                      siteInfo,
+                      items,
+                      extractedCookie: extractedCookie,
+                    );
                     if (!dialogContext.mounted) return;
                     setDialogState(() => saving = false);
                     if (ok) Navigator.of(dialogContext).pop();
                   },
-            child: Text(saving ? '保存中...' : (siteInfo == null ? '添加站点' : '更新站点')),
+            child: Text(
+              saving ? '保存中...' : (siteInfo == null ? '添加站点' : '更新站点'),
+            ),
           );
           return shadcn.AlertDialog(
             content: content(dialogContext),
             actions: [
               shadcn.Button.outline(
-                onPressed: saving ? null : () => Navigator.of(dialogContext).pop(),
+                onPressed: saving
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
                 child: const Text('关闭'),
               ),
-              if (hasUid) saveButton else shadcn.Tooltip(tooltip: (_) => const Text('未抓取到 UID'), child: saveButton),
+              if (hasUid)
+                saveButton
+              else
+                shadcn.Tooltip(
+                  tooltip: (_) => const Text('未抓取到 UID'),
+                  child: saveButton,
+                ),
             ],
           );
         },
@@ -2164,14 +3201,19 @@ JSON.stringify({
 
   SiteInfo? _currentSiteInfoForWebsite(WebSite website) {
     final sites =
-        ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
+        ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(siteInfoListProvider).valueOrNull ??
+        const <SiteInfo>[];
     final configName = website.name.trim().toLowerCase();
     final siteId = widget.siteId?.trim().toLowerCase() ?? '';
     final currentHost = _uriHost(_currentUrl);
 
     for (final site in sites) {
       final siteName = site.site.trim().toLowerCase();
-      if (siteName.isNotEmpty && (siteName == configName || siteName == siteId)) return site;
+      if (siteName.isNotEmpty && (siteName == configName || siteName == siteId))
+        return site;
     }
     if (currentHost == null) return null;
     for (final site in sites) {
@@ -2202,23 +3244,30 @@ JSON.stringify({
     }
 
     try {
-      final notifier = ProviderScope.containerOf(context, listen: false).read(siteInfoListProvider.notifier);
+      final notifier = ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(siteInfoListProvider.notifier);
 
       // 优先使用提取的 Cookie，如果没有则从浏览器读取
       final cookie = extractedCookie?.trim().isNotEmpty == true
           ? extractedCookie!.trim()
           : await _cookieHeaderFor(_currentUrl);
+      final localStorage = await _localStorageSnapshotFor(_currentUrl);
       AppLogger.info("当前站点Cookie: $cookie");
       final next =
           (siteInfo ??
                   SiteInfo(
                     id: 0,
-                    site: website.name.trim().isNotEmpty ? website.name.trim() : (widget.siteId?.trim() ?? ''),
+                    site: website.name.trim().isNotEmpty
+                        ? website.name.trim()
+                        : (widget.siteId?.trim() ?? ''),
                     nickname: website.nickname.trim(),
                     sortId: 1,
                     tags: website.tagList,
                     mirror: _currentOriginOrFirstWebsiteUrl(website),
                     cookie: cookie,
+                    localStorage: _optionalBrowserStorage(localStorage ?? ''),
                     available: true,
                     signIn: website.signIn,
                     getInfo: website.getInfo,
@@ -2233,9 +3282,16 @@ JSON.stringify({
                 username: raw('username') ?? siteInfo?.username,
                 email: raw('email') ?? siteInfo?.email,
                 passkey: raw('passkey') ?? siteInfo?.passkey,
-                timeJoin: _normalizedUserProfileDateTime(raw('time_join')) ?? siteInfo?.timeJoin,
-                latestActive: _normalizedUserProfileDateTime(raw('latest_active')) ?? siteInfo?.latestActive,
+                timeJoin:
+                    _normalizedUserProfileDateTime(raw('time_join')) ??
+                    siteInfo?.timeJoin,
+                latestActive:
+                    _normalizedUserProfileDateTime(raw('latest_active')) ??
+                    siteInfo?.latestActive,
                 cookie: cookie ?? siteInfo?.cookie,
+                localStorage: localStorage == null
+                    ? siteInfo?.localStorage
+                    : _optionalBrowserStorage(localStorage),
               );
 
       if (siteInfo == null) {
@@ -2524,12 +3580,19 @@ JSON.stringify({
         .whereType<Object?>()
         .map((item) {
           if (item is Map) {
-            return _BrowserExtractedTorrent.fromMap(Map<String, dynamic>.from(item as Map));
+            return _BrowserExtractedTorrent.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            );
           }
           return null;
         })
         .whereType<_BrowserExtractedTorrent>()
-        .where((item) => item.title.isNotEmpty || item.detailUrl.isNotEmpty || item.magnetUrl.isNotEmpty)
+        .where(
+          (item) =>
+              item.title.isNotEmpty ||
+              item.detailUrl.isNotEmpty ||
+              item.magnetUrl.isNotEmpty,
+        )
         .toList();
   }
 
@@ -2543,14 +3606,20 @@ JSON.stringify({
       }
     }
     if (data is! Map) return null;
-    final item = _BrowserExtractedTorrent.fromMap(Map<String, dynamic>.from(data));
-    if (item.title.isEmpty && item.detailUrl.isEmpty && item.magnetUrl.isEmpty) {
+    final item = _BrowserExtractedTorrent.fromMap(
+      Map<String, dynamic>.from(data),
+    );
+    if (item.title.isEmpty &&
+        item.detailUrl.isEmpty &&
+        item.magnetUrl.isEmpty) {
       return null;
     }
     return item;
   }
 
-  Future<void> _showExtractedTorrentDialog(List<_BrowserExtractedTorrent> items) async {
+  Future<void> _showExtractedTorrentDialog(
+    List<_BrowserExtractedTorrent> items,
+  ) async {
     final cs = shadcn.Theme.of(context).colorScheme;
     final selected = <int>{
       for (var i = 0; i < items.length; i += 1)
@@ -2563,27 +3632,51 @@ JSON.stringify({
     bool sortAscending = false;
     bool panelExpanded = !context.isMobile;
 
-    final saleOptions = items.map((item) => item.sale.trim()).where((item) => item.isNotEmpty).toSet().toList()..sort();
-    final categoryOptions = items.map((item) => item.category.trim()).where((item) => item.isNotEmpty).toSet().toList()
-      ..sort();
+    final saleOptions =
+        items
+            .map((item) => item.sale.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    final categoryOptions =
+        items
+            .map((item) => item.category.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     final tagOptions =
-        items.expand((item) => item.tags).map((item) => item.trim()).where((item) => item.isNotEmpty).toSet().toList()
+        items
+            .expand((item) => item.tags)
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet()
+            .toList()
           ..sort();
 
     Widget content(BuildContext dialogContext, StateSetter setDialogState) {
       bool matchesCurrentFilters(_BrowserExtractedTorrent item) {
         final saleOk = saleFilter.isEmpty || item.sale.trim() == saleFilter;
-        final categoryOk = categoryFilter.isEmpty || item.category.trim() == categoryFilter;
-        final tagOk = tagFilters.isEmpty || item.tags.any((tag) => tagFilters.contains(tag.trim()));
+        final categoryOk =
+            categoryFilter.isEmpty || item.category.trim() == categoryFilter;
+        final tagOk =
+            tagFilters.isEmpty ||
+            item.tags.any((tag) => tagFilters.contains(tag.trim()));
         return saleOk && categoryOk && tagOk;
       }
 
       Iterable<MapEntry<int, _BrowserExtractedTorrent>> matchingEntries() {
-        return items.asMap().entries.where((entry) => matchesCurrentFilters(entry.value));
+        return items.asMap().entries.where(
+          (entry) => matchesCurrentFilters(entry.value),
+        );
       }
 
       List<int> matchingPushableKeys() {
-        return matchingEntries().where((entry) => entry.value.hasPushableUrl).map((entry) => entry.key).toList();
+        return matchingEntries()
+            .where((entry) => entry.value.hasPushableUrl)
+            .map((entry) => entry.key)
+            .toList();
       }
 
       final visibleEntries = matchingEntries().toList()
@@ -2591,9 +3684,15 @@ JSON.stringify({
           final left = a.value;
           final right = b.value;
           final result = switch (sortKey) {
-            _BrowserTorrentSortKey.name => left.titleSortValue.compareTo(right.titleSortValue),
-            _BrowserTorrentSortKey.seeders => left.seedersValue.compareTo(right.seedersValue),
-            _BrowserTorrentSortKey.size => left.sizeBytes.compareTo(right.sizeBytes),
+            _BrowserTorrentSortKey.name => left.titleSortValue.compareTo(
+              right.titleSortValue,
+            ),
+            _BrowserTorrentSortKey.seeders => left.seedersValue.compareTo(
+              right.seedersValue,
+            ),
+            _BrowserTorrentSortKey.size => left.sizeBytes.compareTo(
+              right.sizeBytes,
+            ),
           };
           if (result == 0) {
             return left.titleSortValue.compareTo(right.titleSortValue);
@@ -2606,8 +3705,13 @@ JSON.stringify({
           if (items[i].hasPushableUrl) i,
       ];
       final visibleKeys = matchingPushableKeys();
-      final allVisibleSelected = visibleKeys.isNotEmpty && visibleKeys.every((key) => selected.contains(key));
-      final hasActiveFilter = saleFilter.isNotEmpty || categoryFilter.isNotEmpty || tagFilters.isNotEmpty;
+      final allVisibleSelected =
+          visibleKeys.isNotEmpty &&
+          visibleKeys.every((key) => selected.contains(key));
+      final hasActiveFilter =
+          saleFilter.isNotEmpty ||
+          categoryFilter.isNotEmpty ||
+          tagFilters.isNotEmpty;
       selected.removeWhere((index) => !allKeys.contains(index));
 
       void syncSelectionToCurrentFilter() {
@@ -2674,10 +3778,14 @@ JSON.stringify({
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: selectedValue ? activeColor.withValues(alpha: 0.12) : cs.muted.withValues(alpha: 0.4),
+              color: selectedValue
+                  ? activeColor.withValues(alpha: 0.12)
+                  : cs.muted.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: selectedValue ? activeColor.withValues(alpha: 0.32) : cs.border.withValues(alpha: 0.7),
+                color: selectedValue
+                    ? activeColor.withValues(alpha: 0.32)
+                    : cs.border.withValues(alpha: 0.7),
               ),
             ),
             child: Text(
@@ -2685,7 +3793,9 @@ JSON.stringify({
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: selectedValue ? FontWeight.w700 : FontWeight.w500,
-                color: selectedValue ? activeColor : cs.foreground.withValues(alpha: 0.72),
+                color: selectedValue
+                    ? activeColor
+                    : cs.foreground.withValues(alpha: 0.72),
               ),
             ),
           ),
@@ -2697,14 +3807,20 @@ JSON.stringify({
           padding: const EdgeInsets.only(bottom: 6),
           child: Text(
             text,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.foreground.withValues(alpha: 0.56)),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: cs.foreground.withValues(alpha: 0.56),
+            ),
           ),
         );
       }
 
       Color saleColor(String sale) {
         final value = sale.toLowerCase();
-        if (value.contains('免费') || value.contains('free') || value.contains('0')) {
+        if (value.contains('免费') ||
+            value.contains('free') ||
+            value.contains('0')) {
           return const Color(0xFF10B981);
         }
         if (value.contains('2x') || value.contains('双倍')) {
@@ -2802,7 +3918,8 @@ JSON.stringify({
                             child: const Text('仅选当前'),
                           ),
                           shadcn.MenuButton(
-                            enabled: visibleKeys.isNotEmpty && allVisibleSelected,
+                            enabled:
+                                visibleKeys.isNotEmpty && allVisibleSelected,
                             onPressed: (_) {
                               setDialogState(() {
                                 unselectVisible();
@@ -2843,7 +3960,9 @@ JSON.stringify({
         );
       }
 
-      final dialogHeight = MediaQuery.of(dialogContext).size.height * (dialogContext.isMobile ? 0.86 : 0.78);
+      final dialogHeight =
+          MediaQuery.of(dialogContext).size.height *
+          (dialogContext.isMobile ? 0.86 : 0.78);
       return SizedBox(
         width: dialogContext.isMobile ? double.infinity : 720,
         height: dialogHeight,
@@ -2864,7 +3983,10 @@ JSON.stringify({
                             const SizedBox(height: 4),
                             Text(
                               '共 ${items.length} 条，当前 ${visibleEntries.length} 条，可推送 ${visibleKeys.length} 条，已选 ${selected.length} 条',
-                              style: TextStyle(fontSize: 12, color: cs.foreground.withValues(alpha: 0.56)),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.foreground.withValues(alpha: 0.56),
+                              ),
                             ),
                           ],
                         ),
@@ -2880,34 +4002,55 @@ JSON.stringify({
                   ? Center(
                       child: Text(
                         '没有符合当前筛选条件的种子',
-                        style: TextStyle(fontSize: 13, color: cs.foreground.withValues(alpha: 0.5)),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.foreground.withValues(alpha: 0.5),
+                        ),
                       ),
                     )
                   : ListView.separated(
                       itemCount: visibleEntries.length,
-                      separatorBuilder: (_, _) => Divider(height: 1, color: cs.border),
+                      separatorBuilder: (_, _) =>
+                          Divider(height: 1, color: cs.border),
                       itemBuilder: (itemContext, index) {
                         final entry = visibleEntries[index];
                         final item = entry.value;
                         final itemIndex = entry.key;
                         final isSelected = selected.contains(itemIndex);
                         final compact = dialogContext.isMobile;
-                        Widget metricBadge({required String text, IconData? icon, Color? color, bool filled = false}) {
-                          final accent = color ?? cs.foreground.withValues(alpha: 0.72);
+                        Widget metricBadge({
+                          required String text,
+                          IconData? icon,
+                          Color? color,
+                          bool filled = false,
+                        }) {
+                          final accent =
+                              color ?? cs.foreground.withValues(alpha: 0.72);
                           return Container(
-                            padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 8, vertical: compact ? 3 : 4),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 7 : 8,
+                              vertical: compact ? 3 : 4,
+                            ),
                             decoration: BoxDecoration(
-                              color: filled ? accent.withValues(alpha: 0.12) : cs.background.withValues(alpha: 0.6),
+                              color: filled
+                                  ? accent.withValues(alpha: 0.12)
+                                  : cs.background.withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: filled ? accent.withValues(alpha: 0.26) : cs.border.withValues(alpha: 0.7),
+                                color: filled
+                                    ? accent.withValues(alpha: 0.26)
+                                    : cs.border.withValues(alpha: 0.7),
                               ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (icon != null) ...[
-                                  Icon(icon, size: compact ? 10 : 11, color: accent),
+                                  Icon(
+                                    icon,
+                                    size: compact ? 10 : 11,
+                                    color: accent,
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
@@ -2925,7 +4068,10 @@ JSON.stringify({
 
                         final metricBadges = <Widget>[
                           if (item.formattedCategory.isNotEmpty)
-                            metricBadge(text: item.formattedCategory, icon: shadcn.LucideIcons.folder),
+                            metricBadge(
+                              text: item.formattedCategory,
+                              icon: shadcn.LucideIcons.folder,
+                            ),
                           if (item.displaySize.isNotEmpty)
                             metricBadge(
                               text: item.displaySize,
@@ -2958,13 +4104,22 @@ JSON.stringify({
 
                         final saleBadge = item.sale.isEmpty
                             ? null
-                            : metricBadge(text: item.sale, color: saleColor(item.sale), filled: true);
+                            : metricBadge(
+                                text: item.sale,
+                                color: saleColor(item.sale),
+                                filled: true,
+                              );
 
                         return AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
-                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: isSelected ? cs.primary.withValues(alpha: 0.08) : cs.background,
+                            color: isSelected
+                                ? cs.primary.withValues(alpha: 0.08)
+                                : cs.background,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: isSelected
@@ -3009,55 +4164,81 @@ JSON.stringify({
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  item.title.isEmpty ? item.primaryUrl : item.title,
+                                                  item.title.isEmpty
+                                                      ? item.primaryUrl
+                                                      : item.title,
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: TextStyle(
-                                                    fontSize: compact ? 12.5 : 13.5,
+                                                    fontSize: compact
+                                                        ? 12.5
+                                                        : 13.5,
                                                     fontWeight: FontWeight.w700,
                                                     color: cs.foreground,
                                                   ),
                                                 ),
                                               ),
-                                              if (saleBadge != null) ...[const SizedBox(width: 8), saleBadge],
+                                              if (saleBadge != null) ...[
+                                                const SizedBox(width: 8),
+                                                saleBadge,
+                                              ],
                                             ],
                                           ),
                                           if (item.subtitle.isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(top: 2),
+                                              padding: const EdgeInsets.only(
+                                                top: 2,
+                                              ),
                                               child: Text(
                                                 item.subtitle,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                  fontSize: compact ? 10.5 : 11.5,
-                                                  color: cs.foreground.withValues(alpha: 0.68),
+                                                  fontSize: compact
+                                                      ? 10.5
+                                                      : 11.5,
+                                                  color: cs.foreground
+                                                      .withValues(alpha: 0.68),
                                                 ),
                                               ),
                                             ),
                                           if (metricBadges.isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(top: 6),
-                                              child: Wrap(spacing: 6, runSpacing: 6, children: metricBadges),
+                                              padding: const EdgeInsets.only(
+                                                top: 6,
+                                              ),
+                                              child: Wrap(
+                                                spacing: 6,
+                                                runSpacing: 6,
+                                                children: metricBadges,
+                                              ),
                                             ),
                                           if (item.tags.isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(top: 6),
+                                              padding: const EdgeInsets.only(
+                                                top: 6,
+                                              ),
                                               child: Wrap(
                                                 spacing: 6,
                                                 runSpacing: 6,
                                                 children: [
-                                                  for (final tag in item.tags.take(6))
+                                                  for (final tag
+                                                      in item.tags.take(6))
                                                     metricBadge(
                                                       text: tag,
-                                                      color: const Color(0xFF8B5CF6),
+                                                      color: const Color(
+                                                        0xFF8B5CF6,
+                                                      ),
                                                       filled: true,
                                                     ),
                                                 ],
@@ -3068,15 +4249,23 @@ JSON.stringify({
                                     ),
                                     const SizedBox(width: 8),
                                     shadcn.IconButton.ghost(
-                                      onPressed: item.hasPushableUrl ? () => unawaited(pushPicked([item])) : null,
+                                      onPressed: item.hasPushableUrl
+                                          ? () => unawaited(pushPicked([item]))
+                                          : null,
                                       icon: shadcn.Tooltip(
-                                        tooltip: (_) => Text(item.hasPushableUrl ? '推送此种子' : '缺少可用链接'),
+                                        tooltip: (_) => Text(
+                                          item.hasPushableUrl
+                                              ? '推送此种子'
+                                              : '缺少可用链接',
+                                        ),
                                         child: Icon(
                                           shadcn.LucideIcons.send,
                                           size: compact ? 16 : 17,
                                           color: item.hasPushableUrl
                                               ? cs.primary
-                                              : cs.foreground.withValues(alpha: 0.32),
+                                              : cs.foreground.withValues(
+                                                  alpha: 0.32,
+                                                ),
                                         ),
                                       ),
                                     ),
@@ -3093,7 +4282,9 @@ JSON.stringify({
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              decoration: BoxDecoration(color: cs.muted.withValues(alpha: 0.22)),
+              decoration: BoxDecoration(
+                color: cs.muted.withValues(alpha: 0.22),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -3101,14 +4292,20 @@ JSON.stringify({
                     children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setDialogState(() => panelExpanded = !panelExpanded),
+                          onTap: () => setDialogState(
+                            () => panelExpanded = !panelExpanded,
+                          ),
                           behavior: HitTestBehavior.opaque,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '筛选与排序',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.foreground),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.foreground,
+                                ),
                               ),
                               if (filterSummary.isNotEmpty)
                                 Padding(
@@ -3117,7 +4314,12 @@ JSON.stringify({
                                     filterSummary,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 11, color: cs.foreground.withValues(alpha: 0.58)),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: cs.foreground.withValues(
+                                        alpha: 0.58,
+                                      ),
+                                    ),
                                   ),
                                 ),
                             ],
@@ -3130,14 +4332,21 @@ JSON.stringify({
                       pushSelectedButton(),
                       if (hasActiveFilter) ...[
                         const SizedBox(width: 8),
-                        shadcn.Button.ghost(onPressed: () => setDialogState(clearFilters), child: const Text('重置')),
+                        shadcn.Button.ghost(
+                          onPressed: () => setDialogState(clearFilters),
+                          child: const Text('重置'),
+                        ),
                       ],
                       const SizedBox(width: 6),
                       GestureDetector(
-                        onTap: () => setDialogState(() => panelExpanded = !panelExpanded),
+                        onTap: () => setDialogState(
+                          () => panelExpanded = !panelExpanded,
+                        ),
                         behavior: HitTestBehavior.opaque,
                         child: Icon(
-                          panelExpanded ? shadcn.LucideIcons.chevronDown : shadcn.LucideIcons.chevronUp,
+                          panelExpanded
+                              ? shadcn.LucideIcons.chevronDown
+                              : shadcn.LucideIcons.chevronUp,
                           size: 16,
                           color: cs.foreground.withValues(alpha: 0.72),
                         ),
@@ -3146,7 +4355,11 @@ JSON.stringify({
                   ),
                   if (panelExpanded)
                     ConstrainedBox(
-                      constraints: BoxConstraints(maxHeight: dialogHeight * (dialogContext.isMobile ? 0.46 : 0.42)),
+                      constraints: BoxConstraints(
+                        maxHeight:
+                            dialogHeight *
+                            (dialogContext.isMobile ? 0.46 : 0.42),
+                      ),
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.only(top: 12),
                         child: Column(
@@ -3162,7 +4375,9 @@ JSON.stringify({
                                     children: [
                                       filterChip(
                                         label: '名称',
-                                        selectedValue: sortKey == _BrowserTorrentSortKey.name,
+                                        selectedValue:
+                                            sortKey ==
+                                            _BrowserTorrentSortKey.name,
                                         onTap: () => setDialogState(() {
                                           sortKey = _BrowserTorrentSortKey.name;
                                           sortAscending = true;
@@ -3170,15 +4385,20 @@ JSON.stringify({
                                       ),
                                       filterChip(
                                         label: '做种人数',
-                                        selectedValue: sortKey == _BrowserTorrentSortKey.seeders,
+                                        selectedValue:
+                                            sortKey ==
+                                            _BrowserTorrentSortKey.seeders,
                                         onTap: () => setDialogState(() {
-                                          sortKey = _BrowserTorrentSortKey.seeders;
+                                          sortKey =
+                                              _BrowserTorrentSortKey.seeders;
                                           sortAscending = false;
                                         }),
                                       ),
                                       filterChip(
                                         label: '大小',
-                                        selectedValue: sortKey == _BrowserTorrentSortKey.size,
+                                        selectedValue:
+                                            sortKey ==
+                                            _BrowserTorrentSortKey.size,
                                         onTap: () => setDialogState(() {
                                           sortKey = _BrowserTorrentSortKey.size;
                                           sortAscending = false;
@@ -3189,23 +4409,36 @@ JSON.stringify({
                                 ),
                                 const SizedBox(width: 8),
                                 GestureDetector(
-                                  onTap: () => setDialogState(() => sortAscending = !sortAscending),
+                                  onTap: () => setDialogState(
+                                    () => sortAscending = !sortAscending,
+                                  ),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: cs.background,
                                       borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(color: cs.border.withValues(alpha: 0.7)),
+                                      border: Border.all(
+                                        color: cs.border.withValues(alpha: 0.7),
+                                      ),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
                                           sortAscending
-                                              ? shadcn.LucideIcons.arrowUpNarrowWide
-                                              : shadcn.LucideIcons.arrowDownWideNarrow,
+                                              ? shadcn
+                                                    .LucideIcons
+                                                    .arrowUpNarrowWide
+                                              : shadcn
+                                                    .LucideIcons
+                                                    .arrowDownWideNarrow,
                                           size: 12,
-                                          color: cs.foreground.withValues(alpha: 0.72),
+                                          color: cs.foreground.withValues(
+                                            alpha: 0.72,
+                                          ),
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
@@ -3213,7 +4446,9 @@ JSON.stringify({
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
-                                            color: cs.foreground.withValues(alpha: 0.72),
+                                            color: cs.foreground.withValues(
+                                              alpha: 0.72,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -3231,14 +4466,20 @@ JSON.stringify({
                                 filterChip(
                                   label: '全部',
                                   selectedValue: saleFilter.isEmpty,
-                                  onTap: () => setDialogState(() => updateFilters(() => saleFilter = '')),
+                                  onTap: () => setDialogState(
+                                    () => updateFilters(() => saleFilter = ''),
+                                  ),
                                 ),
                                 for (final sale in saleOptions)
                                   filterChip(
                                     label: sale,
                                     selectedValue: saleFilter == sale,
                                     onTap: () => setDialogState(
-                                      () => updateFilters(() => saleFilter = saleFilter == sale ? '' : sale),
+                                      () => updateFilters(
+                                        () => saleFilter = saleFilter == sale
+                                            ? ''
+                                            : sale,
+                                      ),
                                     ),
                                     accent: saleColor(sale),
                                   ),
@@ -3254,7 +4495,11 @@ JSON.stringify({
                                   filterChip(
                                     label: '全部',
                                     selectedValue: categoryFilter.isEmpty,
-                                    onTap: () => setDialogState(() => updateFilters(() => categoryFilter = '')),
+                                    onTap: () => setDialogState(
+                                      () => updateFilters(
+                                        () => categoryFilter = '',
+                                      ),
+                                    ),
                                   ),
                                   for (final category in categoryOptions)
                                     filterChip(
@@ -3262,7 +4507,10 @@ JSON.stringify({
                                       selectedValue: categoryFilter == category,
                                       onTap: () => setDialogState(
                                         () => updateFilters(
-                                          () => categoryFilter = categoryFilter == category ? '' : category,
+                                          () => categoryFilter =
+                                              categoryFilter == category
+                                              ? ''
+                                              : category,
                                         ),
                                       ),
                                     ),
@@ -3279,7 +4527,9 @@ JSON.stringify({
                                   filterChip(
                                     label: '全部',
                                     selectedValue: tagFilters.isEmpty,
-                                    onTap: () => setDialogState(() => updateFilters(tagFilters.clear)),
+                                    onTap: () => setDialogState(
+                                      () => updateFilters(tagFilters.clear),
+                                    ),
                                   ),
                                   for (final tag in tagOptions)
                                     filterChip(
@@ -3315,7 +4565,8 @@ JSON.stringify({
         isScrollControlled: true,
         backgroundColor: cs.background,
         builder: (sheetContext) => StatefulBuilder(
-          builder: (sheetContext, setDialogState) => SafeArea(child: content(sheetContext, setDialogState)),
+          builder: (sheetContext, setDialogState) =>
+              SafeArea(child: content(sheetContext, setDialogState)),
         ),
       );
       return;
@@ -3324,12 +4575,15 @@ JSON.stringify({
     await shadcn.showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => shadcn.AlertDialog(content: content(dialogContext, setDialogState)),
+        builder: (dialogContext, setDialogState) =>
+            shadcn.AlertDialog(content: content(dialogContext, setDialogState)),
       ),
     );
   }
 
-  Future<void> _showDownloaderSelectAndPush(List<_BrowserExtractedTorrent> torrents) async {
+  Future<void> _showDownloaderSelectAndPush(
+    List<_BrowserExtractedTorrent> torrents,
+  ) async {
     if (!mounted || _closing || torrents.isEmpty) return;
     await showAppSheet<void>(
       context: context,
@@ -3337,7 +4591,9 @@ JSON.stringify({
       showDefaultHeader: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(maxWidth: DownloaderSelectSheet.desktopWidth),
+      constraints: const BoxConstraints(
+        maxWidth: DownloaderSelectSheet.desktopWidth,
+      ),
       builder: (sheetContext) => DownloaderSelectSheet(
         useDefaultHeader: true,
         onSelected: (downloader) async {
@@ -3364,13 +4620,17 @@ JSON.stringify({
           }
           final cookie = await _cookieHeaderFor(urls.first);
           if (!mounted || _closing) return;
-          final singleTorrent = torrents.length == 1 ? _toSearchTorrentInfo(torrents.first, cookie: cookie) : null;
+          final singleTorrent = torrents.length == 1
+              ? _toSearchTorrentInfo(torrents.first, cookie: cookie)
+              : null;
           if (context.isMobile) {
             await showAppSheet<void>(
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              constraints: const BoxConstraints(maxWidth: PushTorrentSheet.desktopWidth),
+              constraints: const BoxConstraints(
+                maxWidth: PushTorrentSheet.desktopWidth,
+              ),
               builder: (_) => PushTorrentSheet(
                 downloader: downloader,
                 torrent: singleTorrent,
@@ -3405,23 +4665,35 @@ JSON.stringify({
     );
   }
 
-  SearchTorrentInfo _toSearchTorrentInfo(_BrowserExtractedTorrent item, {String? cookie, String? overrideUrl}) {
-    final primaryUrl = (overrideUrl?.trim().isNotEmpty == true ? overrideUrl!.trim() : item.primaryUrl.trim());
+  SearchTorrentInfo _toSearchTorrentInfo(
+    _BrowserExtractedTorrent item, {
+    String? cookie,
+    String? overrideUrl,
+  }) {
+    final primaryUrl = (overrideUrl?.trim().isNotEmpty == true
+        ? overrideUrl!.trim()
+        : item.primaryUrl.trim());
     final detailUrl = item.detailUrl.trim();
     final siteId = widget.siteId?.trim() ?? '';
     final torrentId = item.id.trim().isNotEmpty
         ? item.id.trim()
-        : _extractTorrentIdFromBrowserUrl(primaryUrl.isNotEmpty ? primaryUrl : detailUrl);
+        : _extractTorrentIdFromBrowserUrl(
+            primaryUrl.isNotEmpty ? primaryUrl : detailUrl,
+          );
     return SearchTorrentInfo(
       siteId: siteId,
       tid: torrentId,
       poster: item.poster,
-      category: item.formattedCategory.isNotEmpty ? item.formattedCategory : item.category,
+      category: item.formattedCategory.isNotEmpty
+          ? item.formattedCategory
+          : item.category,
       magnetUrl: primaryUrl,
       detailUrl: detailUrl,
       title: item.title.isNotEmpty ? item.title : primaryUrl,
       subtitle: item.subtitle,
-      cookie: cookie?.trim().isNotEmpty == true ? cookie!.trim() : widget.cookie,
+      cookie: cookie?.trim().isNotEmpty == true
+          ? cookie!.trim()
+          : widget.cookie,
       saleStatus: item.sale.isNotEmpty ? item.sale : '无优惠',
       saleExpire: item.saleExpire.isEmpty ? null : item.saleExpire,
       tags: item.tags,
@@ -3444,17 +4716,26 @@ JSON.stringify({
     return '';
   }
 
-  Future<SearchTorrentInfo?> _extractInterceptedTorrentInfo(String torrentUrl, {String? cookie}) async {
+  Future<SearchTorrentInfo?> _extractInterceptedTorrentInfo(
+    String torrentUrl, {
+    String? cookie,
+  }) async {
     final controller = _controller;
     if (controller == null || _closing || !mounted) return null;
 
     final detailWebsite = _currentDetailWebsiteConfig();
     if (detailWebsite != null) {
       try {
-        final raw = await controller.evaluateJavascript(source: _buildTorrentDetailExtractScript(detailWebsite));
+        final raw = await controller.evaluateJavascript(
+          source: _buildTorrentDetailExtractScript(detailWebsite),
+        );
         final item = _parseExtractedTorrentDetail(raw);
         if (item != null) {
-          return _toSearchTorrentInfo(item, cookie: cookie, overrideUrl: torrentUrl);
+          return _toSearchTorrentInfo(
+            item,
+            cookie: cookie,
+            overrideUrl: torrentUrl,
+          );
         }
       } catch (e, st) {
         AppLogger.warn('拦截种子下载时解析详情页种子信息失败: $e\n$st');
@@ -3464,11 +4745,17 @@ JSON.stringify({
     final listWebsite = _currentTorrentWebsiteConfig();
     if (listWebsite != null) {
       try {
-        final raw = await controller.evaluateJavascript(source: _buildTorrentExtractScript(listWebsite));
+        final raw = await controller.evaluateJavascript(
+          source: _buildTorrentExtractScript(listWebsite),
+        );
         final items = _parseExtractedTorrents(raw);
         final matched = _matchInterceptedTorrent(items, torrentUrl);
         if (matched != null) {
-          return _toSearchTorrentInfo(matched, cookie: cookie, overrideUrl: torrentUrl);
+          return _toSearchTorrentInfo(
+            matched,
+            cookie: cookie,
+            overrideUrl: torrentUrl,
+          );
         }
       } catch (e, st) {
         AppLogger.warn('拦截种子下载时解析列表页种子信息失败: $e\n$st');
@@ -3478,11 +4765,18 @@ JSON.stringify({
     return null;
   }
 
-  _BrowserExtractedTorrent? _matchInterceptedTorrent(List<_BrowserExtractedTorrent> items, String torrentUrl) {
+  _BrowserExtractedTorrent? _matchInterceptedTorrent(
+    List<_BrowserExtractedTorrent> items,
+    String torrentUrl,
+  ) {
     final targetUrl = _normalizeTorrentCompareUrl(torrentUrl);
     final targetId = _extractTorrentIdFromBrowserUrl(torrentUrl);
     for (final item in items) {
-      final candidates = <String>[item.magnetUrl, item.detailUrl, item.primaryUrl];
+      final candidates = <String>[
+        item.magnetUrl,
+        item.detailUrl,
+        item.primaryUrl,
+      ];
       for (final candidate in candidates) {
         final normalized = _normalizeTorrentCompareUrl(candidate);
         if (normalized.isNotEmpty && normalized == targetUrl) return item;
@@ -3507,7 +4801,9 @@ JSON.stringify({
             normalized == 'auth' ||
             normalized == 'token';
       });
-    return uri.replace(queryParameters: query.isEmpty ? null : query).toString();
+    return uri
+        .replace(queryParameters: query.isEmpty ? null : query)
+        .toString();
   }
 
   String _extractTorrentIdFromBrowserUrl(String value) {
@@ -3530,7 +4826,10 @@ JSON.stringify({
       }
     }
 
-    final match = RegExp(r'([?&](?:tid|id|torrentid|topicid)=)([^&#]+)', caseSensitive: false).firstMatch(raw);
+    final match = RegExp(
+      r'([?&](?:tid|id|torrentid|topicid)=)([^&#]+)',
+      caseSensitive: false,
+    ).firstMatch(raw);
     return match?.group(2)?.trim() ?? '';
   }
 
@@ -3548,7 +4847,9 @@ JSON.stringify({
 
   bool _isLoadedPageUrl(String url) {
     final uri = Uri.tryParse(url.trim());
-    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && !_isTorrentUrl(url);
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        !_isTorrentUrl(url);
   }
 
   bool _isTorrentDownloadRequest({
@@ -3579,7 +4880,9 @@ JSON.stringify({
     _torrentSheetOpen = true;
     _activeTorrentUrl = torrentUrl;
     if (mounted) {
-      final restoredUrl = (restoreUrl?.trim().isNotEmpty ?? false) ? restoreUrl!.trim() : _lastLoadedPageUrl.trim();
+      final restoredUrl = (restoreUrl?.trim().isNotEmpty ?? false)
+          ? restoreUrl!.trim()
+          : _lastLoadedPageUrl.trim();
       setState(() {
         if (restoredUrl.isNotEmpty) {
           _currentUrl = restoredUrl;
@@ -3596,7 +4899,9 @@ JSON.stringify({
       showDefaultHeader: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(maxWidth: DownloaderSelectSheet.desktopWidth),
+      constraints: const BoxConstraints(
+        maxWidth: DownloaderSelectSheet.desktopWidth,
+      ),
       builder: (sheetContext) => DownloaderSelectSheet(
         useDefaultHeader: true,
         onSelected: (downloader) async {
@@ -3606,7 +4911,10 @@ JSON.stringify({
           if (!mounted || _closing) return;
           final cookie = await _cookieHeaderFor(torrentUrl);
           if (!mounted || _closing) return;
-          final torrent = await _extractInterceptedTorrentInfo(torrentUrl, cookie: cookie);
+          final torrent = await _extractInterceptedTorrentInfo(
+            torrentUrl,
+            cookie: cookie,
+          );
           if (!mounted || _closing) return;
           final torrentId = torrent?.tid.trim().isNotEmpty == true
               ? torrent!.tid.trim()
@@ -3616,12 +4924,16 @@ JSON.stringify({
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
-            constraints: const BoxConstraints(maxWidth: PushTorrentSheet.desktopWidth),
+            constraints: const BoxConstraints(
+              maxWidth: PushTorrentSheet.desktopWidth,
+            ),
             builder: (_) => PushTorrentSheet(
               downloader: downloader,
               torrent: torrent,
               initialUrl: torrentUrl,
-              initialIds: torrentId.isEmpty ? const <String>[] : <String>[torrentId],
+              initialIds: torrentId.isEmpty
+                  ? const <String>[]
+                  : <String>[torrentId],
               initialCookie: cookie,
               initialSiteId: widget.siteId,
             ),
@@ -3639,6 +4951,96 @@ JSON.stringify({
     });
   }
 
+  Future<String?> _localStorageSnapshotFor(String url) async {
+    final controller = _controller;
+    if (controller == null || _closing) return null;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      AppLogger.warn('无效的 URL，无法提取 localStorage: $url');
+      return null;
+    }
+
+    try {
+      final raw = await controller.evaluateJavascript(
+        source: r'''
+(() => {
+  try {
+    const keys = [];
+    const shouldKeepAuth = (key, value) => /auth|token|session|jwt|access|refresh/i.test(`${key} ${value || ''}`);
+    const shouldSkip = (key, value) =>
+      !shouldKeepAuth(key, value) &&
+      (key.startsWith('user.') ||
+        key.startsWith('_') ||
+        key.startsWith('persist:') ||
+        key.startsWith('sysinfo'));
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      const value = key ? window.localStorage.getItem(key) : '';
+      if (key && !shouldSkip(key, value)) keys.push(key);
+    }
+    const pairs = keys.sort().map((key) => {
+      const value = window.localStorage.getItem(key);
+      return `${key}=${value === undefined || value === null ? '' : String(value)}`;
+    });
+    return pairs.length === 0 ? '' : pairs.join('; ');
+  } catch (_) {
+    return null;
+  }
+})();
+''',
+      );
+      if (raw == null) return null;
+      final text = raw is String ? raw.trim() : jsonEncode(raw);
+      AppLogger.info('从 WebView 提取 localStorage 长度: ${text.length} 字符');
+      return text;
+    } catch (e, st) {
+      AppLogger.error('读取 localStorage 失败', e, st);
+      return null;
+    }
+  }
+
+  Future<String?> _localStorageRawSnapshotFor(String url) async {
+    final controller = _controller;
+    if (controller == null || _closing) return null;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      AppLogger.warn('无效的 URL，无法提取 localStorage: $url');
+      return null;
+    }
+
+    try {
+      final raw = await controller.evaluateJavascript(
+        source: r'''
+(() => {
+  try {
+    const keys = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (key) keys.push(key);
+    }
+    const pairs = keys.sort().map((key) => {
+      const value = window.localStorage.getItem(key);
+      return `${key}=${value === undefined || value === null ? '' : String(value)}`;
+    });
+    return pairs.length === 0 ? '' : pairs.join('; ');
+  } catch (_) {
+    return null;
+  }
+})();
+''',
+      );
+      if (raw == null) return null;
+      final text = raw is String ? raw.trim() : jsonEncode(raw);
+      AppLogger.info('从 WebView 提取未过滤 localStorage 长度: ${text.length} 字符');
+      return text;
+    } catch (e, st) {
+      AppLogger.error('读取未过滤 localStorage 失败', e, st);
+      return null;
+    }
+  }
+
   Future<String?> _cookieHeaderFor(String url) async {
     // 不再使用配置的 Cookie，总是从 WebView 中提取最新的 Cookie
     // 这样可以避免使用过期或无效的 Cookie
@@ -3654,7 +5056,9 @@ JSON.stringify({
       final domainUrl = '${uri.scheme}://${uri.host}';
       AppLogger.info('从 WebView 提取最新 Cookie: $domainUrl');
 
-      final cookies = await CookieManager.instance().getCookies(url: WebUri(domainUrl));
+      final cookies = await CookieManager.instance().getCookies(
+        url: WebUri(domainUrl),
+      );
       AppLogger.info('从 WebView 获取到 ${cookies.length} 个 Cookie');
 
       if (cookies.isEmpty) {
@@ -3700,8 +5104,10 @@ JSON.stringify({
   Future<void> _showSiteTimeline() async {
     if (!mounted) return;
     final container = ProviderScope.containerOf(context, listen: false);
-    final websites = container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
-    final mySites = container.read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
+    final websites =
+        container.read(websiteListProvider).valueOrNull ?? const <WebSite>[];
+    final mySites =
+        container.read(siteInfoListProvider).valueOrNull ?? const <SiteInfo>[];
     if (websites.isEmpty) {
       Toast.warning('暂无站点配置');
       return;
@@ -3766,7 +5172,8 @@ JSON.stringify({
             ..sort((a, b) {
               final at = a.registeredAt;
               final bt = b.registeredAt;
-              if (at == null && bt == null) return a.displayName.compareTo(b.displayName);
+              if (at == null && bt == null)
+                return a.displayName.compareTo(b.displayName);
               if (at == null) return 1;
               if (bt == null) return -1;
               final cmp = at.compareTo(bt);
@@ -3774,12 +5181,18 @@ JSON.stringify({
             });
           final filteredUnowned = unownedEntries.where(matches).toList()
             ..sort((a, b) => a.displayName.compareTo(b.displayName));
-          final displayList = <_SiteTimelineEntry>[...filteredOwned, ...filteredUnowned];
+          final displayList = <_SiteTimelineEntry>[
+            ...filteredOwned,
+            ...filteredUnowned,
+          ];
 
           Widget fieldLine(String label, String value) {
             return Row(
               children: [
-                Text(label, style: TextStyle(fontSize: 11, color: cs.mutedForeground)),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: cs.mutedForeground),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -3797,7 +5210,9 @@ JSON.stringify({
           Widget openUnownedAction(_SiteTimelineEntry entry) {
             return shadcn.Button.ghost(
               onPressed: () async {
-                final urls = entry.website.url.where((e) => e.trim().isNotEmpty).toList();
+                final urls = entry.website.url
+                    .where((e) => e.trim().isNotEmpty)
+                    .toList();
                 if (urls.isEmpty) {
                   Toast.warning('该站点未配置可用 URL');
                   return;
@@ -3826,14 +5241,23 @@ JSON.stringify({
                           children: [
                             for (final url in urls)
                               ListTile(
-                                title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                title: Text(
+                                  url,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onTap: () => Navigator.of(ctx).pop(url),
                               ),
                           ],
                         ),
                       ),
                     ),
-                    actions: [shadcn.Button.outline(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消'))],
+                    actions: [
+                      shadcn.Button.outline(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('取消'),
+                      ),
+                    ],
                   ),
                 );
                 if (selected == null || selected.isEmpty) return;
@@ -3865,9 +5289,12 @@ JSON.stringify({
                       shadcn.Button.secondary(
                         onPressed: () => setState(() {
                           ownership = switch (ownership) {
-                            _TimelineOwnership.all => _TimelineOwnership.ownedOnly,
-                            _TimelineOwnership.ownedOnly => _TimelineOwnership.unownedOnly,
-                            _TimelineOwnership.unownedOnly => _TimelineOwnership.all,
+                            _TimelineOwnership.all =>
+                              _TimelineOwnership.ownedOnly,
+                            _TimelineOwnership.ownedOnly =>
+                              _TimelineOwnership.unownedOnly,
+                            _TimelineOwnership.unownedOnly =>
+                              _TimelineOwnership.all,
                           };
                         }),
                         child: Text(switch (ownership) {
@@ -3879,9 +5306,12 @@ JSON.stringify({
                       shadcn.Button.secondary(
                         onPressed: () => setState(() {
                           inviteFilter = switch (inviteFilter) {
-                            _TimelineInviteFilter.all => _TimelineInviteFilter.has,
-                            _TimelineInviteFilter.has => _TimelineInviteFilter.none,
-                            _TimelineInviteFilter.none => _TimelineInviteFilter.all,
+                            _TimelineInviteFilter.all =>
+                              _TimelineInviteFilter.has,
+                            _TimelineInviteFilter.has =>
+                              _TimelineInviteFilter.none,
+                            _TimelineInviteFilter.none =>
+                              _TimelineInviteFilter.all,
                           };
                         }),
                         child: Text(switch (inviteFilter) {
@@ -3896,7 +5326,8 @@ JSON.stringify({
                       ),
                       shadcn.OverlayManagerLayer(
                         popoverHandler: const shadcn.PopoverOverlayHandler(),
-                        tooltipHandler: const shadcn.FixedTooltipOverlayHandler(),
+                        tooltipHandler:
+                            const shadcn.FixedTooltipOverlayHandler(),
                         menuHandler: const shadcn.PopoverOverlayHandler(),
                         child: Builder(
                           builder: (menuContext) => shadcn.Button.ghost(
@@ -3920,7 +5351,8 @@ JSON.stringify({
                                   ])
                                     shadcn.MenuButton(
                                       onPressed: (_) => setState(() {
-                                        visibleFields[item.$1] = !(visibleFields[item.$1] ?? true);
+                                        visibleFields[item.$1] =
+                                            !(visibleFields[item.$1] ?? true);
                                       }),
                                       child: Row(
                                         children: [
@@ -3966,21 +5398,37 @@ JSON.stringify({
                                   Expanded(
                                     child: Text(
                                       entry.displayName,
-                                      style: TextStyle(fontWeight: FontWeight.w700, color: cs.foreground),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: cs.foreground,
+                                      ),
                                     ),
                                   ),
-                                  if (!entry.isOwned) shadcn.OutlineBadge(child: const Text('未添加')),
-                                  if (!entry.isOwned) ...[const SizedBox(width: 8), openUnownedAction(entry)],
+                                  if (!entry.isOwned)
+                                    shadcn.OutlineBadge(
+                                      child: const Text('未添加'),
+                                    ),
+                                  if (!entry.isOwned) ...[
+                                    const SizedBox(width: 8),
+                                    openUnownedAction(entry),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              if (visibleFields['duration'] == true) fieldLine('注册时长', entry.durationText),
-                              if (visibleFields['uploaded'] == true) fieldLine('上传量', entry.uploadedText),
-                              if (visibleFields['downloaded'] == true) fieldLine('下载量', entry.downloadedText),
-                              if (visibleFields['invitation'] == true) fieldLine('邀请数', '${entry.invitationCount}'),
-                              if (visibleFields['username'] == true) fieldLine('用户名', entry.usernameText),
-                              if (visibleFields['email'] == true) fieldLine('邮箱', entry.emailText),
-                              if (visibleFields['uid'] == true) fieldLine('UID', entry.uidText),
+                              if (visibleFields['duration'] == true)
+                                fieldLine('注册时长', entry.durationText),
+                              if (visibleFields['uploaded'] == true)
+                                fieldLine('上传量', entry.uploadedText),
+                              if (visibleFields['downloaded'] == true)
+                                fieldLine('下载量', entry.downloadedText),
+                              if (visibleFields['invitation'] == true)
+                                fieldLine('邀请数', '${entry.invitationCount}'),
+                              if (visibleFields['username'] == true)
+                                fieldLine('用户名', entry.usernameText),
+                              if (visibleFields['email'] == true)
+                                fieldLine('邮箱', entry.emailText),
+                              if (visibleFields['uid'] == true)
+                                fieldLine('UID', entry.uidText),
                             ],
                           ),
                         );
@@ -3991,7 +5439,10 @@ JSON.stringify({
               ),
             ),
             actions: [
-              shadcn.Button.outline(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('关闭')),
+              shadcn.Button.outline(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              ),
             ],
           );
         },
@@ -4034,15 +5485,21 @@ class _SiteTimelineEntry {
 
   int get invitationCount => mySite?.latestStatus?.invitation ?? 0;
 
-  String get uploadedText => uploadedBytes > 0 ? formatBytes(uploadedBytes) : '-';
+  String get uploadedText =>
+      uploadedBytes > 0 ? formatBytes(uploadedBytes) : '-';
 
-  String get downloadedText => downloadedBytes > 0 ? formatBytes(downloadedBytes) : '-';
+  String get downloadedText =>
+      downloadedBytes > 0 ? formatBytes(downloadedBytes) : '-';
 
-  String get usernameText => mySite?.username?.trim().isNotEmpty == true ? mySite!.username!.trim() : '-';
+  String get usernameText => mySite?.username?.trim().isNotEmpty == true
+      ? mySite!.username!.trim()
+      : '-';
 
-  String get emailText => mySite?.email?.trim().isNotEmpty == true ? mySite!.email!.trim() : '-';
+  String get emailText =>
+      mySite?.email?.trim().isNotEmpty == true ? mySite!.email!.trim() : '-';
 
-  String get uidText => mySite?.userId?.trim().isNotEmpty == true ? mySite!.userId!.trim() : '-';
+  String get uidText =>
+      mySite?.userId?.trim().isNotEmpty == true ? mySite!.userId!.trim() : '-';
 }
 
 class _UserAgentPreset {
@@ -4051,7 +5508,12 @@ class _UserAgentPreset {
   final String description;
   final String? userAgent;
 
-  const _UserAgentPreset({required this.id, required this.label, required this.description, required this.userAgent});
+  const _UserAgentPreset({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.userAgent,
+  });
 }
 
 class _BrowserUserProfileRule {
@@ -4136,9 +5598,11 @@ class _BrowserExtractedTorrent {
 
   String get primaryUrl => magnetUrl.isNotEmpty ? magnetUrl : detailUrl;
 
-  bool get hasPushableUrl => primaryUrl.trim().isNotEmpty || detailUrl.trim().isNotEmpty;
+  bool get hasPushableUrl =>
+      primaryUrl.trim().isNotEmpty || detailUrl.trim().isNotEmpty;
 
-  String get titleSortValue => (title.isNotEmpty ? title : primaryUrl).toLowerCase();
+  String get titleSortValue =>
+      (title.isNotEmpty ? title : primaryUrl).toLowerCase();
 
   int get seedersValue => _parseCompactInt(seeders);
 
@@ -4151,7 +5615,10 @@ class _BrowserExtractedTorrent {
   factory _BrowserExtractedTorrent.fromMap(Map<String, dynamic> map) {
     List<String> parseTags(dynamic value) {
       if (value is Iterable) {
-        return value.map((item) => item?.toString().trim() ?? '').where((item) => item.isNotEmpty).toList();
+        return value
+            .map((item) => item?.toString().trim() ?? '')
+            .where((item) => item.isNotEmpty)
+            .toList();
       }
       final text = value?.toString().trim() ?? '';
       return text.isEmpty ? const [] : <String>[text];
@@ -4160,7 +5627,9 @@ class _BrowserExtractedTorrent {
     String text(dynamic value) => value?.toString().trim() ?? '';
 
     return _BrowserExtractedTorrent(
-      id: text(map['id'] ?? map['tid'] ?? map['torrentId'] ?? map['torrent_id']),
+      id: text(
+        map['id'] ?? map['tid'] ?? map['torrentId'] ?? map['torrent_id'],
+      ),
       title: text(map['title']),
       subtitle: text(map['subtitle']),
       detailUrl: text(map['detailUrl']),
@@ -4236,7 +5705,10 @@ class _BrowserExtractedTorrent {
     if (text.isEmpty) return bytes > 0 ? formatBytes(bytes) : '';
     if (RegExp(r'[a-zA-Z\u4e00-\u9fa5]').hasMatch(text)) {
       return text.replaceAll(RegExp(r'\s+'), ' ').replaceAllMapped(
-        RegExp(r'([0-9]+(?:\.[0-9]+)?)\s*([kmgtpe]?i?b?|bytes?)', caseSensitive: false),
+        RegExp(
+          r'([0-9]+(?:\.[0-9]+)?)\s*([kmgtpe]?i?b?|bytes?)',
+          caseSensitive: false,
+        ),
         (match) {
           final number = match.group(1) ?? '';
           var unit = (match.group(2) ?? '').toUpperCase();

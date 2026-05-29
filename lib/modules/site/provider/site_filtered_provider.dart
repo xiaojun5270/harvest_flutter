@@ -20,6 +20,16 @@ List<String> availableTags(Ref ref) {
     ..sort();
 }
 
+final availableSiteTypesProvider = Provider.autoDispose<List<String>>((ref) {
+  final configs = ref.watch(websiteListProvider).valueOrNull ?? [];
+  return configs
+      .map((config) => config.type.trim())
+      .where((type) => type.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+});
+
 @riverpod
 List<SiteInfo> filteredSiteList(Ref ref) {
   final sites = ref.watch(siteInfoListProvider).valueOrNull ?? [];
@@ -36,11 +46,13 @@ List<SiteInfo> _applyFilter(
   final availability = filter.availability;
   final condition = filter.condition;
   final query = filter.siteNameQuery.toLowerCase();
+  final selectedSiteTypes = filter.selectedSiteTypes;
 
   List<SiteInfo> result;
   if (availability == SiteAvailabilityFilter.all &&
       condition == FilterCondition.all &&
       filter.selectedTags.isEmpty &&
+      selectedSiteTypes.isEmpty &&
       query.isEmpty) {
     result = List.of(sites);
   } else {
@@ -62,6 +74,12 @@ List<SiteInfo> _applyFilter(
       if (filter.selectedTags.isNotEmpty &&
           !filter.selectedTags.any(s.tags.contains)) {
         return false;
+      }
+      if (selectedSiteTypes.isNotEmpty) {
+        final siteType = _siteConfigFor(configs, s.site)?.type.trim();
+        if (siteType == null || !selectedSiteTypes.contains(siteType)) {
+          return false;
+        }
       }
       return true;
     }).toList();

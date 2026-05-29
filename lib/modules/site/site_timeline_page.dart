@@ -483,6 +483,9 @@ class _SiteTimelineContentState extends ConsumerState<SiteTimelineContent> {
         openContext,
         url: urls.first,
         title: entry.displayName,
+        cookie: entry.mySite?.cookie,
+        localStorage: entry.mySite?.localStorage,
+        userAgent: entry.mySite?.userAgent,
         siteId: entry.website.name,
         website: entry.website,
       );
@@ -500,6 +503,9 @@ class _SiteTimelineContentState extends ConsumerState<SiteTimelineContent> {
       openContext,
       url: selected,
       title: entry.displayName,
+      cookie: entry.mySite?.cookie,
+      localStorage: entry.mySite?.localStorage,
+      userAgent: entry.mySite?.userAgent,
       siteId: entry.website.name,
       website: entry.website,
     );
@@ -521,6 +527,7 @@ class _SiteTimelineContentState extends ConsumerState<SiteTimelineContent> {
       siteId: entry.website.name,
       website: entry.website,
       cookie: mySite?.cookie,
+      localStorage: mySite?.localStorage,
       userAgent: mySite?.userAgent,
     );
   }

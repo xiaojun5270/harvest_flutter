@@ -1020,6 +1020,9 @@ class _SitePageState extends ConsumerState<SitePage> {
                     context,
                     url: urls.first,
                     title: entry.displayName,
+                    cookie: entry.mySite?.cookie,
+                    localStorage: entry.mySite?.localStorage,
+                    userAgent: entry.mySite?.userAgent,
                     siteId: entry.website.name,
                     website: entry.website,
                   );
@@ -1121,6 +1124,9 @@ class _SitePageState extends ConsumerState<SitePage> {
                   context,
                   url: selected,
                   title: entry.displayName,
+                  cookie: entry.mySite?.cookie,
+                  localStorage: entry.mySite?.localStorage,
+                  userAgent: entry.mySite?.userAgent,
                   siteId: entry.website.name,
                   website: entry.website,
                 );
@@ -1146,6 +1152,9 @@ class _SitePageState extends ConsumerState<SitePage> {
                     context,
                     url: urls.first,
                     title: entry.displayName,
+                    cookie: entry.mySite?.cookie,
+                    localStorage: entry.mySite?.localStorage,
+                    userAgent: entry.mySite?.userAgent,
                     siteId: entry.website.name,
                     website: entry.website,
                   );
@@ -1247,6 +1256,9 @@ class _SitePageState extends ConsumerState<SitePage> {
                   context,
                   url: selected,
                   title: entry.displayName,
+                  cookie: entry.mySite?.cookie,
+                  localStorage: entry.mySite?.localStorage,
+                  userAgent: entry.mySite?.userAgent,
                   siteId: entry.website.name,
                   website: entry.website,
                 );

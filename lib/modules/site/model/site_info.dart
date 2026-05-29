@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:harvest/core/utils/utils.dart';
 
@@ -7,7 +9,23 @@ part 'site_info.g.dart';
 // 文件顶部，SiteInfo class 外面加：
 Map<String, SiteDailyStatus>? _statusFromJson(Map<String, dynamic>? json) {
   if (json == null) return null;
-  return json.map((k, v) => MapEntry(k, SiteDailyStatus.fromJson(Map<String, dynamic>.from(v as Map))));
+  return json.map(
+    (k, v) => MapEntry(
+      k,
+      SiteDailyStatus.fromJson(Map<String, dynamic>.from(v as Map)),
+    ),
+  );
+}
+
+Object? _readLocalStorage(Map<dynamic, dynamic> json, String key) {
+  return json[key] ?? json['local_storage'];
+}
+
+String? _localStorageFromJson(Object? value) {
+  if (value == null) return null;
+  if (value is String) return value;
+  if (value is Map || value is List) return jsonEncode(value);
+  return value.toString();
 }
 
 @freezed
@@ -26,6 +44,12 @@ abstract class SiteInfo with _$SiteInfo {
     String? passkey,
     String? authkey,
     String? cookie,
+    @JsonKey(
+      name: 'local_storage',
+      readValue: _readLocalStorage,
+      fromJson: _localStorageFromJson,
+    )
+    String? localStorage,
     @JsonKey(name: 'user_agent') String? userAgent,
     String? rss,
     String? torrents,
@@ -51,7 +75,8 @@ abstract class SiteInfo with _$SiteInfo {
     @JsonKey(name: 'updated_at') String? updatedAt,
   }) = _SiteInfo;
 
-  factory SiteInfo.fromJson(Map<String, dynamic> json) => _$SiteInfoFromJson(json);
+  factory SiteInfo.fromJson(Map<String, dynamic> json) =>
+      _$SiteInfoFromJson(json);
 
   SiteDailyStatus? get latestStatus {
     if (status == null || status!.isEmpty) return null;
@@ -62,14 +87,17 @@ abstract class SiteInfo with _$SiteInfo {
 
   String? get latestStatusUpdatedAt {
     final statusUpdatedAt = latestStatus?.updated_at.trim();
-    return (statusUpdatedAt == null || statusUpdatedAt.isEmpty) ? null : statusUpdatedAt;
+    return (statusUpdatedAt == null || statusUpdatedAt.isEmpty)
+        ? null
+        : statusUpdatedAt;
   }
 
   String? get signInText {
     if (signInfo == null || signInfo!.isEmpty) return null;
 
     final today = DateTime.now();
-    final todayKey = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final todayKey =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
     // 有今天的记录 → 已签到
     if (signInfo!.containsKey(todayKey)) return '已签到';
@@ -113,24 +141,25 @@ abstract class SiteDailyStatus with _$SiteDailyStatus {
     @Default(0) @JsonKey(name: 'seed_volume') int seedVolume,
   }) = _SiteDailyStatus;
 
-  factory SiteDailyStatus.fromJson(Map<String, dynamic> json) => SiteDailyStatus(
-    seed: _toInt(json['seed']),
-    leech: _toInt(json['leech']),
-    myHr: json['my_hr']?.toString() ?? '0',
-    ratio: _toDouble(json['ratio']),
-    publish: _toInt(json['publish']),
-    myBonus: _toDouble(json['my_bonus']),
-    myLevel: json['my_level']?.toString() ?? '',
-    myScore: _toDouble(json['my_score']),
-    uploaded: _toInt(json['uploaded']),
-    seedDays: _toInt(json['seed_days']),
-    bonusHour: _toDouble(json['bonus_hour']),
-    created_at: json['created_at']?.toString() ?? '',
-    downloaded: _toInt(json['downloaded']),
-    invitation: _toInt(json['invitation']),
-    updated_at: json['updated_at']?.toString() ?? '',
-    seedVolume: _toInt(json['seed_volume']),
-  );
+  factory SiteDailyStatus.fromJson(Map<String, dynamic> json) =>
+      SiteDailyStatus(
+        seed: _toInt(json['seed']),
+        leech: _toInt(json['leech']),
+        myHr: json['my_hr']?.toString() ?? '0',
+        ratio: _toDouble(json['ratio']),
+        publish: _toInt(json['publish']),
+        myBonus: _toDouble(json['my_bonus']),
+        myLevel: json['my_level']?.toString() ?? '',
+        myScore: _toDouble(json['my_score']),
+        uploaded: _toInt(json['uploaded']),
+        seedDays: _toInt(json['seed_days']),
+        bonusHour: _toDouble(json['bonus_hour']),
+        created_at: json['created_at']?.toString() ?? '',
+        downloaded: _toInt(json['downloaded']),
+        invitation: _toInt(json['invitation']),
+        updated_at: json['updated_at']?.toString() ?? '',
+        seedVolume: _toInt(json['seed_volume']),
+      );
 
   Map<String, dynamic> toJson() => {
     'seed': seed,

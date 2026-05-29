@@ -68,6 +68,7 @@ class SiteFilterState extends ChangeNotifier {
   SortField _sortField = _defaultSortField;
   bool _sortAscending = true;
   final Set<String> _selectedTags = {};
+  final Set<String> _selectedSiteTypes = {};
   String _siteNameQuery = '';
   Timer? _debounce;
 
@@ -85,6 +86,8 @@ class SiteFilterState extends ChangeNotifier {
 
   Set<String> get selectedTags => _selectedTags;
 
+  Set<String> get selectedSiteTypes => _selectedSiteTypes;
+
   String get siteNameQuery => _siteNameQuery;
 
   /// 存活 + 更新时间正序 是默认值，不算"额外"筛选
@@ -92,6 +95,7 @@ class SiteFilterState extends ChangeNotifier {
       _availability != _defaultAvailability ||
       _condition != _defaultCondition ||
       _selectedTags.isNotEmpty ||
+      _selectedSiteTypes.isNotEmpty ||
       _sortField != _defaultSortField ||
       _sortAscending != _defaultSortAscending(_sortField) ||
       _siteNameQuery.isNotEmpty;
@@ -177,6 +181,19 @@ class SiteFilterState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleSiteType(String type) {
+    _selectedSiteTypes.contains(type)
+        ? _selectedSiteTypes.remove(type)
+        : _selectedSiteTypes.add(type);
+    notifyListeners();
+  }
+
+  void clearSiteTypes() {
+    if (_selectedSiteTypes.isEmpty) return;
+    _selectedSiteTypes.clear();
+    notifyListeners();
+  }
+
   void setSiteNameQuery(String q) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
@@ -198,6 +215,7 @@ class SiteFilterState extends ChangeNotifier {
     _sortField = _defaultSortField;
     _sortAscending = _defaultSortAscending(_sortField);
     _selectedTags.clear();
+    _selectedSiteTypes.clear();
     _siteNameQuery = '';
     HiveManager.delete(StorageKeys.siteFilterAvailability);
     HiveManager.delete(StorageKeys.siteFilterCondition);

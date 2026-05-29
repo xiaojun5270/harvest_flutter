@@ -351,6 +351,7 @@ class _SiteFormSheetState extends ConsumerState<SiteFormSheet> {
   late final TextEditingController _passkeyCtrl;
   late final TextEditingController _authkeyCtrl;
   late final TextEditingController _cookieCtrl;
+  late final TextEditingController _localStorageCtrl;
   late final TextEditingController _uaCtrl;
   late final TextEditingController _proxyCtrl;
   late final TextEditingController _mirrorCtrl;
@@ -382,6 +383,7 @@ class _SiteFormSheetState extends ConsumerState<SiteFormSheet> {
     _passkeyCtrl = TextEditingController(text: s?.passkey ?? '');
     _authkeyCtrl = TextEditingController(text: s?.authkey ?? '');
     _cookieCtrl = TextEditingController(text: s?.cookie ?? '');
+    _localStorageCtrl = TextEditingController(text: s?.localStorage ?? '');
     _uaCtrl = TextEditingController(text: s?.userAgent ?? '');
     _proxyCtrl = TextEditingController(text: s?.proxy ?? '');
     _mirrorCtrl = TextEditingController(text: s?.mirror ?? '');
@@ -408,6 +410,7 @@ class _SiteFormSheetState extends ConsumerState<SiteFormSheet> {
     _passkeyCtrl.dispose();
     _authkeyCtrl.dispose();
     _cookieCtrl.dispose();
+    _localStorageCtrl.dispose();
     _uaCtrl.dispose();
     _proxyCtrl.dispose();
     _mirrorCtrl.dispose();
@@ -560,6 +563,7 @@ class _SiteFormSheetState extends ConsumerState<SiteFormSheet> {
                 const SizedBox(height: 16),
                 _formSection(context, '账号信息', [
                   _formField('Cookie', _cookieCtrl, maxLines: 3),
+                  _formField('LocalStorage', _localStorageCtrl, maxLines: 3),
                   _formField('User Agent', _uaCtrl),
                 ]),
                 const SizedBox(height: 16),
@@ -931,6 +935,7 @@ class _SiteFormSheetState extends ConsumerState<SiteFormSheet> {
                 passkey: _opt(_passkeyCtrl),
                 authkey: _opt(_authkeyCtrl),
                 cookie: _cookieCtrl.text.trim(),
+                localStorage: _localStorageCtrl.text.trim(),
                 userAgent: _uaCtrl.text.trim(),
                 proxy: _opt(_proxyCtrl),
                 mirror: _opt(_mirrorCtrl),
@@ -962,6 +967,7 @@ class _SiteFormSheetState extends ConsumerState<SiteFormSheet> {
                 passkey: _opt(_passkeyCtrl),
                 authkey: _opt(_authkeyCtrl),
                 cookie: _cookieCtrl.text.trim(),
+                localStorage: _localStorageCtrl.text.trim(),
                 userAgent: _uaCtrl.text.trim(),
                 proxy: _opt(_proxyCtrl),
                 mirror: _opt(_mirrorCtrl),
