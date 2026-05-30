@@ -64,9 +64,6 @@ Color _adminWarning(BuildContext context, {double alpha = 1}) => _adminTone(
   alpha: alpha,
 );
 
-Color _adminDanger(BuildContext context, {double alpha = 1}) =>
-    _adminColors(context).destructive.withValues(alpha: alpha);
-
 Color _adminAccent(BuildContext context, int index, {double alpha = 1}) {
   final cs = _adminColors(context);
   final palette = <Color>[
@@ -94,6 +91,7 @@ class AdminUserPage extends ConsumerStatefulWidget {
 class _AdminUserPageState extends ConsumerState<AdminUserPage> {
   static const int _defaultPay = 168;
   static const int _defaultExpire = 366 * 100;
+  static const List<int> _pageSizeOptions = [20, 30, 50, 100, 200, 500, 1000];
   static const List<double> _discounts = [
     5,
     5.5,
@@ -110,6 +108,8 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
   final _searchCtrl = TextEditingController();
   String _keyword = '';
   bool _chartsExpanded = true;
+  int _page = 1;
+  int _pageSize = 100;
 
   @override
   void dispose() {
@@ -146,28 +146,38 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
                   ),
                 ),
                 Expanded(
-                  child: EasyRefresh(
-                    onRefresh: () =>
-                        ref.read(adminUserListProvider.notifier).refresh(),
-                    header: appRefreshHeader(context),
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                      children: [
-                        usersAsync.when(
-                          loading: () =>
-                              const _AdminLoadingBlock(label: '授权用户加载中...'),
-                          error: (error, _) => _AdminErrorBlock(
+                  child: usersAsync.when(
+                    loading: () => EasyRefresh(
+                      onRefresh: () =>
+                          ref.read(adminUserListProvider.notifier).refresh(),
+                      header: appRefreshHeader(context),
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                        children: const [
+                          _AdminLoadingBlock(label: '授权用户加载中...'),
+                        ],
+                      ),
+                    ),
+                    error: (error, _) => EasyRefresh(
+                      onRefresh: () =>
+                          ref.read(adminUserListProvider.notifier).refresh(),
+                      header: appRefreshHeader(context),
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                        children: [
+                          _AdminErrorBlock(
                             title: '授权用户加载失败',
                             error: error,
                             onRetry: () => ref
                                 .read(adminUserListProvider.notifier)
                                 .refresh(),
                           ),
-                          data: _buildContent,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    data: _buildContent,
                   ),
                 ),
               ],
@@ -227,44 +237,121 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
         : sorted.where((user) {
             return user.email.toLowerCase().contains(keyword) ||
                 (user.username ?? '').toLowerCase().contains(keyword) ||
-                user.timeExpire.toLowerCase().contains(keyword) ||
-                _displayDate(user.timeExpire).toLowerCase().contains(keyword);
+                (user.marked ?? '').toLowerCase().contains(keyword) ||
+                user.pay.toString().contains(keyword) ||
+                user.invite.toString().contains(keyword) ||
+                user.timeExpire.toLowerCase().contains(keyword);
           }).toList();
+    final pageData = _pageData(filtered);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AdminUserAnalytics(
-          users: users,
-          chartsExpanded: _chartsExpanded,
-          onToggleCharts: () =>
-              setState(() => _chartsExpanded = !_chartsExpanded),
-        ),
-        const SizedBox(height: 12),
-        _AdminUserToolbar(
-          controller: _searchCtrl,
-          total: users.length,
-          current: filtered.length,
-          onSearch: (value) => setState(() => _keyword = value),
-          onClear: () {
-            _searchCtrl.clear();
-            setState(() => _keyword = '');
-          },
-          onAdd: _openCreateDialog,
-          onResetAllInvite: _openResetAllInviteDialog,
-        ),
-        const SizedBox(height: 10),
-        if (filtered.isEmpty)
-          _AdminEmptyBlock(text: keyword.isEmpty ? '暂无授权用户' : '没有匹配的授权用户')
-        else
-          _AdminUserList(
-            users: filtered,
-            onRenew: _openRenewDialog,
-            onResetInvite: _openResetInviteDialog,
-            onSendEmail: _sendTokenEmail,
-            onDelete: _confirmDelete,
+        Expanded(
+          child: EasyRefresh(
+            onRefresh: () => ref.read(adminUserListProvider.notifier).refresh(),
+            header: appRefreshHeader(context),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              children: [
+                _AdminUserAnalytics(
+                  users: users,
+                  chartsExpanded: _chartsExpanded,
+                  onToggleCharts: () =>
+                      setState(() => _chartsExpanded = !_chartsExpanded),
+                ),
+                const SizedBox(height: 12),
+                _AdminUserToolbar(
+                  controller: _searchCtrl,
+                  total: users.length,
+                  current: filtered.length,
+                  onSearch: (value) => setState(() {
+                    _keyword = value;
+                    _page = 1;
+                  }),
+                  onClear: () {
+                    _searchCtrl.clear();
+                    setState(() {
+                      _keyword = '';
+                      _page = 1;
+                    });
+                  },
+                  onAdd: _openCreateDialog,
+                  onResetAllInvite: _openResetAllInviteDialog,
+                ),
+                const SizedBox(height: 10),
+                if (filtered.isEmpty)
+                  _AdminEmptyBlock(
+                    text: keyword.isEmpty ? '暂无授权用户' : '没有匹配的授权用户',
+                  )
+                else
+                  _AdminUserList(
+                    users: pageData.items,
+                    onRenew: _openRenewDialog,
+                    onResetInvite: _openResetInviteDialog,
+                    onSendEmail: _sendTokenEmail,
+                    onDelete: _confirmDelete,
+                  ),
+              ],
+            ),
           ),
+        ),
+        if (filtered.isNotEmpty) ...[
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: _AdminUserPaginationBar(
+                totalItems: filtered.length,
+                pageStart: pageData.start,
+                pageEnd: pageData.end,
+                page: pageData.page,
+                totalPages: pageData.totalPages,
+                pageSize: _pageSize,
+                pageSizeOptions: _pageSizeOptions,
+                onPageChanged: (page) => setState(() => _page = page),
+                onPageSizeChanged: (pageSize) => setState(() {
+                  _pageSize = pageSize;
+                  _page = 1;
+                }),
+              ),
+            ),
+          ),
+        ],
       ],
+    );
+  }
+
+  _AdminUserPageData _pageData(List<AdminUser> users) {
+    if (users.isEmpty) {
+      return const _AdminUserPageData(
+        items: <AdminUser>[],
+        page: 1,
+        totalPages: 1,
+        start: 0,
+        end: 0,
+      );
+    }
+
+    final totalPages = ((users.length + _pageSize - 1) / _pageSize)
+        .floor()
+        .clamp(1, 1 << 31);
+    final page = _page.clamp(1, totalPages).toInt();
+    if (page != _page) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _page == page) return;
+        setState(() => _page = page);
+      });
+    }
+
+    final startIndex = (page - 1) * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, users.length);
+    return _AdminUserPageData(
+      items: users.sublist(startIndex, endIndex),
+      page: page,
+      totalPages: totalPages,
+      start: startIndex + 1,
+      end: endIndex,
     );
   }
 
@@ -720,10 +807,14 @@ class _AdminUserAnalytics extends StatelessWidget {
   Widget build(BuildContext context) {
     final expired = users.where(_isExpired).length;
     final active = users.length - expired;
+    final activeUsers = users.where((user) => !_isExpired(user)).toList();
+    final paidUsers = activeUsers.where((user) => user.pay > 0).length;
+    final freeUsers = activeUsers.where((user) => user.pay <= 0).length;
+    final totalRevenue = users.fold<int>(0, (sum, user) => sum + user.pay);
     final validTryUsers = users
         .where((user) => user.tryUser && !_isExpired(user))
         .length;
-    final recent = users
+    final recent = activeUsers
         .where(
           (user) =>
               DateTime.now()
@@ -737,112 +828,101 @@ class _AdminUserAnalytics extends StatelessWidget {
       expanded: chartsExpanded,
       onToggle: onToggleCharts,
     );
-    final charts = isMobile
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _DonutChartBlock(
-                title: '授权状态',
-                items: [
-                  _ChartItem('有效', active, _adminSuccess(context)),
-                  _ChartItem('过期', expired, _adminDanger(context)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _DonutChartBlock(
-                title: '更新活跃',
-                items: [
-                  _ChartItem('7日内', recent, _adminInfo(context)),
-                  _ChartItem(
-                    '更早',
-                    users.length - recent,
-                    _adminColors(
-                      context,
-                    ).mutedForeground.withValues(alpha: 0.72),
-                  ),
-                ],
+    final charts = Row(
+      children: [
+        Expanded(
+          child: _DonutChartBlock(
+            title: '有效用户类型',
+            items: [
+              _ChartItem('收费', paidUsers, _adminAccent(context, 1)),
+              _ChartItem('免费', freeUsers, _adminSuccess(context)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _DonutChartBlock(
+            title: '更新活跃',
+            items: [
+              _ChartItem('7日内', recent, _adminInfo(context)),
+              _ChartItem(
+                '更早',
+                active - recent,
+                _adminColors(context).mutedForeground.withValues(alpha: 0.72),
               ),
             ],
-          )
-        : Row(
-            children: [
-              Expanded(
-                child: _DonutChartBlock(
-                  title: '授权状态',
-                  items: [
-                    _ChartItem('有效', active, _adminSuccess(context)),
-                    _ChartItem('过期', expired, _adminDanger(context)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DonutChartBlock(
-                  title: '更新活跃',
-                  items: [
-                    _ChartItem('7日内', recent, _adminInfo(context)),
-                    _ChartItem(
-                      '更早',
-                      users.length - recent,
-                      _adminColors(
-                        context,
-                      ).mutedForeground.withValues(alpha: 0.72),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
+          ),
+        ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cards = [
-              _StatCard(
-                label: '授权用户',
-                value: users.length.toString(),
-                icon: shadcn.LucideIcons.shieldCheck,
-                color: _adminInfo(context),
-              ),
-              _StatCard(
-                label: '试用有效',
-                value: validTryUsers.toString(),
-                icon: shadcn.LucideIcons.userCheck,
-                color: _adminAccent(context, 1),
-              ),
-              _StatCard(
-                label: '有效授权',
-                value: active.toString(),
-                icon: shadcn.LucideIcons.calendarCheck,
-                color: _adminSuccess(context),
-              ),
-              _StatCard(
-                label: '已过期',
-                value: expired.toString(),
-                icon: shadcn.LucideIcons.calendarOff,
-                color: _adminDanger(context),
-              ),
-            ];
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: cards.map((card) {
-                final width = isMobile
-                    ? (constraints.maxWidth - 8) / 2
-                    : (constraints.maxWidth - 24) / 4;
-                return SizedBox(width: width, height: 76, child: card);
-              }).toList(),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
         chartHeader,
         AnimatedCrossFade(
           firstChild: const SizedBox.shrink(),
           secondChild: Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: charts,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cards = [
+                      _StatCard(
+                        label: '授权用户',
+                        value: users.length.toString(),
+                        icon: shadcn.LucideIcons.shieldCheck,
+                        color: _adminInfo(context),
+                      ),
+                      _StatCard(
+                        label: '收费用户',
+                        value: paidUsers.toString(),
+                        icon: shadcn.LucideIcons.badgeDollarSign,
+                        color: _adminAccent(context, 1),
+                      ),
+                      _StatCard(
+                        label: '免费用户',
+                        value: freeUsers.toString(),
+                        icon: shadcn.LucideIcons.userCheck,
+                        color: _adminSuccess(context),
+                      ),
+                      _StatCard(
+                        label: '总收入(pay)',
+                        value: _formatAdminAmount(totalRevenue),
+                        icon: shadcn.LucideIcons.walletCards,
+                        color: _adminWarning(context),
+                      ),
+                      _StatCard(
+                        label: '有效授权',
+                        value: active.toString(),
+                        icon: shadcn.LucideIcons.calendarCheck,
+                        color: _adminAccent(context, 4),
+                      ),
+                      _StatCard(
+                        label: '试用有效',
+                        value: validTryUsers.toString(),
+                        icon: shadcn.LucideIcons.ticketCheck,
+                        color: _adminAccent(context, 6),
+                      ),
+                    ];
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: cards.map((card) {
+                        final columns = isMobile ? 2 : 3;
+                        final width =
+                            (constraints.maxWidth - 8 * (columns - 1)) /
+                            columns;
+                        return SizedBox(width: width, height: 76, child: card);
+                      }).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                charts,
+              ],
+            ),
           ),
           crossFadeState: chartsExpanded
               ? CrossFadeState.showSecond
@@ -886,7 +966,7 @@ class _AnalyticsChartHeader extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '图表分析',
+                  '数据分析',
                   style: typo.small.copyWith(
                     fontWeight: FontWeight.w600,
                     color: cs.foreground,
@@ -948,7 +1028,7 @@ class _AdminUserToolbar extends StatelessWidget {
               child: ShadTextField(
                 controller: controller,
                 onChanged: onSearch,
-                hintText: '搜索邮箱、用户名或授权状态',
+                hintText: '搜索邮箱、用户名、备注或授权信息',
                 onSubmitted: (_) =>
                     FocusManager.instance.primaryFocus?.unfocus(),
               ),
@@ -1033,6 +1113,197 @@ class _AdminUserList extends StatelessWidget {
   }
 }
 
+class _AdminUserPageData {
+  final List<AdminUser> items;
+  final int page;
+  final int totalPages;
+  final int start;
+  final int end;
+
+  const _AdminUserPageData({
+    required this.items,
+    required this.page,
+    required this.totalPages,
+    required this.start,
+    required this.end,
+  });
+}
+
+class _AdminUserPaginationBar extends StatelessWidget {
+  final int totalItems;
+  final int pageStart;
+  final int pageEnd;
+  final int page;
+  final int totalPages;
+  final int pageSize;
+  final List<int> pageSizeOptions;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onPageSizeChanged;
+
+  const _AdminUserPaginationBar({
+    required this.totalItems,
+    required this.pageStart,
+    required this.pageEnd,
+    required this.page,
+    required this.totalPages,
+    required this.pageSize,
+    required this.pageSizeOptions,
+    required this.onPageChanged,
+    required this.onPageSizeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final isMobile = context.isMobile;
+    final countText = totalItems == 0
+        ? '共 0 条'
+        : '显示 $pageStart-$pageEnd / 共 $totalItems 条';
+    final countLabel = Text(
+      countText,
+      style: theme.typography.xSmall.copyWith(
+        color: cs.mutedForeground,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    final pageSizePicker = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '每页',
+          style: theme.typography.xSmall.copyWith(
+            color: cs.mutedForeground,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 92,
+          child: shadcn.Select<int>(
+            value: pageSize,
+            itemBuilder: (_, value) => Text('$value'),
+            popup: shadcn.SelectPopup<int>(
+              items: shadcn.SelectItemList(
+                children: [
+                  for (final value in pageSizeOptions)
+                    shadcn.SelectItemButton<int>(
+                      value: value,
+                      child: Text('$value'),
+                    ),
+                ],
+              ),
+            ).call,
+            onChanged: (value) {
+              if (value == null || value == pageSize) return;
+              onPageSizeChanged(value);
+            },
+          ),
+        ),
+      ],
+    );
+    final pagination = isMobile
+        ? _AdminUserCompactPagination(
+            page: page,
+            totalPages: totalPages,
+            onPageChanged: onPageChanged,
+          )
+        : shadcn.Pagination(
+            page: page,
+            totalPages: totalPages,
+            maxPages: 5,
+            showLabel: false,
+            hidePreviousOnFirstPage: true,
+            hideNextOnLastPage: true,
+            onPageChanged: onPageChanged,
+          );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.card.withValues(alpha: 0.7),
+        borderRadius: _adminRadius(context),
+        border: Border.all(color: cs.border.withValues(alpha: 0.8), width: 0.6),
+      ),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                countLabel,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    pageSizePicker,
+                    const Spacer(),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: pagination,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                countLabel,
+                const Spacer(),
+                pageSizePicker,
+                const SizedBox(width: 14),
+                pagination,
+              ],
+            ),
+    );
+  }
+}
+
+class _AdminUserCompactPagination extends StatelessWidget {
+  final int page;
+  final int totalPages;
+  final ValueChanged<int> onPageChanged;
+
+  const _AdminUserCompactPagination({
+    required this.page,
+    required this.totalPages,
+    required this.onPageChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        shadcn.IconButton.outline(
+          onPressed: page > 1 ? () => onPageChanged(page - 1) : null,
+          icon: const Icon(shadcn.LucideIcons.chevronLeft, size: 16),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 58,
+          child: Text(
+            '$page/$totalPages',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.typography.xSmall.copyWith(
+              color: cs.foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        shadcn.IconButton.outline(
+          onPressed: page < totalPages ? () => onPageChanged(page + 1) : null,
+          icon: const Icon(shadcn.LucideIcons.chevronRight, size: 16),
+        ),
+      ],
+    );
+  }
+}
+
 int _adaptiveColumns(
   double width, {
   required double minWidth,
@@ -1062,9 +1333,10 @@ class _AdminUserTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = _adminColors(context);
+    final typo = shadcn.Theme.of(context).typography;
     final expired = _isExpired(user);
     final tile = Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       decoration: BoxDecoration(
         color: cs.background,
         borderRadius: _adminRadius(context),
@@ -1078,20 +1350,92 @@ class _AdminUserTile extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _StatusDot(expired: expired),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _AdminUserTitle(user: user),
-                _AdminUserSubtitle(user: user, expired: expired),
-              ],
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: (expired ? cs.destructive : cs.primary).withValues(
+                    alpha: 0.1,
+                  ),
+                  borderRadius: _adminRadius(context),
+                ),
+                child: Icon(
+                  shadcn.LucideIcons.user,
+                  size: 16,
+                  color: expired ? cs.destructive : cs.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.email.isEmpty ? '未填写邮箱' : user.email,
+                      softWrap: true,
+                      style: typo.base.copyWith(
+                        color: cs.foreground,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user.timeExpire.isEmpty
+                          ? '到期 -'
+                          : '到期 ${user.timeExpire}',
+                      softWrap: true,
+                      style: typo.xSmall.copyWith(
+                        color: cs.mutedForeground,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _StatusDot(expired: expired),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (expired)
+                      const _AdminPill(
+                        text: '过期',
+                        destructive: true,
+                        dense: true,
+                      )
+                    else ...[
+                      const _AdminPill(text: '有效', dense: true),
+                      if (user.tryUser)
+                        const _AdminPill(text: '试用', dense: true),
+                    ],
+                    _AdminPill(text: user.pay > 0 ? '收费' : '免费', dense: true),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _AdminUserMetricGrid(user: user),
+          const SizedBox(height: 10),
+          _AdminUserInfoLine(label: '更新', value: user.updatedAt),
+          if ((user.marked ?? '').isNotEmpty)
+            _AdminUserInfoLine(label: '备注', value: user.marked ?? ''),
         ],
       ),
     );
@@ -1154,67 +1498,149 @@ class _AdminUserTile extends StatelessWidget {
   }
 }
 
-class _AdminUserTitle extends StatelessWidget {
+class _AdminUserMetricGrid extends StatelessWidget {
   final AdminUser user;
 
-  const _AdminUserTitle({required this.user});
+  const _AdminUserMetricGrid({required this.user});
 
   @override
   Widget build(BuildContext context) {
-    final title = user.email.isEmpty ? (user.username ?? '未命名授权') : user.email;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+    final cs = _adminColors(context);
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: cs.secondary.withValues(alpha: 0.42),
+        borderRadius: _adminRadius(context),
+        border: Border.all(
+          color: cs.border.withValues(alpha: 0.55),
+          width: 0.5,
         ),
-        const SizedBox(width: 10),
-        _AdminInfoText(label: '邀请', value: user.invite.toString()),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const gap = 6.0;
+          final width = (constraints.maxWidth - gap * 2) / 3;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              SizedBox(
+                width: width,
+                child: _AdminUserMetricItem(
+                  label: '支付',
+                  value: user.pay.toString(),
+                  icon: shadcn.LucideIcons.badgeDollarSign,
+                  color: _adminAccent(context, 1),
+                ),
+              ),
+              SizedBox(
+                width: width,
+                child: _AdminUserMetricItem(
+                  label: '邀请',
+                  value: user.invite.toString(),
+                  icon: shadcn.LucideIcons.ticketPlus,
+                  color: _adminInfo(context),
+                ),
+              ),
+              SizedBox(
+                width: width,
+                child: _AdminUserMetricItem(
+                  label: '授权',
+                  value: '${user.expire}天',
+                  icon: shadcn.LucideIcons.calendarDays,
+                  color: _adminSuccess(context),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AdminUserMetricItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _AdminUserMetricItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = _adminColors(context);
+    final typo = shadcn.Theme.of(context).typography;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                softWrap: true,
+                style: typo.xSmall.copyWith(color: cs.mutedForeground),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          softWrap: true,
+          style: typo.small.copyWith(
+            color: cs.foreground,
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _AdminUserSubtitle extends StatelessWidget {
-  final AdminUser user;
-  final bool expired;
+class _AdminUserInfoLine extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _AdminUserSubtitle({required this.user, required this.expired});
+  const _AdminUserInfoLine({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     final cs = _adminColors(context);
-    final updateText = Text(
-      '更新于${_displayTime(user.updatedAt)}',
-      textAlign: TextAlign.right,
-      style: shadcn.Theme.of(
-        context,
-      ).typography.xSmall.copyWith(color: cs.mutedForeground, fontSize: 9),
-    );
+    final typo = shadcn.Theme.of(context).typography;
     return Padding(
-      padding: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.only(top: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                if (expired)
-                  const _AdminPill(text: '过期', destructive: true, dense: true)
-                else ...[
-                  if (user.timeExpire.isNotEmpty)
-                    _AdminPill(
-                      text: _displayDate(user.timeExpire),
-                      dense: true,
-                    ),
-                  if (user.tryUser) const _AdminPill(text: '试用', dense: true),
-                ],
-              ],
+          SizedBox(
+            width: 52,
+            child: Text(
+              label,
+              style: typo.xSmall.copyWith(color: cs.mutedForeground),
             ),
           ),
-          const SizedBox(width: 12),
-          updateText,
+          Expanded(
+            child: Text(
+              value.isEmpty ? '-' : value,
+              softWrap: true,
+              style: typo.xSmall.copyWith(
+                color: cs.foreground,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1235,37 +1661,6 @@ class _StatusDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: expired ? cs.destructive : cs.primary,
         shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _AdminInfoText extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _AdminInfoText({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = _adminColors(context);
-    return RichText(
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        style: shadcn.Theme.of(
-          context,
-        ).typography.xSmall.copyWith(color: cs.mutedForeground),
-        children: [
-          TextSpan(text: '$label '),
-          TextSpan(
-            text: value,
-            style: shadcn.Theme.of(context).typography.xSmall.copyWith(
-              color: cs.foreground,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1346,124 +1741,139 @@ class _DonutChartBlock extends StatelessWidget {
     final cs = theme.colorScheme;
     final typo = theme.typography;
     final total = items.fold<int>(0, (sum, item) => sum + item.value);
-    return Container(
-      height: 128,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.background,
-        borderRadius: _adminRadius(context),
-        border: Border.all(color: cs.border.withValues(alpha: 0.8), width: 0.8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            title,
-            style: typo.small.copyWith(
-              fontWeight: FontWeight.w600,
-              color: cs.foreground,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 180;
+        final chartSize = compact ? 54.0 : 72.0;
+        final gap = compact ? 8.0 : 14.0;
+        final percentWidth = compact ? 34.0 : 42.0;
+        return Container(
+          height: compact ? 118 : 128,
+          padding: EdgeInsets.all(compact ? 10 : 12),
+          decoration: BoxDecoration(
+            color: cs.background,
+            borderRadius: _adminRadius(context),
+            border: Border.all(
+              color: cs.border.withValues(alpha: 0.8),
+              width: 0.8,
             ),
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Row(
-              children: [
-                SizedBox.square(
-                  dimension: 72,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CustomPaint(
-                        size: const Size.square(72),
-                        painter: _DonutChartPainter(
-                          items: items,
-                          backgroundColor: cs.secondary,
-                        ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            total.toString(),
-                            style: typo.small.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: cs.foreground,
-                              height: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '总计',
-                            style: typo.xSmall.copyWith(
-                              color: cs.mutedForeground,
-                              height: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: typo.small.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: cs.foreground,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: items.map((item) {
-                      final percent = total > 0
-                          ? item.value / total * 100
-                          : 0.0;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: item.color,
-                                shape: BoxShape.circle,
-                              ),
+              ),
+              SizedBox(height: compact ? 8 : 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: chartSize,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CustomPaint(
+                            size: Size.square(chartSize),
+                            painter: _DonutChartPainter(
+                              items: items,
+                              backgroundColor: cs.secondary,
                             ),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                item.label,
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                total.toString(),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: typo.xSmall.copyWith(
-                                  color: cs.mutedForeground,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.foreground,
+                                  height: 1,
                                 ),
                               ),
-                            ),
-                            Text(
-                              item.value.toString(),
-                              style: typo.xSmall.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: cs.foreground,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 42,
-                              child: Text(
-                                '${percent.toStringAsFixed(0)}%',
-                                textAlign: TextAlign.right,
+                              const SizedBox(height: 2),
+                              Text(
+                                '总计',
                                 style: typo.xSmall.copyWith(
                                   color: cs.mutedForeground,
+                                  height: 1,
                                 ),
                               ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: gap),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: items.map((item) {
+                          final percent = total > 0
+                              ? item.value / total * 100
+                              : 0.0;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: item.color,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    item.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: typo.xSmall.copyWith(
+                                      color: cs.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  item.value.toString(),
+                                  style: typo.xSmall.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: cs.foreground,
+                                  ),
+                                ),
+                                SizedBox(width: compact ? 5 : 8),
+                                SizedBox(
+                                  width: percentWidth,
+                                  child: Text(
+                                    '${percent.toStringAsFixed(0)}%',
+                                    textAlign: TextAlign.right,
+                                    style: typo.xSmall.copyWith(
+                                      color: cs.mutedForeground,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1792,9 +2202,24 @@ class _DialogActions extends StatelessWidget {
   }
 }
 
-String _displayTime(String raw) => raw.isEmpty ? '-' : formatRawDateTime(raw);
+String _formatAdminAmount(num value) {
+  final number = value.toDouble();
+  if (!number.isFinite) return '-';
+  final sign = number < 0 ? '-' : '';
+  final abs = number.abs();
+  if (abs >= 10000) return '$sign${_trimAdminAmount(abs / 10000, 2)}W';
+  return '$sign${_trimAdminAmount(abs, 0)}';
+}
 
-String _displayDate(String raw) => formatDateStringToDate(raw);
+String _trimAdminAmount(num value, int digits) {
+  var text = value.toDouble().toStringAsFixed(digits);
+  if (text.contains('.')) {
+    text = text
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+  return text;
+}
 
 bool _isExpired(AdminUser user) {
   if (user.timeExpire.contains('已过期')) return true;
