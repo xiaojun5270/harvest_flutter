@@ -1037,7 +1037,7 @@ class _BrowserPageState extends State<BrowserPage> {
   bool _shouldShowExtractCookieButton() {
     final website = _websiteConfigForCurrentSite();
     final siteInfo = _currentSiteInfoForQuickLinks(website);
-    return siteInfo != null && (_hasReadableCookie || _hasReadableLocalStorage);
+    return siteInfo != null;
   }
 
   Future<void> _extractAndSyncCookie() async {
@@ -1061,8 +1061,9 @@ class _BrowserPageState extends State<BrowserPage> {
     final normalizedLocalStorage = localStorage == null
         ? null
         : _optionalBrowserStorage(localStorage);
+    final hasLocalStorage = normalizedLocalStorage != null;
 
-    if (!hasCookie && normalizedLocalStorage == null) {
+    if (!hasCookie && !hasLocalStorage) {
       Toast.warning('未检测到 Cookie 或 localStorage');
       AppLogger.warn('Cookie/localStorage 提取失败或为空');
       return;
@@ -1089,17 +1090,15 @@ class _BrowserPageState extends State<BrowserPage> {
 
     try {
       final updated = siteInfo.copyWith(
-        cookie: hasCookie ? cookieText : siteInfo.cookie,
-        localStorage: localStorage == null
-            ? siteInfo.localStorage
-            : normalizedLocalStorage,
+        cookie: hasCookie ? cookieText : '',
+        localStorage: hasLocalStorage ? normalizedLocalStorage : '',
       );
       await notifier.updateSite(updated);
 
       AppLogger.info(
-        'Cookie/localStorage 已同步到后端: site=${siteInfo.site}, cookieLength=${cookie?.length ?? -1}, localStorageLength=${localStorage?.length ?? -1}',
+        'Cookie/localStorage 已同步到后端: site=${siteInfo.site}, cookieLength=${cookieText?.length ?? 0}, localStorageLength=${normalizedLocalStorage?.length ?? 0}',
       );
-      if (hasCookie && normalizedLocalStorage == null) {
+      if (hasCookie && !hasLocalStorage) {
         Toast.success(
           copied
               ? '数据已复制，Cookie 已同步 (${cookieText!.length} 字符)'
