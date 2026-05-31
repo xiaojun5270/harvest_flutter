@@ -61,7 +61,7 @@ class SiteListView extends ConsumerWidget {
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
           mainAxisExtent: switch (cardStyle) {
-            SiteCardStyle.style1 => 184,
+            SiteCardStyle.style1 => 186,
             SiteCardStyle.style2 => 214,
             SiteCardStyle.style3 => 374,
             SiteCardStyle.style4 => 360,
