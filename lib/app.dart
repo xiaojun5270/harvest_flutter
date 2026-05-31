@@ -120,6 +120,7 @@ class _MyAppState extends ConsumerState<MyApp>
     if (!PlatformTool.isDesktopOS()) return;
 
     try {
+      // Windows 下增加额外的检查，避免在无效状态下读取尺寸
       if (await windowManager.isMinimized() ||
           await windowManager.isMaximized() ||
           await windowManager.isFullScreen()) {
@@ -127,7 +128,24 @@ class _MyAppState extends ConsumerState<MyApp>
       }
 
       final size = await windowManager.getSize();
-      if (size.width <= 0 || size.height <= 0) return;
+      
+      // 验证尺寸有效性
+      if (size.width <= 0 || size.height <= 0) {
+        debugPrint('窗口尺寸无效: ${size.width}x${size.height}');
+        return;
+      }
+      
+      // Windows 下检查尺寸是否合理
+      if (PlatformTool.isWindows()) {
+        if (size.width < 400 || size.height < 300) {
+          debugPrint('窗口尺寸过小，跳过保存: ${size.width}x${size.height}');
+          return;
+        }
+        if (size.width > 7680 || size.height > 4320) {
+          debugPrint('窗口尺寸过大，跳过保存: ${size.width}x${size.height}');
+          return;
+        }
+      }
 
       final normalized = Size(
         size.width.roundToDouble(),
@@ -143,8 +161,8 @@ class _MyAppState extends ConsumerState<MyApp>
           normalized.height.toInt(),
         ),
       ]);
-    } catch (error) {
-      debugPrint('保存窗口尺寸失败: $error');
+    } catch (error, stackTrace) {
+      debugPrint('保存窗口尺寸失败: $error\n$stackTrace');
     }
   }
 

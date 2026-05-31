@@ -16,7 +16,11 @@ class ServerResourceService {
     var eventCount = 0;
     final stopwatch = Stopwatch()..start();
     try {
-      client = HttpClient()..autoUncompress = false;
+      client = HttpClient()
+        ..autoUncompress = false
+        ..maxConnectionsPerHost = 5  // 限制连接数，避免资源耗尽
+        ..idleTimeout = const Duration(seconds: 60);  // 设置空闲超时
+      
       final uri = Uri.parse(
         '${AppConfig.baseUrl}${API.SERVER_STATUS}',
       ).replace(queryParameters: {'interval': '$interval'});

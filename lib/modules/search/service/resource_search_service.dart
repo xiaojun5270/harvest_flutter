@@ -38,7 +38,11 @@ class ResourceSearchService {
     HttpClient? client;
     var eventCount = 0;
     try {
-      client = HttpClient()..autoUncompress = false;
+      client = HttpClient()
+        ..autoUncompress = false
+        ..maxConnectionsPerHost = 5  // 限制连接数
+        ..idleTimeout = const Duration(seconds: 60);
+      
       final baseUrl = HiveManager.get(StorageKeys.baseUrl);
 
       final uri = Uri.parse('$baseUrl/api/mysite/search');
