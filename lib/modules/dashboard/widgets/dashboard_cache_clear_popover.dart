@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/http/api.dart';
 import 'package:harvest/core/http/hooks.dart';
+import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:harvest/core/utils/utils.dart';
+import 'package:harvest/modules/auth/session_state_reset.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 const _dashboardCacheClearItems = [
@@ -41,16 +44,18 @@ void showDashboardCacheClearPopover(
   );
 }
 
-class DashboardCacheClearPopover extends StatefulWidget {
+class DashboardCacheClearPopover extends ConsumerStatefulWidget {
   const DashboardCacheClearPopover({super.key});
 
   @override
-  State<DashboardCacheClearPopover> createState() =>
+  ConsumerState<DashboardCacheClearPopover> createState() =>
       _DashboardCacheClearPopoverState();
 }
 
 class _DashboardCacheClearPopoverState
-    extends State<DashboardCacheClearPopover> {
+    extends ConsumerState<DashboardCacheClearPopover> {
+  static const _localScopeKey = '__local_scope__';
+
   String? _clearingKey;
 
   @override
@@ -71,75 +76,79 @@ class _DashboardCacheClearPopoverState
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  shadcn.LucideIcons.trash2,
-                  size: theme.scaling * 18,
-                  color: cs.primary,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    shadcn.LucideIcons.trash2,
+                    size: theme.scaling * 18,
+                    color: cs.primary,
+                  ),
+                  SizedBox(width: theme.density.baseGap * theme.scaling),
+                  Expanded(
+                    child: Text(
+                      '缓存清理',
+                      style: theme.typography.large.copyWith(
+                        color: cs.foreground,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  shadcn.IconButton.ghost(
+                    icon: Icon(
+                      shadcn.LucideIcons.x,
+                      size: theme.scaling * 16,
+                      color: cs.mutedForeground,
+                    ),
+                    onPressed: () => shadcn.closeOverlay(context),
+                  ),
+                ],
+              ),
+              SizedBox(height: theme.density.baseGap * theme.scaling * 0.5),
+              Text(
+                '选择要清理的缓存范围',
+                style: theme.typography.xSmall.copyWith(
+                  color: cs.mutedForeground,
+                  fontWeight: FontWeight.w600,
                 ),
-                SizedBox(width: theme.density.baseGap * theme.scaling),
-                Expanded(
-                  child: Text(
-                    '缓存清理',
-                    style: theme.typography.large.copyWith(
-                      color: cs.foreground,
-                      fontWeight: FontWeight.w700,
+              ),
+              SizedBox(height: theme.density.baseGap * theme.scaling),
+              _localScopeButton(context),
+              SizedBox(height: theme.density.baseGap * theme.scaling * 1.5),
+              Flexible(
+                child: shadcn.Card(
+                  filled: true,
+                  fillColor: cs.muted.withValues(alpha: 0.16),
+                  borderColor: cs.border.withValues(alpha: 0.24),
+                  padding: EdgeInsets.all(
+                    theme.density.baseGap * theme.scaling,
+                  ),
+                  child: SingleChildScrollView(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final spacing = theme.density.baseGap * theme.scaling;
+                        final itemWidth = (constraints.maxWidth - spacing) / 2;
+                        return Wrap(
+                          spacing: spacing,
+                          runSpacing: spacing,
+                          children: [
+                            for (final item in _dashboardCacheClearItems)
+                              SizedBox(
+                                width: itemWidth,
+                                height: theme.scaling * 34,
+                                child: _cacheButton(context, item),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
-                shadcn.IconButton.ghost(
-                  icon: Icon(
-                    shadcn.LucideIcons.x,
-                    size: theme.scaling * 16,
-                    color: cs.mutedForeground,
-                  ),
-                  onPressed: () => shadcn.closeOverlay(context),
-                ),
-              ],
-            ),
-            SizedBox(height: theme.density.baseGap * theme.scaling * 0.5),
-            Text(
-              '选择要清理的缓存范围',
-              style: theme.typography.xSmall.copyWith(
-                color: cs.mutedForeground,
-                fontWeight: FontWeight.w600,
               ),
-            ),
-            SizedBox(height: theme.density.baseGap * theme.scaling * 1.5),
-            Flexible(
-              child: shadcn.Card(
-                filled: true,
-                fillColor: cs.muted.withValues(alpha: 0.16),
-                borderColor: cs.border.withValues(alpha: 0.24),
-                padding: EdgeInsets.all(theme.density.baseGap * theme.scaling),
-                child: SingleChildScrollView(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final spacing = theme.density.baseGap * theme.scaling;
-                      final itemWidth = (constraints.maxWidth - spacing) / 2;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          for (final item in _dashboardCacheClearItems)
-                            SizedBox(
-                              width: itemWidth,
-                              height: theme.scaling * 34,
-                              child: _cacheButton(context, item),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
@@ -173,6 +182,35 @@ class _DashboardCacheClearPopoverState
     );
   }
 
+  Widget _localScopeButton(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final clearing = _clearingKey == _localScopeKey;
+
+    return SizedBox(
+      height: theme.scaling * 38,
+      child: shadcn.Button.outline(
+        onPressed: _clearingKey == null ? _clearLocalScopeData : null,
+        leading: clearing
+            ? shadcn.CircularProgressIndicator(size: theme.scaling * 14)
+            : Icon(
+                shadcn.LucideIcons.databaseZap,
+                size: theme.scaling * 15,
+                color: cs.primary,
+              ),
+        child: Text(
+          '本地空间数据',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.typography.small.copyWith(
+            color: cs.foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _clearCache(_DashboardCacheClearItem item) async {
     setState(() => _clearingKey = item.value);
     try {
@@ -180,6 +218,22 @@ class _DashboardCacheClearPopoverState
       Toast.success('${item.name}已清理');
     } catch (_) {
       Toast.error('${item.name}清理失败');
+    } finally {
+      if (mounted) setState(() => _clearingKey = null);
+    }
+  }
+
+  Future<void> _clearLocalScopeData() async {
+    setState(() => _clearingKey = _localScopeKey);
+    try {
+      final count = await HiveManager.clearCurrentScope();
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      invalidateWidgetSessionState(ref);
+      Toast.success(count > 0 ? '本地空间数据已清理' : '当前空间没有本地数据');
+    } catch (e, st) {
+      AppLogger.error('清理本地空间数据失败', e, st);
+      Toast.error('本地空间数据清理失败');
     } finally {
       if (mounted) setState(() => _clearingKey = null);
     }

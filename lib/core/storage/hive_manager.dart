@@ -87,8 +87,26 @@ class HiveManager {
     await _box.delete(_resolveKey(key));
   }
 
+  static Future<int> deleteWhere(bool Function(String key) test) async {
+    final keys = _box.keys
+        .whereType<String>()
+        .where(test)
+        .toList(growable: false);
+    if (keys.isEmpty) return 0;
+
+    await _box.deleteAll(keys);
+    return keys.length;
+  }
+
+  static Future<int> clearCurrentScope() async {
+    final prefix = '$_scopedNamespace::${_scopePrefix()}::';
+    return deleteWhere((key) => key.startsWith(prefix));
+  }
+
   static Future<void> clear() async {
     await _box.clear();
+    _authSessionCleared = true;
+    clearScope();
   }
 
   static bool contains(String key) {

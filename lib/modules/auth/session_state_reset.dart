@@ -16,6 +16,14 @@ import 'package:harvest/modules/task/provider/schedule_provider.dart';
 import 'package:harvest/modules/user/provider/user_management_provider.dart';
 
 void invalidateSessionState(Ref ref) {
+  _invalidateSessionState(ref);
+}
+
+void invalidateWidgetSessionState(WidgetRef ref) {
+  _invalidateSessionState(ref);
+}
+
+void _invalidateSessionState(dynamic ref) {
   ref.read(noticeUnreadCountProvider.notifier).state = 0;
   unawaited(LocalNoticeNotificationService.instance.syncBadgeCount(0));
   unawaited(LocalNoticeNotificationService.instance.clearAllNotices());

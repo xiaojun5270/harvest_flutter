@@ -23,8 +23,9 @@ class LoginStorage {
     final list = await getRecords();
 
     /// 去重（同 server + username）
-    list.removeWhere((e) =>
-    e.server == record.server && e.username == record.username);
+    list.removeWhere(
+      (e) => e.server == record.server && e.username == record.username,
+    );
 
     /// 插入到最前（最近使用）
     list.insert(0, record);
@@ -32,29 +33,25 @@ class LoginStorage {
     /// 可限制最大数量（比如 10 条）
     final newList = list.take(10).toList();
 
-    await box.put(
-      _key,
-      newList.map((e) => e.toJson()).toList(),
-    );
+    await box.put(_key, newList.map((e) => e.toJson()).toList());
   }
+
   // ====================== 新增：删除单条记录 ======================
   static Future<void> remove(LoginRecord record) async {
     final box = await _box();
     final list = await getRecords();
 
     // 根据 server + username 匹配删除
-    list.removeWhere((e) =>
-    e.server == record.server && e.username == record.username);
-
-    await box.put(
-      _key,
-      list.map((e) => e.toJson()).toList(),
+    list.removeWhere(
+      (e) => e.server == record.server && e.username == record.username,
     );
+
+    await box.put(_key, list.map((e) => e.toJson()).toList());
   }
 
   // ====================== 新增：清空所有记录 ======================
   static Future<void> clearAll() async {
     final box = await _box();
-    await box.put(_key, []);
+    await box.clear();
   }
 }

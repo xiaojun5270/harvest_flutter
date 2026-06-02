@@ -20,6 +20,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../login/login_history_provider.dart';
 import '../login/login_record.dart';
+import '../login/login_storage.dart';
 import 'auth_provider.dart';
 import 'setup_prompt_provider.dart';
 
@@ -280,6 +281,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                         ),
                                       ),
                                     ),
+                                    tokens.actionGap,
+                                    shadcn.IconButton.outline(
+                                      onPressed: auth.loading
+                                          ? null
+                                          : _clearAllPersistentData,
+                                      icon: shadcn.Tooltip(
+                                        tooltip: (_) => const Text('清理所有持久化数据'),
+                                        child: Icon(
+                                          shadcn.LucideIcons.databaseZap,
+                                          size: tokens.iconSize,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -414,6 +428,49 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await _showSetupDialog(normalizedBaseUrl);
     } finally {
       _setupDialogOpening = false;
+    }
+  }
+
+  Future<void> _clearAllPersistentData() async {
+    final confirmed = await shadcn.showDialog<bool>(
+      context: context,
+      builder: (ctx) => shadcn.AlertDialog(
+        title: const Text('清理所有持久化数据'),
+        content: const Text('将清理登录态、登录历史、全局设置和所有本地空间数据。当前输入框内容也会清空。'),
+        actions: [
+          shadcn.Button.outline(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          shadcn.Button.destructive(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('清理'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await HiveManager.clear();
+      await LoginStorage.clearAll();
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
+      ref.invalidate(authNotifierProvider);
+      ref.invalidate(loginHistoryProvider);
+      ref.read(postLogoutRouteProvider.notifier).state = null;
+      ref.read(setupDialogBaseUrlProvider.notifier).state = null;
+
+      if (!kIsWeb) _serverController.clear();
+      _usernameController.clear();
+      _passwordController.clear();
+      _filledFromHistory = false;
+
+      Toast.success('持久化数据已清理');
+    } catch (e, st) {
+      AppLogger.error('清理持久化数据失败', e, st);
+      Toast.error('持久化数据清理失败');
     }
   }
 
