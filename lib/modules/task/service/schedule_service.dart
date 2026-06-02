@@ -1,6 +1,7 @@
 import '../../../core/http/api.dart';
 import '../../../core/http/hooks.dart';
 import '../model/schedule.dart';
+import '../model/task_result.dart';
 
 class ScheduleService {
   ScheduleService._();
@@ -51,5 +52,31 @@ class ScheduleService {
   /// 立即执行
   static Future<void> runOnce(int id) {
     return fetchBasic(API.TASK_EXEC_URL, queryParameters: {'task_id': id});
+  }
+
+  static Future<List<TaskResult>> fetchTaskResults() {
+    return fetchModelList(API.TASK_RESULTS, TaskResult.fromJson);
+  }
+
+  static Future<TaskResult?> fetchTaskResult(String taskId) {
+    return fetchModel(
+      '${API.TASK_RESULTS}${Uri.encodeComponent(taskId)}',
+      TaskResult.fromJson,
+    );
+  }
+
+  static Future<void> terminateTaskResult(String taskId) {
+    return editData(
+      '${API.TASK_RESULTS}${Uri.encodeComponent(taskId)}',
+      const <String, dynamic>{},
+    );
+  }
+
+  static Future<void> deleteTaskResult(String taskId) {
+    return removeData('${API.TASK_RESULTS}${Uri.encodeComponent(taskId)}');
+  }
+
+  static Future<void> clearTaskResults() {
+    return removeData(API.TASK_RESULTS);
   }
 }

@@ -131,6 +131,7 @@ class API {
   static const String TASK_OPERATE = "/api/option/schedule";
   static const String CRONTAB_LIST = "/api/option/crontabs";
   static const String TASK_EXEC_URL = "/api/option/exec";
+  static const String TASK_RESULTS = "/api/option/task-results/";
 
   static const String SYSTEM_CONFIG = "/api/auth/config";
   static const String SYSTEM_LOGGING = "/api/logging";
@@ -286,6 +287,7 @@ const _apiEndpointNames = <String, String>{
   API.TASK_OPERATE: '计划任务配置接口',
   API.CRONTAB_LIST: '定时任务接口',
   API.TASK_EXEC_URL: '任务执行接口',
+  API.TASK_RESULTS: '任务执行记录接口',
   API.SYSTEM_CONFIG: '系统配置接口',
   API.SYSTEM_LOGGING: '系统日志接口',
   API.setupStatus: '初始化状态接口',
