@@ -84,9 +84,10 @@ class _TaskPageState extends ConsumerState<TaskPage> {
     );
   }
 
-  void _openAdd(BuildContext context, WidgetRef ref) {
+  void _openAdd(BuildContext buttonContext, WidgetRef ref) {
+    final pageContext = context;
     shadcn.showDropdown<void>(
-      context: context,
+      context: buttonContext,
       alignment: Alignment.topCenter,
       offset: const Offset(0, 8),
       widthConstraint: shadcn.PopoverConstraint.intrinsic,
@@ -99,18 +100,18 @@ class _TaskPageState extends ConsumerState<TaskPage> {
           shadcn.MenuButton(
             leading: const Icon(shadcn.LucideIcons.calendarClock),
             onPressed: (overlayContext) async {
-              await shadcn.closeOverlay(overlayContext);
-              if (!context.mounted) return;
-              _openEdit(context, ref, null, isTorrentMove: false);
+              unawaited(shadcn.closeOverlay(overlayContext));
+              if (!pageContext.mounted) return;
+              _openEdit(pageContext, ref, null, isTorrentMove: false);
             },
             child: const Text('普通任务'),
           ),
           shadcn.MenuButton(
             leading: const Icon(shadcn.LucideIcons.arrowRightLeft),
             onPressed: (overlayContext) async {
-              await shadcn.closeOverlay(overlayContext);
-              if (!context.mounted) return;
-              _openEdit(context, ref, null, isTorrentMove: true);
+              unawaited(shadcn.closeOverlay(overlayContext));
+              if (!pageContext.mounted) return;
+              _openEdit(pageContext, ref, null, isTorrentMove: true);
             },
             child: const Text('种子迁移任务'),
           ),
