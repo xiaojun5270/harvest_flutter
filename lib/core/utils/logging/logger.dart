@@ -42,14 +42,23 @@ class AppLogger {
     if (_isInitialized) return;
 
     // 从存储读取日志级别
-    var savedIndex = HiveManager.get(StorageKeys.loggerLevel);
-    if (savedIndex.runtimeType != int) {
-      savedIndex = 2;
-    }
-    _level = savedIndex != null ? LogLevel.values[savedIndex as int] : LogLevel.debug;
+    final savedIndex = HiveManager.get(StorageKeys.loggerLevel);
+    final normalizedIndex =
+        savedIndex is int &&
+            savedIndex >= 0 &&
+            savedIndex < LogLevel.values.length
+        ? savedIndex
+        : LogLevel.info.index;
+    _level = LogLevel.values[normalizedIndex];
 
     _consoleLogger = Logger(
-      printer: PrettyPrinter(methodCount: 2, errorMethodCount: 8, colors: true, printEmojis: true, printTime: true),
+      printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8,
+        colors: true,
+        printEmojis: true,
+        printTime: true,
+      ),
     );
     await _initFileLogger();
     await _clearOldLogs();
@@ -62,7 +71,13 @@ class AppLogger {
     _level = level;
     await HiveManager.set(StorageKeys.loggerLevel, level.index);
     _consoleLogger = Logger(
-      printer: PrettyPrinter(methodCount: 2, errorMethodCount: 8, colors: true, printEmojis: true, printTime: true),
+      printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8,
+        colors: true,
+        printEmojis: true,
+        printTime: true,
+      ),
     );
     info('日志级别已切换为: ${level.name}');
   }
@@ -87,7 +102,10 @@ class AppLogger {
     if (_logFile == null) return;
     try {
       final time = DateTime.now().toIso8601String();
-      _logFile!.writeAsString('[$time] [$level] $message\n', mode: FileMode.append);
+      _logFile!.writeAsString(
+        '[$time] [$level] $message\n',
+        mode: FileMode.append,
+      );
     } catch (e) {}
   }
 
@@ -115,13 +133,18 @@ class AppLogger {
       final logDir = Directory(path.join(dir.path, 'logs'));
       if (!await logDir.exists()) return null;
 
-      final zipPath = path.join(dir.path, 'app_logs_${DateTime.now().millisecondsSinceEpoch}.zip');
+      final zipPath = path.join(
+        dir.path,
+        'app_logs_${DateTime.now().millisecondsSinceEpoch}.zip',
+      );
       final archive = Archive();
 
       await for (final file in logDir.list()) {
         if (file is File && file.path.endsWith('.log')) {
           final bytes = await file.readAsBytes();
-          archive.addFile(ArchiveFile(path.basename(file.path), bytes.length, bytes));
+          archive.addFile(
+            ArchiveFile(path.basename(file.path), bytes.length, bytes),
+          );
         }
       }
 
@@ -138,12 +161,19 @@ class AppLogger {
   static Future<void> shareLogs() async {
     final zip = await compressAllLogs();
     if (zip == null) return;
-    await SharePlus.instance.share(ShareParams(files: [XFile(zip.path)], text: '导出日志'));
+    await SharePlus.instance.share(
+      ShareParams(files: [XFile(zip.path)], text: '导出日志'),
+    );
   }
 
   // 在 shareLogs 方法后面加
   static Future<void> shareSingleLog(File file) async {
-    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: '导出日志: ${path.basename(file.path)}'));
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: '导出日志: ${path.basename(file.path)}',
+      ),
+    );
   }
 
   static Future<void> deleteAllLogFiles() async {
@@ -158,7 +188,9 @@ class AppLogger {
         }
         // 删除打包的 zip
         await for (final entity in dir.list()) {
-          if (entity is File && entity.path.endsWith('.zip') && entity.path.contains('app_logs')) {
+          if (entity is File &&
+              entity.path.endsWith('.zip') &&
+              entity.path.contains('app_logs')) {
             await entity.delete();
           }
         }

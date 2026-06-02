@@ -26,43 +26,13 @@ void main() {
 
 Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Windows 下增加额外的错误处理
-  if (PlatformTool.isWindows()) {
-    FlutterError.onError = (details) {
-      // 忽略一些常见的 Windows 渲染错误，避免闪退
-      final errorStr = details.exceptionAsString();
-      if (errorStr.contains('RenderFlex') || 
-          errorStr.contains('overflowed') ||
-          errorStr.contains('RenderBox was not laid out')) {
-        debugPrint('Windows: 忽略布局错误: $errorStr');
-        return;
-      }
-      FlutterError.presentError(details);
-      _logUnhandledError(
-        '未捕获的 Flutter 异常',
-        details.exception,
-        details.stack ?? StackTrace.current,
-      );
-    };
-  }
-  
+
+  _installGlobalErrorHandlers();
+
   await HiveManager.init();
   await ThemeStorage.init();
   // 初始化日志
   await AppLogger.init();
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    _logUnhandledError(
-      '未捕获的 Flutter 异常',
-      details.exception,
-      details.stack ?? StackTrace.current,
-    );
-  };
-  ui.PlatformDispatcher.instance.onError = (error, stack) {
-    _logUnhandledError('未捕获的平台异常', error, stack);
-    return true;
-  };
   // await AppLogger.init();
   // 固定写法，处理状态栏背景颜色透明问题
   AppLogger.debug("============尝试访问网络===========");
@@ -112,11 +82,11 @@ Future<void> _startApp() async {
       // 读取窗口尺寸，增加容错处理
       double height = 900;
       double width = 1440;
-      
+
       try {
         final savedHeight = HiveManager.get(StorageKeys.windowSizeHeight);
         final savedWidth = HiveManager.get(StorageKeys.windowSizeWidth);
-        
+
         if (savedHeight != null && savedHeight is num && savedHeight > 0) {
           height = savedHeight.toDouble().clamp(400, 4096);
         }
@@ -127,47 +97,31 @@ Future<void> _startApp() async {
         AppLogger.warn('读取窗口尺寸失败，使用默认值: $e');
       }
 
+      final isWindows = PlatformTool.isWindows();
       WindowOptions windowOptions = WindowOptions(
         size: Size(width, height),
         center: true,
-        backgroundColor: Colors.transparent,
+        minimumSize: const Size(600, 400),
+        backgroundColor: isWindows ? Colors.white : Colors.transparent,
+        title: 'Harvest',
         titleBarStyle: TitleBarStyle.hidden,
         windowButtonVisibility: false,
       );
 
-      // Windows 下需要特别处理，避免闪退
-      if (PlatformTool.isWindows()) {
-        // Windows 下先设置基本选项，不等待显示
-        await windowManager.setAsFrameless();
-        await windowManager.setSize(Size(width, height));
-        await windowManager.center();
-        
-        // 延迟显示窗口，确保所有初始化完成
-        Future.delayed(const Duration(milliseconds: 100), () async {
-          try {
-            await windowManager.show();
-            await windowManager.focus();
-          } catch (e, st) {
-            AppLogger.error('显示窗口失败', e, st);
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        try {
+          if (PlatformTool.isMacOS()) {
+            await windowManager.setTitleBarStyle(
+              TitleBarStyle.hidden,
+              windowButtonVisibility: false,
+            );
           }
-        });
-      } else {
-        // macOS 和 Linux 保持原有逻辑
-        windowManager.waitUntilReadyToShow(windowOptions, () async {
-          try {
-            if (PlatformTool.isMacOS()) {
-              await windowManager.setTitleBarStyle(
-                TitleBarStyle.hidden,
-                windowButtonVisibility: false,
-              );
-            }
-            await windowManager.show();
-            await windowManager.focus();
-          } catch (e, st) {
-            AppLogger.error('显示窗口失败', e, st);
-          }
-        });
-      }
+          await windowManager.show();
+          await windowManager.focus();
+        } catch (e, st) {
+          AppLogger.error('显示窗口失败', e, st);
+        }
+      });
     } catch (e, st) {
       AppLogger.error('窗口管理器初始化失败', e, st);
     }
@@ -177,7 +131,24 @@ Future<void> _startApp() async {
 
   /// 🔥 恢复登录
   // 触发 auth 初始化（build 自动恢复）
-  final authState = container.read(authNotifierProvider);
+  AuthState authState;
+  try {
+    authState = container.read(authNotifierProvider);
+  } catch (e, st) {
+    AppLogger.error('恢复登录状态失败，清理本地登录态后继续启动', e, st);
+    await Future.wait([
+      HiveManager.delete(StorageKeys.accessToken),
+      HiveManager.delete(StorageKeys.refreshToken),
+      HiveManager.delete(StorageKeys.authState),
+    ]);
+    container.invalidate(authNotifierProvider);
+    try {
+      authState = container.read(authNotifierProvider);
+    } catch (retryError, retryStack) {
+      AppLogger.error('清理登录态后恢复仍失败', retryError, retryStack);
+      authState = const AuthState();
+    }
+  }
 
   // 如果已登录，先写入 token 再获取最新用户信息
   if (authState.loggedIn && authState.accessToken != null) {
@@ -208,9 +179,26 @@ Future<void> _startApp() async {
       AppLogger.error('处理通知启动事件失败', e, st);
     }
   }
-  await Future.delayed(const Duration(seconds: 2), () {
-    FlutterNativeSplash.remove();
-  });
+  if (kIsWeb || PlatformTool.isAndroid() || PlatformTool.isIOS()) {
+    await Future.delayed(const Duration(seconds: 2), () {
+      FlutterNativeSplash.remove();
+    });
+  }
+}
+
+void _installGlobalErrorHandlers() {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    _logUnhandledError(
+      '未捕获的 Flutter 异常',
+      details.exception,
+      details.stack ?? StackTrace.current,
+    );
+  };
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    _logUnhandledError('未捕获的平台异常', error, stack);
+    return true;
+  };
 }
 
 void _logUnhandledError(String message, Object error, StackTrace stack) {

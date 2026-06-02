@@ -255,8 +255,7 @@ class LocalNoticeNotificationService {
     return switch (defaultTargetPlatform) {
       TargetPlatform.android ||
       TargetPlatform.iOS ||
-      TargetPlatform.macOS ||
-      TargetPlatform.windows => true,
+      TargetPlatform.macOS => true,
       _ => false,
     };
   }
