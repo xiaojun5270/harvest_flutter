@@ -29,7 +29,14 @@ Future<void> _startApp() async {
 
   _installGlobalErrorHandlers();
 
-  await HiveManager.init();
+  try {
+    await HiveManager.init();
+  } catch (error, stack) {
+    _logUnhandledError('启动存储初始化失败', error, stack);
+    await _showStartupFailure(error);
+    return;
+  }
+
   await ThemeStorage.init();
   // 初始化日志
   await AppLogger.init();
@@ -183,6 +190,121 @@ Future<void> _startApp() async {
     await Future.delayed(const Duration(seconds: 2), () {
       FlutterNativeSplash.remove();
     });
+  }
+}
+
+Future<void> _showStartupFailure(Object error) async {
+  FlutterNativeSplash.remove();
+
+  if (PlatformTool.isDesktopOS()) {
+    try {
+      await windowManager.ensureInitialized();
+      const windowOptions = WindowOptions(
+        size: Size(520, 320),
+        center: true,
+        minimumSize: Size(420, 260),
+        backgroundColor: Colors.white,
+        title: 'Harvest',
+      );
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    } catch (_) {
+      // If the window manager is unavailable, Flutter's default window still
+      // has enough information to render the startup error below.
+    }
+  }
+
+  runApp(_StartupFailureApp(error: error));
+}
+
+class _StartupFailureApp extends StatelessWidget {
+  const _StartupFailureApp({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final isStorageLocked = HiveManager.isStorageLockError(error);
+    final title = isStorageLocked ? 'Harvest 已在运行' : 'Harvest 启动失败';
+    final message = isStorageLocked
+        ? '本地数据文件正在被另一个 Harvest 进程占用。请关闭已经打开的 Harvest 窗口，或在活动监视器中结束残留的 harvest 进程后再启动。'
+        : '本地存储初始化失败，请查看日志中的详细错误信息。';
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x140F172A),
+                      blurRadius: 24,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        message,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SelectableText(
+                        error.toString(),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.4,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      if (PlatformTool.isDesktopOS()) ...[
+                        const SizedBox(height: 20),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton(
+                            onPressed: () => PlatformTool.exitProcess(0),
+                            child: const Text('退出'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

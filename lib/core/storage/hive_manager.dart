@@ -31,17 +31,56 @@ class HiveManager {
   static String? _scopeUsername;
   static bool _authSessionCleared = false;
   static bool _initialized = false;
+  static Future<void>? _initializing;
 
   static bool get isInitialized => _initialized;
 
   static Future<void> init() async {
+    if (_initialized) return;
+
+    final initializing = _initializing;
+    if (initializing != null) return initializing;
+
+    final future = _init();
+    _initializing = future;
+    try {
+      await future;
+    } finally {
+      _initializing = null;
+    }
+  }
+
+  static Future<void> _init() async {
     if (!kIsWeb) {
       await Hive.initFlutter();
     }
-    _box = Hive.isBoxOpen(_boxName)
-        ? Hive.box(_boxName)
-        : await Hive.openBox(_boxName);
-    _initialized = true;
+
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        _box = Hive.isBoxOpen(_boxName)
+            ? Hive.box(_boxName)
+            : await Hive.openBox(_boxName);
+        _initialized = true;
+        return;
+      } catch (error) {
+        if (!isStorageLockError(error) || attempt == 2) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+    }
+
+    throw StateError('Hive initialization did not complete.');
+  }
+
+  static bool isStorageLockError(Object error) {
+    final message = error.toString();
+    return message.contains('lock failed') ||
+        message.contains('Resource temporarily unavailable') ||
+        message.contains('errno = 35') ||
+        message.contains('errno = 11') ||
+        message.contains('errno = 32') ||
+        message.contains('The process cannot access the file');
   }
 
   static void setScope({required String server, required String username}) {
