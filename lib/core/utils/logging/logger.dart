@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:harvest/core/storage/hive_manager.dart';
 import 'package:logger/logger.dart';
 import 'package:path/path.dart' as path;
@@ -24,6 +25,10 @@ class AppLogger {
   static File? _logFile;
   static bool _isInitialized = false;
   static const int _maxLogDays = 7;
+  static const int _maxMemoryLogLines = 1000;
+  static const String memoryLogPath = '__harvest_memory_app_log__';
+  static final List<String> _memoryLogLines = [];
+  static DateTime? _memoryLogModifiedAt;
 
   /// 当前日志级别，默认 debug（开发环境）
   static LogLevel _level = LogLevel.debug;
@@ -36,6 +41,20 @@ class AppLogger {
 
   /// 获取当前日志级别
   static LogLevel get level => _level;
+
+  static List<String> get memoryLogLines =>
+      List.unmodifiable(_memoryLogLines);
+
+  static DateTime get memoryLogModifiedAt =>
+      _memoryLogModifiedAt ?? DateTime.now();
+
+  static int get memoryLogSizeBytes =>
+      _memoryLogLines.fold<int>(0, (sum, line) => sum + line.length + 1);
+
+  static void clearMemoryLogs() {
+    _memoryLogLines.clear();
+    _memoryLogModifiedAt = DateTime.now();
+  }
 
   /// 初始化日志（自动从存储读取级别）
   static Future<void> init() async {
@@ -82,12 +101,35 @@ class AppLogger {
     info('日志级别已切换为: ${level.name}');
   }
 
+  static Future<Directory?> _documentsDirectory() async {
+    if (kIsWeb) return null;
+    return getApplicationDocumentsDirectory();
+  }
+
+  static Future<Directory?> _logDirectory({bool create = false}) async {
+    final dir = await _documentsDirectory();
+    if (dir == null) return null;
+
+    final logDir = Directory(path.join(dir.path, 'logs'));
+    if (create && !await logDir.exists()) {
+      await logDir.create(recursive: true);
+    }
+    return logDir;
+  }
+
+  static Future<File?> currentLogFile() async {
+    final logDir = await _logDirectory();
+    if (logDir == null) return null;
+
+    final date = DateTime.now().toString().split(' ')[0];
+    return File(path.join(logDir.path, 'app_$date.log'));
+  }
+
   /// 初始化日志文件
   static Future<void> _initFileLogger() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final logDir = Directory(path.join(dir.path, 'logs'));
-      if (!await logDir.exists()) await logDir.create();
+      final logDir = await _logDirectory(create: true);
+      if (logDir == null) return;
 
       final date = DateTime.now().toString().split(' ')[0];
       final logPath = path.join(logDir.path, 'app_$date.log');
@@ -99,20 +141,34 @@ class AppLogger {
 
   /// 写入文件（不受级别限制，始终写入，方便排查问题）
   static void _writeToFile(String level, String message) {
+    final time = DateTime.now().toIso8601String();
+    final line = '[$time] [$level] $message';
+    _appendMemoryLogLine(line);
+
     if (_logFile == null) return;
     try {
-      final time = DateTime.now().toIso8601String();
       _logFile!.writeAsString(
-        '[$time] [$level] $message\n',
+        '$line\n',
         mode: FileMode.append,
       );
     } catch (e) {}
   }
 
+  static void _appendMemoryLogLine(String line) {
+    _memoryLogLines.add(line);
+    if (_memoryLogLines.length > _maxMemoryLogLines) {
+      _memoryLogLines.removeRange(
+        0,
+        _memoryLogLines.length - _maxMemoryLogLines,
+      );
+    }
+    _memoryLogModifiedAt = DateTime.now();
+  }
+
   static Future<void> _clearOldLogs() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final logDir = Directory(path.join(dir.path, 'logs'));
+      final logDir = await _logDirectory();
+      if (logDir == null) return;
       if (!await logDir.exists()) return;
 
       final now = DateTime.now();
@@ -129,8 +185,11 @@ class AppLogger {
 
   static Future<File?> compressAllLogs() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final logDir = Directory(path.join(dir.path, 'logs'));
+      final dir = await _documentsDirectory();
+      if (dir == null) return null;
+
+      final logDir = await _logDirectory();
+      if (logDir == null) return null;
       if (!await logDir.exists()) return null;
 
       final zipPath = path.join(
@@ -178,8 +237,11 @@ class AppLogger {
 
   static Future<void> deleteAllLogFiles() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final logDir = Directory(path.join(dir.path, 'logs'));
+      final dir = await _documentsDirectory();
+      if (dir == null) return;
+
+      final logDir = await _logDirectory();
+      if (logDir == null) return;
       if (await logDir.exists()) {
         await for (final entity in logDir.list()) {
           if (entity is File && entity.path.endsWith('.log')) {

@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:harvest/core/utils/utils.dart';
 
@@ -44,7 +43,9 @@ abstract class LogState with _$LogState {
 //  Provider
 // ══════════════════════════════════════════════════════════
 
-final logProvider = StateNotifierProvider.autoDispose<LogNotifier, LogState>((ref) => LogNotifier());
+final logProvider = StateNotifierProvider.autoDispose<LogNotifier, LogState>(
+  (ref) => LogNotifier(),
+);
 
 class LogNotifier extends StateNotifier<LogState> {
   Timer? _refreshTimer;
@@ -75,8 +76,28 @@ class LogNotifier extends StateNotifier<LogState> {
   Future<void> loadFiles() async {
     state = state.copyWith(isLoading: true);
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final logDir = Directory(p.join(dir.path, 'logs'));
+      if (kIsWeb) {
+        state = state.copyWith(
+          isLoading: false,
+          files: [
+            LogFileInfo(
+              name: '浏览器会话日志',
+              filePath: AppLogger.memoryLogPath,
+              sizeBytes: AppLogger.memoryLogSizeBytes,
+              lastModified: AppLogger.memoryLogModifiedAt,
+            ),
+          ],
+        );
+        return;
+      }
+
+      final file = await AppLogger.currentLogFile();
+      final logDirPath = file?.parent.path;
+      if (logDirPath == null) {
+        state = state.copyWith(isLoading: false, files: []);
+        return;
+      }
+      final logDir = Directory(logDirPath);
       if (!await logDir.exists()) {
         state = state.copyWith(isLoading: false, files: []);
         return;
@@ -120,12 +141,23 @@ class LogNotifier extends StateNotifier<LogState> {
     );
 
     try {
+      if (file.filePath == AppLogger.memoryLogPath) {
+        final lines = AppLogger.memoryLogLines;
+        _lastFileLength = lines.length;
+        state = state.copyWith(viewingLines: lines, isLoadingContent: false);
+        _startTailing(file.filePath);
+        return;
+      }
+
       final content = await File(file.filePath).readAsString();
       final lines = content.split('\n').where((l) => l.isNotEmpty).toList();
       _lastFileLength = content.length;
       state = state.copyWith(viewingLines: lines, isLoadingContent: false);
     } catch (e) {
-      state = state.copyWith(viewingLines: ['读取失败: $e'], isLoadingContent: false);
+      state = state.copyWith(
+        viewingLines: ['读取失败: $e'],
+        isLoadingContent: false,
+      );
     }
 
     // 启动实时追踪
@@ -142,6 +174,14 @@ class LogNotifier extends StateNotifier<LogState> {
 
   Future<void> _tailUpdate(String filePath) async {
     try {
+      if (filePath == AppLogger.memoryLogPath) {
+        final lines = AppLogger.memoryLogLines;
+        if (lines.length == _lastFileLength) return;
+        _lastFileLength = lines.length;
+        state = state.copyWith(viewingLines: lines);
+        return;
+      }
+
       final file = File(filePath);
       if (!await file.exists()) return;
 
@@ -174,7 +214,10 @@ class LogNotifier extends StateNotifier<LogState> {
       if (currentLength < stat.size) {
         // 文件被截断，全量替换
         final fullContent = await file.readAsString();
-        final allLines = fullContent.split('\n').where((l) => l.isNotEmpty).toList();
+        final allLines = fullContent
+            .split('\n')
+            .where((l) => l.isNotEmpty)
+            .toList();
         state = state.copyWith(viewingLines: allLines);
       } else {
         // 增量追加
@@ -190,7 +233,11 @@ class LogNotifier extends StateNotifier<LogState> {
   void closeViewer() {
     _stopTimers();
     _lastFileLength = 0;
-    state = state.copyWith(viewingFilePath: null, viewingFileName: null, viewingLines: []);
+    state = state.copyWith(
+      viewingFilePath: null,
+      viewingFileName: null,
+      viewingLines: [],
+    );
   }
 
   /// 切换自动追踪
@@ -226,6 +273,7 @@ class LogNotifier extends StateNotifier<LogState> {
   Future<bool> shareCurrentFile() async {
     final filePath = state.viewingFilePath;
     if (filePath == null) return false;
+    if (filePath == AppLogger.memoryLogPath) return false;
     try {
       final file = File(filePath);
       if (!await file.exists()) return false;
@@ -247,8 +295,17 @@ class LogNotifier extends StateNotifier<LogState> {
 
   Future<void> clearAllLogs() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final logDir = Directory(p.join(dir.path, 'logs'));
+      if (kIsWeb) {
+        AppLogger.clearMemoryLogs();
+        await loadFiles();
+        return;
+      }
+
+      final file = await AppLogger.currentLogFile();
+      final logDirPath = file?.parent.path;
+      if (logDirPath == null) return;
+
+      final logDir = Directory(logDirPath);
       if (await logDir.exists()) {
         await for (final entity in logDir.list()) {
           if (entity is File && entity.path.endsWith('.log')) {
@@ -262,6 +319,12 @@ class LogNotifier extends StateNotifier<LogState> {
 
   Future<void> deleteFile(LogFileInfo file) async {
     try {
+      if (file.filePath == AppLogger.memoryLogPath) {
+        AppLogger.clearMemoryLogs();
+        await loadFiles();
+        return;
+      }
+
       final f = File(file.filePath);
       if (await f.exists()) await f.delete();
       await loadFiles();
