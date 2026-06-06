@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:harvest/core/utils/platform/platform_tool.dart';
 
 import '../config/app_config.dart';
 import 'interceptors/auth_interceptor.dart';
@@ -21,7 +22,7 @@ class DioClient {
     );
 
     // Windows 下优化连接池配置
-    if (Platform.isWindows) {
+    if (PlatformTool.isWindows()) {
       (dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
         final client = HttpClient();
 
