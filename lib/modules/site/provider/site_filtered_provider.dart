@@ -4,6 +4,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../model/site_config.dart';
 import '../model/site_info.dart';
 import '../utils/site_level_milestone.dart';
+import '../../dashboard/provider/dashboard_provider.dart';
+import '../../models/kv/kv.dart';
 import 'site_filter_state.dart';
 import 'site_provider.dart';
 
@@ -30,6 +32,18 @@ final availableSiteTypesProvider = Provider.autoDispose<List<String>>((ref) {
     ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 });
 
+final availableSiteUsernamesProvider = Provider.autoDispose<List<String>>((
+  ref,
+) {
+  final data = ref.watch(dashboardNotifierProvider);
+  return _dashboardIdentityOptions(data?.usernameCount ?? const []);
+});
+
+final availableSiteEmailsProvider = Provider.autoDispose<List<String>>((ref) {
+  final data = ref.watch(dashboardNotifierProvider);
+  return _dashboardIdentityOptions(data?.emailCount ?? const []);
+});
+
 @riverpod
 List<SiteInfo> filteredSiteList(Ref ref) {
   final sites = ref.watch(siteInfoListProvider).valueOrNull ?? [];
@@ -47,12 +61,16 @@ List<SiteInfo> _applyFilter(
   final condition = filter.condition;
   final query = filter.siteNameQuery.toLowerCase();
   final selectedSiteTypes = filter.selectedSiteTypes;
+  final selectedUsername = filter.selectedUsername;
+  final selectedEmail = filter.selectedEmail;
 
   List<SiteInfo> result;
   if (availability == SiteAvailabilityFilter.all &&
       condition == FilterCondition.all &&
       filter.selectedTags.isEmpty &&
       selectedSiteTypes.isEmpty &&
+      selectedUsername == null &&
+      selectedEmail == null &&
       query.isEmpty) {
     result = List.of(sites);
   } else {
@@ -81,6 +99,13 @@ List<SiteInfo> _applyFilter(
           return false;
         }
       }
+      if (selectedUsername != null &&
+          !_matchesIdentity(selectedUsername, s.username)) {
+        return false;
+      }
+      if (selectedEmail != null && !_matchesIdentity(selectedEmail, s.email)) {
+        return false;
+      }
       return true;
     }).toList();
   }
@@ -101,6 +126,16 @@ List<SiteInfo> _applyFilter(
   });
 
   return result;
+}
+
+List<String> _dashboardIdentityOptions(Iterable<KV> items) {
+  final values = items
+      .map((item) => item.name.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet()
+      .toList();
+  values.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return values;
 }
 
 bool _matchesSiteQuery(SiteInfo site, WebSite? config, String query) {
@@ -125,6 +160,14 @@ bool _matchesSiteQuery(SiteInfo site, WebSite? config, String query) {
 
   return false;
 }
+
+bool _matchesIdentity(String selectedValue, String? value) {
+  final selected = _normalizeIdentity(selectedValue);
+  final target = _normalizeIdentity(value);
+  return selected.isNotEmpty && target.isNotEmpty && selected == target;
+}
+
+String _normalizeIdentity(String? value) => value?.trim().toLowerCase() ?? '';
 
 int _noticeCount(SiteInfo s) => s.mail + s.notice;
 

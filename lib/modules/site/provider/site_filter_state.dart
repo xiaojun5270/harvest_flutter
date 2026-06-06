@@ -69,6 +69,8 @@ class SiteFilterState extends ChangeNotifier {
   bool _sortAscending = true;
   final Set<String> _selectedTags = {};
   final Set<String> _selectedSiteTypes = {};
+  String? _selectedUsername;
+  String? _selectedEmail;
   String _siteNameQuery = '';
   Timer? _debounce;
 
@@ -88,6 +90,10 @@ class SiteFilterState extends ChangeNotifier {
 
   Set<String> get selectedSiteTypes => _selectedSiteTypes;
 
+  String? get selectedUsername => _selectedUsername;
+
+  String? get selectedEmail => _selectedEmail;
+
   String get siteNameQuery => _siteNameQuery;
 
   /// 存活 + 更新时间正序 是默认值，不算"额外"筛选
@@ -96,6 +102,8 @@ class SiteFilterState extends ChangeNotifier {
       _condition != _defaultCondition ||
       _selectedTags.isNotEmpty ||
       _selectedSiteTypes.isNotEmpty ||
+      _selectedUsername != null ||
+      _selectedEmail != null ||
       _sortField != _defaultSortField ||
       _sortAscending != _defaultSortAscending(_sortField) ||
       _siteNameQuery.isNotEmpty;
@@ -194,6 +202,28 @@ class SiteFilterState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setUsername(String username) {
+    _selectedUsername = _selectedUsername == username ? null : username;
+    notifyListeners();
+  }
+
+  void clearUsername() {
+    if (_selectedUsername == null) return;
+    _selectedUsername = null;
+    notifyListeners();
+  }
+
+  void setEmail(String email) {
+    _selectedEmail = _selectedEmail == email ? null : email;
+    notifyListeners();
+  }
+
+  void clearEmail() {
+    if (_selectedEmail == null) return;
+    _selectedEmail = null;
+    notifyListeners();
+  }
+
   void setSiteNameQuery(String q) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
@@ -216,6 +246,8 @@ class SiteFilterState extends ChangeNotifier {
     _sortAscending = _defaultSortAscending(_sortField);
     _selectedTags.clear();
     _selectedSiteTypes.clear();
+    _selectedUsername = null;
+    _selectedEmail = null;
     _siteNameQuery = '';
     HiveManager.delete(StorageKeys.siteFilterAvailability);
     HiveManager.delete(StorageKeys.siteFilterCondition);

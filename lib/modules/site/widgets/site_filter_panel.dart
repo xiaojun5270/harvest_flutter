@@ -16,6 +16,8 @@ class SiteFilterPanel extends ConsumerWidget {
     final filter = ref.watch(siteFilterStateProvider);
     final tags = ref.watch(availableTagsProvider);
     final siteTypes = ref.watch(availableSiteTypesProvider);
+    final usernames = ref.watch(availableSiteUsernamesProvider);
+    final emails = ref.watch(availableSiteEmailsProvider);
     final theme = shadcn.Theme.of(context);
     final cs = theme.colorScheme;
     final typo = theme.typography;
@@ -172,6 +174,34 @@ class SiteFilterPanel extends ConsumerWidget {
                   }).toList(),
             ),
           ),
+
+          // ── 用户名 ──
+          if (usernames.isNotEmpty)
+            _section(
+              context,
+              '用户名筛选',
+              _identityChips(
+                context,
+                values: usernames,
+                selectedValue: filter.selectedUsername,
+                clear: filter.clearUsername,
+                select: filter.setUsername,
+              ),
+            ),
+
+          // ── 邮箱 ──
+          if (emails.isNotEmpty)
+            _section(
+              context,
+              '邮箱筛选',
+              _identityChips(
+                context,
+                values: emails,
+                selectedValue: filter.selectedEmail,
+                clear: filter.clearEmail,
+                select: filter.setEmail,
+              ),
+            ),
 
           // ── 排序 ──
           _section(
@@ -345,6 +375,77 @@ class SiteFilterPanel extends ConsumerWidget {
           const SizedBox(height: 12),
         ],
       ),
+    );
+  }
+
+  Widget _identityChips(
+    BuildContext context, {
+    required List<String> values,
+    required String? selectedValue,
+    required VoidCallback clear,
+    required ValueChanged<String> select,
+  }) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final maxLabelWidth = (MediaQuery.sizeOf(context).width - 96).clamp(
+      120.0,
+      240.0,
+    );
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        FilterChip(
+          label: const Text('全部', style: TextStyle(fontSize: 12)),
+          selected: selectedValue == null,
+          showCheckmark: false,
+          onSelected: (_) => clear(),
+          selectedColor: cs.primary.withValues(alpha: 0.15),
+          side: BorderSide(
+            color: selectedValue == null
+                ? cs.primary
+                : cs.border.withValues(alpha: 0.5),
+          ),
+          labelStyle: TextStyle(
+            fontSize: 12,
+            color: selectedValue == null ? cs.primary : cs.foreground,
+            fontWeight: selectedValue == null
+                ? FontWeight.w600
+                : FontWeight.w400,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          visualDensity: VisualDensity.compact,
+        ),
+        ...values.map((value) {
+          final active = selectedValue == value;
+          return FilterChip(
+            label: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxLabelWidth),
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            selected: active,
+            showCheckmark: false,
+            onSelected: (_) => select(value),
+            selectedColor: cs.primary.withValues(alpha: 0.15),
+            side: BorderSide(
+              color: active ? cs.primary : cs.border.withValues(alpha: 0.5),
+            ),
+            labelStyle: TextStyle(
+              fontSize: 12,
+              color: active ? cs.primary : cs.foreground,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            visualDensity: VisualDensity.compact,
+          );
+        }),
+      ],
     );
   }
 
