@@ -42,7 +42,7 @@ class SiteListView extends ConsumerWidget {
         controller: controller,
         padding: EdgeInsets.fromLTRB(8, 4, 8, _bottomPadding(context)),
         itemCount: sites.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, __) => const SizedBox(height: 4),
         itemBuilder: (_, i) => SiteCard(site: sites[i]),
       );
 
@@ -55,16 +55,16 @@ class SiteListView extends ConsumerWidget {
       final cols = (c.maxWidth / 360).floor().clamp(2, 5);
       return GridView.builder(
         controller: controller,
-        padding: EdgeInsets.fromLTRB(8, 8, 8, _bottomPadding(context)),
+        padding: EdgeInsets.fromLTRB(8, 4, 8, _bottomPadding(context)),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: cols,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 6,
           mainAxisExtent: switch (cardStyle) {
             SiteCardStyle.style1 => 186,
             SiteCardStyle.style2 => 214,
-            SiteCardStyle.style3 => 374,
-            SiteCardStyle.style4 => 360,
+            SiteCardStyle.style3 => 300,
+            SiteCardStyle.style4 => 292,
           },
         ),
         itemCount: sites.length,
