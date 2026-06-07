@@ -1,24 +1,23 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:harvest/widgets/shad_text_field.dart';
 
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:harvest/widgets/app_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/utils/utils.dart';
+import 'package:harvest/widgets/app_sheet.dart';
+import 'package:harvest/widgets/shad_text_field.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
-
-import 'site_theme.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../model/site_config.dart';
 import '../provider/site_provider.dart';
 import '../service/site_service.dart';
+import 'site_theme.dart';
 
 void showSiteConfigGenerator(BuildContext context) {
   final dialog = const SiteConfigGeneratorDialog();
@@ -1054,12 +1053,14 @@ class _TomlLevelDetailState extends State<_TomlLevelDetail> {
                   }
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: ShadTextField(
-                      controller: field.controller,
-                      placeholder: Text(_tomlFieldLabel(field.key)),
-                      hintText: '${field.hint} · ${field.key}',
-                      maxLines: field.key == 'rights' ? 3 : 1,
-                      onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                    child: _FieldPanel(
+                      title: _FieldTitle(field: field),
+                      child: ShadTextField(
+                        controller: field.controller,
+                        hintText: '${field.hint} · ${field.key}',
+                        maxLines: field.key == 'rights' ? 3 : 1,
+                        onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                      ),
                     ),
                   );
                 }),
@@ -1068,10 +1069,9 @@ class _TomlLevelDetailState extends State<_TomlLevelDetail> {
           ),
           const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Expanded(
-                child: shadcn.Button.ghost(onPressed: () => Navigator.of(context).maybePop(), child: const Text('完成')),
-              ),
+              shadcn.Button.primary(onPressed: () => Navigator.of(context).maybePop(), child: const Text('完成')),
             ],
           ),
         ],
@@ -1338,7 +1338,7 @@ class _TomlLevel {
     final downloaded = fields['downloaded']?.controller.text.trim();
     final ratio = fields['ratio']?.controller.text.trim();
     if (id != null && id.isNotEmpty) parts.add('ID $id');
-    if (days != null && days.isNotEmpty) parts.add('注册 $days 天');
+    if (days != null && days.isNotEmpty) parts.add('注册 $days 周');
     if (uploaded != null && uploaded.isNotEmpty) parts.add('上传 $uploaded');
     if (downloaded != null && downloaded.isNotEmpty) {
       parts.add('下载 $downloaded');
@@ -1419,8 +1419,12 @@ enum _TomlValueKind { string, number, boolean, list }
 _TomlField? _parseTomlField(String line) {
   final match = RegExp(r'^([A-Za-z0-9_]+)\s*=\s*(.*)$').firstMatch(line);
   if (match == null) return null;
-  return _TomlField.fromRaw(match.group(1)!, match.group(2)!.trim());
+  final key = match.group(1)!;
+  if (_ignoredTomlKeys.contains(key)) return null;
+  return _TomlField.fromRaw(key, match.group(2)!.trim());
 }
+
+const _ignoredTomlKeys = {'buy_page', 'buy_action'};
 
 String _defaultTopLevelRawValue(String key) {
   return switch (key) {
@@ -1505,7 +1509,7 @@ String _tomlFieldLabel(String key) {
     'buy_page': '魔力兑换页面',
     'level_id': '等级 ID',
     'level': '等级名称',
-    'days': '注册天数要求',
+    'days': '注册周数要求',
     'uploaded': '上传量要求',
     'downloaded': '下载量要求',
     'bonus': '魔力值要求',
@@ -1606,10 +1610,20 @@ String? _extractTomlContent(Map<String, dynamic> raw) {
 String _mapToToml(Map<String, dynamic> map) {
   final buffer = StringBuffer();
   final sections = <String, Map<String, dynamic>>{};
+  Map<String, dynamic>? buyActionSection;
 
   for (final entry in map.entries) {
     final key = entry.key;
     final value = entry.value;
+    if (key == 'buy_action') {
+      if (value is Map && value.isNotEmpty) {
+        buyActionSection = value.map(
+          (entryKey, entryValue) => MapEntry(entryKey.toString(), entryValue?.toString() ?? ''),
+        );
+      }
+      continue;
+    }
+    if (_ignoredTomlKeys.contains(key)) continue;
     if (value is Map) {
       if (key == 'level') {
         for (final levelEntry in value.entries) {
@@ -1639,8 +1653,16 @@ String _mapToToml(Map<String, dynamic> map) {
     if (buffer.isNotEmpty) buffer.writeln();
     buffer.writeln('[${entry.key}]');
     for (final field in entry.value.entries) {
-      if (field.value is Map) continue;
+      if (_ignoredTomlKeys.contains(field.key) || field.value is Map) continue;
       buffer.writeln('${field.key} = ${_formatTomlDynamic(field.value)}');
+    }
+  }
+
+  if (buyActionSection case final section?) {
+    if (buffer.isNotEmpty) buffer.writeln();
+    buffer.writeln('[buy_action]');
+    for (final field in section.entries) {
+      buffer.writeln('${_quoteTomlString(field.key)} = ${_quoteTomlString(field.value.toString())}');
     }
   }
 

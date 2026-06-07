@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_annotation_target
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'site_config.freezed.dart';
@@ -146,7 +148,13 @@ abstract class WebSite with _$WebSite {
     @Default('') @JsonKey(name: 'my_email_rule') String myEmailRule,
     @Default('') @JsonKey(name: 'my_username_rule') String myUsernameRule,
     @Default('') @JsonKey(name: 'buy_page') String buyPage,
-    @Default({}) @JsonKey(name: 'buy_action') Map<String, String> buyAction,
+    @Default({})
+    @JsonKey(
+      name: 'buy_action',
+      toJson: _stringMapToNullableJson,
+      includeIfNull: false,
+    )
+    Map<String, String> buyAction,
     @Default({}) Map<String, SiteLevel> level,
   }) = _WebSite;
 
@@ -186,6 +194,11 @@ Map<String, String> _stringMapFromJson(Object? value) {
   return value.map(
     (key, item) => MapEntry(key.toString(), _stringFromJson(item)),
   );
+}
+
+Map<String, String>? _stringMapToNullableJson(Map<String, String> value) {
+  if (value.isEmpty) return null;
+  return value;
 }
 
 @freezed
@@ -332,14 +345,20 @@ Map<String, dynamic> _normalizeSiteLevelJson(Map<String, dynamic> json) {
     if (next.containsKey(key)) next[key] = _stringFromJson(next[key]);
   }
   if ((next['uploaded'] as String?)?.isEmpty ?? true) next['uploaded'] = '0';
-  if ((next['downloaded'] as String?)?.isEmpty ?? true) next['downloaded'] = '0';
+  if ((next['downloaded'] as String?)?.isEmpty ?? true)
+    next['downloaded'] = '0';
   return next;
 }
 
 Map<String, dynamic> _siteLevelJsonMapFromJson(Object? value) {
   if (value is Map) {
     return value.map((key, item) {
-      if (item is Map) return MapEntry(key.toString(), _normalizeSiteLevelJson(Map<String, dynamic>.from(item)));
+      if (item is Map) {
+        return MapEntry(
+          key.toString(),
+          _normalizeSiteLevelJson(Map<String, dynamic>.from(item)),
+        );
+      }
       return MapEntry(key.toString(), _normalizeSiteLevelJson({'level': item}));
     });
   }
@@ -348,7 +367,9 @@ Map<String, dynamic> _siteLevelJsonMapFromJson(Object? value) {
     var index = 0;
     for (final item in value) {
       index++;
-      if (item is! Map) continue;
+      if (item is! Map) {
+        continue;
+      }
       final level = _normalizeSiteLevelJson(Map<String, dynamic>.from(item));
       final name = _stringFromJson(level['level']);
       result[name.isEmpty ? 'Level$index' : name] = level;
