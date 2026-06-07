@@ -10,6 +10,7 @@ import 'package:harvest/core/utils/utils.dart';
 
 import '../model/update_log_model.dart';
 import '../provider/update_provider.dart';
+import 'option_form_card.dart';
 
 class UpdateSummaryCard extends ConsumerWidget {
   final VoidCallback onOpen;
@@ -57,11 +58,7 @@ class UpdateSummaryCard extends ConsumerWidget {
               ),
             ),
             if (state.isLoading)
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: const shadcn.CircularProgressIndicator(strokeWidth: 2),
-              )
+              const OptionInlineProgress(label: '检查中', size: 16)
             else
               const Icon(
                 shadcn.LucideIcons.chevronRight,
@@ -165,13 +162,7 @@ class _UpdateOverview extends ConsumerWidget {
                 size: shadcn.ButtonSize.small,
                 density: shadcn.ButtonDensity.iconDense,
                 icon: state.isLoading
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: const shadcn.CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      )
+                    ? const OptionInlineProgress(label: '检查中', size: 16)
                     : const Icon(shadcn.LucideIcons.refreshCw).iconSmall,
                 onPressed: state.isLoading || state.isUpdating
                     ? null
@@ -259,8 +250,10 @@ class _UpdateTargetCard extends ConsumerWidget {
             if (current == null && isLoading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 18),
-                child: Center(
-                  child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+                child: OptionLoadingState(
+                  label: '正在获取更新日志...',
+                  compact: true,
+                  padding: EdgeInsets.zero,
                 ),
               )
             else if (current != null)
@@ -298,13 +291,10 @@ class _UpdateTargetCard extends ConsumerWidget {
                         ? () => _runUpgrade(context, ref, action)
                         : null,
                     child: isUpdating
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: shadcn.CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.primaryForeground,
-                            ),
+                        ? OptionInlineProgress(
+                            label: '更新中',
+                            size: 16,
+                            color: cs.primaryForeground,
                           )
                         : _ButtonContent(
                             icon: shadcn.LucideIcons.download,
@@ -350,13 +340,7 @@ class _GlobalActions extends ConsumerWidget {
                         ? null
                         : () => _runUpgrade(context, ref, UpgradeAction.webui),
                     child: state.updatingAction == UpgradeAction.webui
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: shadcn.CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
+                        ? const OptionInlineProgress(label: '更新中', size: 16)
                         : const _ButtonContent(
                             icon: shadcn.LucideIcons.download,
                             label: '更新WEBUI',
@@ -370,13 +354,10 @@ class _GlobalActions extends ConsumerWidget {
                         ? null
                         : () => _runUpgrade(context, ref, UpgradeAction.all),
                     child: state.updatingAction == UpgradeAction.all
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: shadcn.CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.primaryForeground,
-                            ),
+                        ? OptionInlineProgress(
+                            label: '更新中',
+                            size: 16,
+                            color: cs.primaryForeground,
                           )
                         : const _ButtonContent(
                             icon: shadcn.LucideIcons.download,

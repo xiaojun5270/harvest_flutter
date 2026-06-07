@@ -134,9 +134,7 @@ class OptionLoadingOverlay extends StatelessWidget {
                       const SizedBox(
                         width: 16,
                         height: 16,
-                        child: shadcn.CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
+                        child: shadcn.CircularProgressIndicator(strokeWidth: 2),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -153,6 +151,99 @@ class OptionLoadingOverlay extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+class OptionLoadingState extends StatelessWidget {
+  final String label;
+  final EdgeInsetsGeometry padding;
+  final double indicatorSize;
+  final double strokeWidth;
+  final bool compact;
+
+  const OptionLoadingState({
+    super.key,
+    this.label = '加载中...',
+    this.padding = const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+    this.indicatorSize = 18,
+    this.strokeWidth = 2,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = shadcn.Theme.of(context);
+    final cs = theme.colorScheme;
+    final typo = theme.typography;
+
+    return Center(
+      child: Padding(
+        padding: padding,
+        child: AppSurfaceContainer(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 12 : 16,
+            vertical: compact ? 10 : 14,
+          ),
+          borderRadius: _optionCardRadius(context, size: 'lg'),
+          color: appSurfaceColor(context, cs.card),
+          borderColor: cs.border.withValues(alpha: 0.6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: indicatorSize,
+                height: indicatorSize,
+                child: shadcn.CircularProgressIndicator(
+                  strokeWidth: strokeWidth,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: typo.small.copyWith(
+                  color: cs.foreground,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OptionInlineProgress extends StatelessWidget {
+  final String label;
+  final Color? color;
+  final double size;
+  final double strokeWidth;
+
+  const OptionInlineProgress({
+    super.key,
+    required this.label,
+    this.color,
+    this.size = 14,
+    this.strokeWidth = 2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: size,
+          height: size,
+          child: shadcn.CircularProgressIndicator(
+            strokeWidth: strokeWidth,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label),
       ],
     );
   }
@@ -396,7 +487,9 @@ class _OptionFormCardState extends State<OptionFormCard> {
             child: shadcn.Button.primary(
               onPressed: _busy ? null : _handleSave,
               alignment: Alignment.center,
-              child: const Center(child: Text('保存', textAlign: TextAlign.center)),
+              child: const Center(
+                child: Text('保存', textAlign: TextAlign.center),
+              ),
             ),
           ),
         ],

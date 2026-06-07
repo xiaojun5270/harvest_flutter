@@ -57,9 +57,15 @@ final appUpgradeStatusProvider = FutureProvider<AppUpgradeStatus>((ref) async {
   final response = await Dio().get<Map<String, dynamic>>(_appUpgradeLatestUrl);
   final latest = AppUpdateInfo.fromApiResponse(response.data);
   final ignored = isAppUpgradeVersionIgnored(latest.version);
+  final macosArch = await _detectCurrentMacosArch();
+  final hasCurrentPlatformAsset = _hasPreferredCurrentPlatformAsset(
+    latest,
+    macosArch: macosArch,
+  );
   final hasNewVersion =
       latest.version.trim().isNotEmpty &&
-      _compareVersions(latest.version, currentVersion) > 0;
+      _compareVersions(latest.version, currentVersion) > 0 &&
+      hasCurrentPlatformAsset;
 
   return AppUpgradeStatus(
     currentVersion: currentVersion,
@@ -177,6 +183,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   PackageInfo? _packageInfo;
   AppUpdateInfo? _latest;
   List<AppUpdateInfo> _versions = const [];
+  String _macosArch = 'x86_64';
   bool _loadingLatest = false;
   bool _loadingVersions = false;
   bool _downloading = false;
@@ -206,7 +213,8 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   bool get _hasNewVersion {
     final latest = _latest?.version.trim();
     if (latest == null || latest.isEmpty || _packageInfo == null) return false;
-    return _compareVersions(latest, _currentVersion) > 0;
+    return _compareVersions(latest, _currentVersion) > 0 &&
+        _hasPreferredCurrentPlatformAsset(_latest, macosArch: _macosArch);
   }
 
   bool get _ignoredLatest {
@@ -257,6 +265,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
   Future<void> _init() async {
     try {
       _packageInfo = await PackageInfo.fromPlatform();
+      _macosArch = await _detectCurrentMacosArch();
       _useGithubProxy =
           HiveManager.get<bool>(_appUpgradeUseGithubProxyKey) ?? false;
       _githubProxy = _savedGithubProxy();
@@ -498,11 +507,14 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
                         onCheck: kIsWeb || _loadingLatest
                             ? null
                             : () => _checkLatest(),
-                        onDownload: kIsWeb || (_latest == null && !_downloading)
+                        onDownload:
+                            kIsWeb ||
+                                ((_latest == null && _versions.isEmpty) &&
+                                    !_downloading)
                             ? null
                             : _downloading
                             ? _cancelDownload
-                            : () => _downloadPreferred(_latest),
+                            : _downloadLatestOrReinstall,
                         onTestFlight: kIsWeb || !Platform.isIOS
                             ? null
                             : () => _openIosTestFlight(),
@@ -586,8 +598,10 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
               _SectionTitle('更新日志'),
               SizedBox(height: compact ? 5 : 8),
               if (_loadingLatest && latest == null)
-                const Center(
-                  child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+                const OptionLoadingState(
+                  label: '正在加载更新日志...',
+                  compact: true,
+                  padding: EdgeInsets.symmetric(vertical: 8),
                 )
               else
                 _ChangeLog(text: latest?.changelog, compact: compact),
@@ -605,6 +619,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
                 info: latest,
                 onDownload: _downloadEntry,
                 onCopy: _copyDownloadUrl,
+                showOtherPlatforms: false,
                 onOpenPage: compact
                     ? null
                     : () => BrowserPage.open(
@@ -632,15 +647,17 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
               shadcn.Button.outline(
                 onPressed: _loadingVersions ? null : _loadVersions,
                 child: _loadingVersions
-                    ? const _SmallProgress(label: '加载中')
+                    ? const OptionInlineProgress(label: '加载中')
                     : const Text('刷新'),
               ),
             ],
           ),
           const SizedBox(height: 12),
           if (_loadingVersions && _versions.isEmpty)
-            const Center(
-              child: shadcn.CircularProgressIndicator(strokeWidth: 2),
+            const OptionLoadingState(
+              label: '正在加载版本列表...',
+              compact: true,
+              padding: EdgeInsets.symmetric(vertical: 8),
             )
           else if (_versions.isEmpty)
             const _MessageBox(message: '暂无版本记录')
@@ -677,6 +694,15 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
       return;
     }
     await _downloadEntry(info, entry);
+  }
+
+  Future<void> _downloadLatestOrReinstall() async {
+    final target = await _resolvePrimaryDownloadTarget();
+    if (target == null) {
+      Toast.warning('没有找到适合当前平台的安装包');
+      return;
+    }
+    await _downloadPreferred(target);
   }
 
   Future<void> _downloadEntry(
@@ -864,6 +890,38 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
     return Clipboard.setData(ClipboardData(text: text));
   }
 
+  Future<AppUpdateInfo?> _resolvePrimaryDownloadTarget() async {
+    if (_hasNewVersion && _latest != null) return _latest;
+
+    AppUpdateInfo? current;
+    for (final item in _versions) {
+      if (_compareVersions(item.version, _currentVersion) == 0) {
+        current = item;
+        break;
+      }
+    }
+    current ??=
+        (_latest != null &&
+            _compareVersions(_latest!.version, _currentVersion) == 0)
+        ? _latest
+        : null;
+    if (current != null) return current;
+
+    if (!_loadingVersions) {
+      await _loadVersions();
+      if (!mounted) return null;
+      for (final item in _versions) {
+        if (_compareVersions(item.version, _currentVersion) == 0) {
+          return item;
+        }
+      }
+    }
+    return (_latest != null &&
+            _compareVersions(_latest!.version, _currentVersion) == 0)
+        ? _latest
+        : null;
+  }
+
   Future<MapEntry<String, String>?> _selectPreferredAsset(
     AppUpdateInfo info,
   ) async {
@@ -872,53 +930,8 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
       return null;
     }
     final entries = info.downloadLinks.entries.toList();
-    bool contains(MapEntry<String, String> entry, List<String> keys) {
-      final text = '${entry.key} ${entry.value}'.toLowerCase();
-      return keys.every(text.contains);
-    }
-
-    List<List<String>> patterns;
-    String? targetArch;
-    if (kIsWeb) {
-      patterns = const [
-        ['web'],
-      ];
-    } else if (Platform.isAndroid) {
-      patterns = const [
-        ['android', 'arm64'],
-        ['android', 'apk'],
-        ['apk'],
-      ];
-    } else if (Platform.isIOS) {
-      patterns = const [
-        ['ios', 'ipa'],
-        ['ipa'],
-      ];
-    } else if (Platform.isMacOS) {
-      final arch = await _currentInstallerArch();
-      targetArch = arch;
-      patterns = [
-        ['$arch-macos.pkg'],
-        [arch, 'macos', 'pkg'],
-        [arch, 'mac', 'pkg'],
-        ['macos', 'pkg'],
-        ['mac', 'pkg'],
-        ['pkg'],
-      ];
-    } else if (Platform.isWindows) {
-      patterns = const [
-        ['x86_64-windows-setup.exe'],
-        ['x86_64', 'windows', 'setup', 'exe'],
-        ['windows', 'setup'],
-        ['exe'],
-      ];
-    } else {
-      patterns = const [
-        ['linux'],
-        ['appimage'],
-        ['deb'],
-      ];
-    }
+    final patterns = _preferredAssetPatterns(macosArch: _macosArch);
+    final targetArch = Platform.isMacOS ? _macosArch : null;
 
     AppLogger.debug(
       '[AppUpgrade] select asset candidates: platform=${_platformDebugName()}, '
@@ -928,7 +941,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
 
     for (final pattern in patterns) {
       for (final entry in entries) {
-        if (contains(entry, pattern)) {
+        if (_containsAssetPattern(entry, pattern)) {
           AppLogger.debug(
             '[AppUpgrade] select asset matched: pattern=$pattern, '
             'asset=${entry.key}, url=${entry.value}',
@@ -941,20 +954,6 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
       '[AppUpgrade] select asset fallback: asset=${entries.first.key}, url=${entries.first.value}',
     );
     return entries.first;
-  }
-
-  Future<String> _currentInstallerArch() async {
-    if (kIsWeb || !Platform.isMacOS) return 'x86_64';
-    try {
-      final info = await DeviceInfoPlugin().macOsInfo;
-      final raw = info.arch.trim().toLowerCase();
-      AppLogger.debug('[AppUpgrade] macos installer arch parsed: raw=$raw');
-      if (raw.contains('arm64') || raw.contains('aarch64')) return 'arm64';
-      return 'x86_64';
-    } catch (e, st) {
-      AppLogger.warn('解析 macOS 安装包架构失败: $e\n$st');
-      return 'x86_64';
-    }
   }
 
   String _resolveDownloadUrl(
@@ -1273,11 +1272,14 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
                   onCheck: kIsWeb || _loadingLatest
                       ? null
                       : () => _checkLatest(),
-                  onDownload: kIsWeb || (_latest == null && !_downloading)
+                  onDownload:
+                      kIsWeb ||
+                          ((_latest == null && _versions.isEmpty) &&
+                              !_downloading)
                       ? null
                       : _downloading
                       ? _cancelDownload
-                      : () => _downloadPreferred(_latest),
+                      : _downloadLatestOrReinstall,
                   onTestFlight: kIsWeb || !Platform.isIOS
                       ? null
                       : () => _openIosTestFlight(),
@@ -1291,7 +1293,7 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
                           ? null
                           : _loadVersions,
                       child: _loadingVersions
-                          ? const _SmallProgress(label: '加载中')
+                          ? const OptionInlineProgress(label: '加载中')
                           : const Text('刷新'),
                     ),
                   ],
@@ -1359,11 +1361,13 @@ class _AppUpgradePageState extends ConsumerState<AppUpgradePage> {
           progress: _progress,
           hasNewVersion: _hasNewVersion,
           onCheck: kIsWeb || _loadingLatest ? null : () => _checkLatest(),
-          onDownload: kIsWeb || (_latest == null && !_downloading)
+          onDownload:
+              kIsWeb ||
+                  ((_latest == null && _versions.isEmpty) && !_downloading)
               ? null
               : _downloading
               ? _cancelDownload
-              : () => _downloadPreferred(_latest),
+              : _downloadLatestOrReinstall,
           onTestFlight: kIsWeb || !Platform.isIOS
               ? null
               : () => _openIosTestFlight(),
@@ -1963,6 +1967,7 @@ class _DownloadLinks extends StatefulWidget {
   final Future<void> Function(AppUpdateInfo, MapEntry<String, String>) onCopy;
   final VoidCallback? onOpenPage;
   final bool compact;
+  final bool showOtherPlatforms;
 
   const _DownloadLinks({
     required this.info,
@@ -1970,6 +1975,7 @@ class _DownloadLinks extends StatefulWidget {
     required this.onCopy,
     this.onOpenPage,
     this.compact = false,
+    this.showOtherPlatforms = true,
   });
 
   @override
@@ -1989,11 +1995,7 @@ class _DownloadLinksState extends State<_DownloadLinks> {
   Future<void> _loadCurrentPlatformArch() async {
     if (kIsWeb || !Platform.isMacOS) return;
     try {
-      final info = await DeviceInfoPlugin().macOsInfo;
-      final raw = info.arch.trim().toLowerCase();
-      final arch = raw.contains('arm64') || raw.contains('aarch64')
-          ? 'arm64'
-          : 'x86_64';
+      final arch = await _detectCurrentMacosArch();
       if (mounted) setState(() => _macosArch = arch);
     } catch (e, st) {
       AppLogger.warn('解析 macOS 安装包列表架构失败: $e\n$st');
@@ -2006,9 +2008,13 @@ class _DownloadLinksState extends State<_DownloadLinks> {
     final entries =
         current?.downloadLinks.entries.toList() ??
         const <MapEntry<String, String>>[];
-    final platformEntries = entries.where(_isCurrentPlatformAsset).toList();
+    final platformEntries = entries
+        .where((entry) => _isCurrentPlatformAsset(entry, macosArch: _macosArch))
+        .toList();
     final otherEntries = entries
-        .where((entry) => !_isCurrentPlatformAsset(entry))
+        .where(
+          (entry) => !_isCurrentPlatformAsset(entry, macosArch: _macosArch),
+        )
         .toList();
     final primaryEntries = platformEntries.isNotEmpty
         ? platformEntries
@@ -2022,20 +2028,11 @@ class _DownloadLinksState extends State<_DownloadLinks> {
         if (widget.onOpenPage != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: shadcn.Button.outline(
-              style: const shadcn.ButtonStyle.outline(
-                density: shadcn.ButtonDensity.dense,
-              ),
-              onPressed: widget.onOpenPage,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(shadcn.LucideIcons.externalLink, size: 15),
-                  SizedBox(width: 6),
-                  Text('打开下载页'),
-                ],
-              ),
+            child: _ColoredActionButton(
+              icon: shadcn.LucideIcons.externalLink,
+              label: '打开下载页',
+              color: shadcn.Theme.of(context).colorScheme.primary,
+              onPressed: widget.onOpenPage!,
             ),
           ),
         if (current == null || entries.isEmpty)
@@ -2043,7 +2040,9 @@ class _DownloadLinksState extends State<_DownloadLinks> {
         else ...[
           for (final entry in visibleEntries)
             _downloadEntryTile(context, current, entry),
-          if (!widget.compact && otherEntries.isNotEmpty) ...[
+          if (widget.showOtherPlatforms &&
+              !widget.compact &&
+              otherEntries.isNotEmpty) ...[
             const SizedBox(height: 2),
             _OtherPlatformsToggle(
               count: otherEntries.length,
@@ -2066,6 +2065,7 @@ class _DownloadLinksState extends State<_DownloadLinks> {
     MapEntry<String, String> entry,
   ) {
     final cs = shadcn.Theme.of(context).colorScheme;
+    final label = _buildDownloadLabel(entry, macosArch: _macosArch);
     return Padding(
       padding: EdgeInsets.only(bottom: widget.compact ? 6 : 8),
       child: shadcn.Card(
@@ -2084,16 +2084,19 @@ class _DownloadLinksState extends State<_DownloadLinks> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    entry.key,
-                    maxLines: 1,
+                    label.title,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ).small.bold,
                   const SizedBox(height: 2),
-                  Text(
-                    _downloadHost(entry.value),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ).xSmall.muted,
+                  SizedBox(
+                    width: double.infinity,
+                    child: FittedBox(
+                      alignment: Alignment.centerLeft,
+                      fit: BoxFit.scaleDown,
+                      child: Text(label.subtitle).xSmall.muted,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2114,44 +2117,6 @@ class _DownloadLinksState extends State<_DownloadLinks> {
         ),
       ),
     );
-  }
-
-  bool _isCurrentPlatformAsset(MapEntry<String, String> entry) {
-    final text = '${entry.key} ${entry.value}'.toLowerCase();
-    bool any(Iterable<String> values) => values.any(text.contains);
-    final isWindows = any(['windows', '.exe', '.msi', 'setup.exe']);
-    final isMacos = any(['macos', 'mac-os', 'mac_os', '.pkg', '.dmg']);
-    final isLinux = any(['linux', '.appimage', '.deb', '.rpm']);
-    final isAndroid = any(['android', '.apk']);
-    final isIos = any(['ios', '.ipa']);
-    final hasArm64 = any(['arm64', 'aarch64']);
-    final hasX64 = any(['x86_64', 'x64', 'amd64']);
-
-    if (kIsWeb) return any(['web']);
-    if (Platform.isWindows) {
-      return isWindows && !isMacos && !isLinux && !isAndroid && !isIos;
-    }
-    if (Platform.isMacOS) {
-      if (!isMacos || isWindows || isLinux || isAndroid || isIos) return false;
-      if (_macosArch == 'arm64') return hasArm64 || (!hasX64 && !hasArm64);
-      return hasX64 || (!hasX64 && !hasArm64);
-    }
-    if (Platform.isLinux) {
-      return isLinux && !isWindows && !isMacos && !isAndroid && !isIos;
-    }
-    if (Platform.isAndroid) {
-      return isAndroid && !isWindows && !isMacos && !isLinux && !isIos;
-    }
-    if (Platform.isIOS) {
-      return isIos && !isWindows && !isMacos && !isLinux && !isAndroid;
-    }
-    return false;
-  }
-
-  String _downloadHost(String value) {
-    final uri = Uri.tryParse(value);
-    if (uri == null || uri.host.isEmpty) return '远端安装包';
-    return uri.host;
   }
 }
 
@@ -2339,28 +2304,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _SmallProgress extends StatelessWidget {
-  final String label;
-
-  const _SmallProgress({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(
-          width: 14,
-          height: 14,
-          child: shadcn.CircularProgressIndicator(strokeWidth: 2),
-        ),
-        const SizedBox(width: 6),
-        Text(label),
-      ],
-    );
-  }
-}
-
 class _DialogActionBar extends StatelessWidget {
   final bool loadingLatest;
   final bool downloading;
@@ -2389,7 +2332,7 @@ class _DialogActionBar extends StatelessWidget {
             onPressed: onCheck,
             alignment: Alignment.center,
             child: loadingLatest
-                ? const _SmallProgress(label: '检查')
+                ? const OptionInlineProgress(label: '检查')
                 : const Text('检查'),
           ),
         ),
@@ -2460,24 +2403,91 @@ class _MiniActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = outlined ? const Color(0xFF16A34A) : const Color(0xFF0891B2);
     return shadcn.Tooltip(
       tooltip: (_) => Text(tip),
       child: SizedBox(
         width: 30,
         height: 38,
-        child: outlined
-            ? shadcn.IconButton.outline(
-                size: shadcn.ButtonSize.small,
-                density: shadcn.ButtonDensity.iconDense,
-                onPressed: onPress,
-                icon: Icon(icon, size: 14),
-              )
-            : shadcn.IconButton.ghost(
-                size: shadcn.ButtonSize.small,
-                density: shadcn.ButtonDensity.iconDense,
-                onPressed: onPress,
-                icon: Icon(icon, size: 14),
+        child: _ColoredIconActionButton(
+          icon: icon,
+          color: color,
+          onPressed: onPress,
+          subtle: !outlined,
+        ),
+      ),
+    );
+  }
+}
+
+class _ColoredActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const _ColoredActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return shadcn.Clickable(
+      behavior: HitTestBehavior.opaque,
+      onPressed: onPressed,
+      child: AppSurfaceContainer(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        borderRadius: BorderRadius.circular(10),
+        color: color.withValues(alpha: 0.10),
+        borderColor: color.withValues(alpha: 0.42),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: shadcn.Theme.of(context).typography.small.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ColoredIconActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+  final bool subtle;
+
+  const _ColoredIconActionButton({
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+    this.subtle = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return shadcn.Clickable(
+      behavior: HitTestBehavior.opaque,
+      onPressed: onPressed,
+      child: AppSurfaceContainer(
+        width: 30,
+        height: 38,
+        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: subtle ? 0.08 : 0.12),
+        borderColor: color.withValues(alpha: subtle ? 0.18 : 0.38),
+        child: Center(child: Icon(icon, size: 14, color: color)),
       ),
     );
   }
@@ -2488,6 +2498,203 @@ String _formatAppVersion(PackageInfo info) {
   final build = info.buildNumber.trim();
   if (build.isEmpty) return version.isEmpty ? '-' : version;
   return '${version.isEmpty ? '-' : version}+$build';
+}
+
+Future<String> _detectCurrentMacosArch() async {
+  if (kIsWeb || !Platform.isMacOS) return 'x86_64';
+  try {
+    final info = await DeviceInfoPlugin().macOsInfo;
+    final raw = info.arch.trim().toLowerCase();
+    AppLogger.debug('[AppUpgrade] macos installer arch parsed: raw=$raw');
+    if (raw.contains('arm64') || raw.contains('aarch64')) return 'arm64';
+  } catch (e, st) {
+    AppLogger.warn('解析 macOS 安装包架构失败: $e\n$st');
+  }
+  return 'x86_64';
+}
+
+bool _containsAssetPattern(MapEntry<String, String> entry, List<String> keys) {
+  final text = '${entry.key} ${entry.value}'.toLowerCase();
+  return keys.every(text.contains);
+}
+
+List<List<String>> _preferredAssetPatterns({required String macosArch}) {
+  if (kIsWeb) {
+    return const [
+      ['web'],
+    ];
+  }
+  if (Platform.isAndroid) {
+    return const [
+      ['android', 'arm64'],
+      ['android', 'apk'],
+      ['apk'],
+    ];
+  }
+  if (Platform.isIOS) {
+    return const [
+      ['ios', 'ipa'],
+      ['ipa'],
+    ];
+  }
+  if (Platform.isMacOS) {
+    return [
+      [macosArch, 'macos', 'dmg'],
+      [macosArch, 'mac', 'dmg'],
+      [macosArch, 'macos', 'pkg'],
+      [macosArch, 'mac', 'pkg'],
+      ['macos', 'dmg'],
+      ['mac', 'dmg'],
+      ['macos', 'pkg'],
+      ['mac', 'pkg'],
+      ['dmg'],
+      ['pkg'],
+    ];
+  }
+  if (Platform.isWindows) {
+    return const [
+      ['x86_64-windows-setup.exe'],
+      ['x86_64', 'windows', 'setup', 'exe'],
+      ['windows', 'setup'],
+      ['exe'],
+      ['msi'],
+    ];
+  }
+  return const [
+    ['linux'],
+    ['appimage'],
+    ['deb'],
+    ['rpm'],
+  ];
+}
+
+bool _isCurrentPlatformAsset(
+  MapEntry<String, String> entry, {
+  required String macosArch,
+}) {
+  final text = '${entry.key} ${entry.value}'.toLowerCase();
+  bool any(Iterable<String> values) => values.any(text.contains);
+  final isWindows = any(['windows', '.exe', '.msi', 'setup.exe']);
+  final isMacos = any(['macos', 'mac-os', 'mac_os', '.pkg', '.dmg']);
+  final isLinux = any(['linux', '.appimage', '.deb', '.rpm']);
+  final isAndroid = any(['android', '.apk']);
+  final isIos = any(['ios', '.ipa']);
+  final hasArm64 = any(['arm64', 'aarch64']);
+  final hasX64 = any(['x86_64', 'x64', 'amd64']);
+
+  if (kIsWeb) return any(['web']);
+  if (Platform.isWindows) {
+    return isWindows && !isMacos && !isLinux && !isAndroid && !isIos;
+  }
+  if (Platform.isMacOS) {
+    if (!isMacos || isWindows || isLinux || isAndroid || isIos) return false;
+    if (macosArch == 'arm64') return hasArm64 || (!hasX64 && !hasArm64);
+    return hasX64 || (!hasX64 && !hasArm64);
+  }
+  if (Platform.isLinux) {
+    return isLinux && !isWindows && !isMacos && !isAndroid && !isIos;
+  }
+  if (Platform.isAndroid) {
+    return isAndroid && !isWindows && !isMacos && !isLinux && !isIos;
+  }
+  if (Platform.isIOS) {
+    return isIos && !isWindows && !isMacos && !isLinux && !isAndroid;
+  }
+  return false;
+}
+
+bool _hasPreferredCurrentPlatformAsset(
+  AppUpdateInfo? info, {
+  required String macosArch,
+}) {
+  if (info == null || info.downloadLinks.isEmpty) return false;
+  return info.downloadLinks.entries.any(
+    (entry) => _isCurrentPlatformAsset(entry, macosArch: macosArch),
+  );
+}
+
+class _DownloadLabel {
+  final String title;
+  final String subtitle;
+
+  const _DownloadLabel({required this.title, required this.subtitle});
+}
+
+_DownloadLabel _buildDownloadLabel(
+  MapEntry<String, String> entry, {
+  required String macosArch,
+}) {
+  final text = '${entry.key} ${entry.value}'.toLowerCase();
+  final isMac = [
+    'macos',
+    'mac-os',
+    'mac_os',
+    '.pkg',
+    '.dmg',
+  ].any(text.contains);
+  final isWindows = ['windows', '.exe', '.msi', 'setup.exe'].any(text.contains);
+  final isLinux = ['linux', '.appimage', '.deb', '.rpm'].any(text.contains);
+  final isAndroid = ['android', '.apk'].any(text.contains);
+  final isIos = ['ios', '.ipa'].any(text.contains);
+  final hasArm64 = ['arm64', 'aarch64'].any(text.contains);
+  final hasX64 = ['x86_64', 'x64', 'amd64'].any(text.contains);
+  final fileName = _assetFileName(entry);
+
+  if (isMac) {
+    final arch = hasArm64
+        ? 'ARM'
+        : hasX64
+        ? 'Intel'
+        : macosArch == 'arm64'
+        ? 'ARM'
+        : 'Intel';
+    return _DownloadLabel(title: 'macOS $arch', subtitle: fileName);
+  }
+  if (isWindows) {
+    final arch = hasArm64
+        ? 'ARM'
+        : hasX64
+        ? 'x64'
+        : '通用';
+    return _DownloadLabel(title: 'Windows $arch', subtitle: fileName);
+  }
+  if (isLinux) {
+    final arch = hasArm64
+        ? 'ARM'
+        : hasX64
+        ? 'x64'
+        : '通用';
+    return _DownloadLabel(title: 'Linux $arch', subtitle: fileName);
+  }
+  if (isAndroid) {
+    final arch = hasArm64
+        ? 'ARM64'
+        : hasX64
+        ? 'x64'
+        : '通用';
+    return _DownloadLabel(title: 'Android $arch', subtitle: fileName);
+  }
+  if (isIos) return _DownloadLabel(title: 'iOS 通用', subtitle: fileName);
+  if (kIsWeb || text.contains('web')) {
+    return _DownloadLabel(title: 'Web 平台', subtitle: fileName);
+  }
+  return _DownloadLabel(title: entry.key, subtitle: fileName);
+}
+
+String _assetFileName(MapEntry<String, String> entry) {
+  final candidates = [entry.value, entry.key];
+  for (final candidate in candidates) {
+    final fileName = Uri.decodeComponent(
+      p.basename(Uri.tryParse(candidate)?.path ?? candidate),
+    ).trim();
+    if (fileName.isNotEmpty &&
+        fileName != '/' &&
+        fileName != '.' &&
+        fileName != '..') {
+      return fileName;
+    }
+  }
+  return entry.key.trim().isNotEmpty ? entry.key.trim() : 'unknown.bin';
 }
 
 int _compareVersions(String a, String b) {

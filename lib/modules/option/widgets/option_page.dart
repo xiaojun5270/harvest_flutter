@@ -566,9 +566,7 @@ class OptionPage extends ConsumerWidget {
               ),
               Expanded(
                 child: state.isLoading
-                    ? const Center(
-                        child: shadcn.CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const OptionLoadingState(label: '正在加载设置...')
                     : EasyRefresh(
                         onRefresh: () =>
                             ref.read(optionProvider.notifier).fetchOptions(),
