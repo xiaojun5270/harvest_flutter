@@ -52,6 +52,8 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
     final selectedCount = _selectedSites
         .where((site) => availableSiteKeys.contains(site))
         .length;
+    final allSitesSelected =
+        availableSites.isNotEmpty && selectedCount == availableSites.length;
 
     return AppSurfaceContainer(
       constraints: BoxConstraints(
@@ -189,12 +191,14 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: _buildActionButton(
-                          icon: shadcn.LucideIcons.checkCheck,
-                          label: '全部',
+                          icon: allSitesSelected
+                              ? shadcn.LucideIcons.square
+                              : shadcn.LucideIcons.checkCheck,
+                          label: allSitesSelected ? '取消' : '全部',
                           color: actionColors[1],
                           onPress: availableSites.isEmpty
                               ? null
-                              : () => _selectAllSites(availableSites),
+                              : () => _toggleAllSites(availableSites),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -527,10 +531,17 @@ class _SearchSettingsSheetState extends ConsumerState<SearchSettingsSheet> {
     _updateSiteDraft();
   }
 
-  void _selectAllSites(List<SiteInfo> availableSites) {
+  void _toggleAllSites(List<SiteInfo> availableSites) {
+    final availableKeys = availableSites.map(_siteKey).toSet();
+    final selectedCount = _selectedSites.where(availableKeys.contains).length;
+    final shouldClear =
+        availableSites.isNotEmpty && selectedCount == availableSites.length;
+
     setState(() {
       _sitesEnabled = true;
-      _selectedSites = availableSites.map(_siteKey).toList();
+      _selectedSites = shouldClear
+          ? <String>[]
+          : availableSites.map(_siteKey).toList();
       _storedSites = List.from(_selectedSites);
     });
     _updateSiteDraft();
