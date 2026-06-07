@@ -511,7 +511,7 @@ class _ShellHeader extends StatelessWidget {
                   ),
                 if (updateState.hasAnyUpdate)
                   _HeaderBadgeButton(
-                    icon: shadcn.LucideIcons.arrowUpFromLine,
+                    icon: shadcn.LucideIcons.download,
                     count: updateState.updateCount,
                     tooltip: '发现程序更新',
                     onTap: () => Navigator.push(
@@ -832,6 +832,7 @@ class _HeaderBadgeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
     final display = count > 99 ? '99+' : '$count';
+    final accent = cs.primary;
 
     return shadcn.Tooltip(
       tooltip: (_) => Text(tooltip),
@@ -846,10 +847,15 @@ class _HeaderBadgeButton extends StatelessWidget {
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              Icon(icon, size: _headerActionIconSize, color: cs.foreground),
+              _HeaderUpdateIconFrame(
+                foreground: accent,
+                background: accent.withValues(alpha: 0.14),
+                borderColor: accent.withValues(alpha: 0.26),
+                child: Icon(icon, size: 15, color: accent),
+              ),
               Positioned(
-                top: -2,
-                right: -10,
+                top: -3,
+                right: -9,
                 child: Container(
                   constraints: const BoxConstraints(
                     minWidth: 16,
@@ -859,7 +865,14 @@ class _HeaderBadgeButton extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: cs.chart4,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: cs.background, width: 1),
+                    border: Border.all(color: cs.background, width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.chart4.withValues(alpha: 0.22),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -898,6 +911,7 @@ class _HeaderDotButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = shadcn.Theme.of(context).colorScheme;
+    final accent = color ?? cs.destructive;
 
     return shadcn.Tooltip(
       tooltip: (_) => Text(tooltip),
@@ -912,27 +926,67 @@ class _HeaderDotButton extends StatelessWidget {
             clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
-              Icon(
-                icon,
-                size: _headerActionIconSize,
-                color: color ?? cs.foreground,
+              _HeaderUpdateIconFrame(
+                foreground: accent,
+                background: accent.withValues(alpha: 0.12),
+                borderColor: accent.withValues(alpha: 0.24),
+                child: Icon(icon, size: 15, color: accent),
               ),
               Positioned(
-                top: -2,
-                right: -6,
+                top: -1,
+                right: -4,
                 child: Container(
-                  width: 9,
-                  height: 9,
+                  width: 8,
+                  height: 8,
                   decoration: BoxDecoration(
-                    color: cs.destructive,
+                    color: accent,
                     shape: BoxShape.circle,
-                    border: Border.all(color: cs.background, width: 1),
+                    border: Border.all(color: cs.background, width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.25),
+                        blurRadius: 5,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderUpdateIconFrame extends StatelessWidget {
+  final Widget child;
+  final Color foreground;
+  final Color background;
+  final Color borderColor;
+
+  const _HeaderUpdateIconFrame({
+    required this.child,
+    required this.foreground,
+    required this.background,
+    required this.borderColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor, width: 0.8),
+      ),
+      alignment: Alignment.center,
+      child: IconTheme(
+        data: IconThemeData(color: foreground, size: 15),
+        child: child,
       ),
     );
   }
