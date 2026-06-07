@@ -17,7 +17,10 @@ class API {
   static const String ADMIN_SEND_TOKEN = "/api/auth/admin/send";
   static const String ADMIN_RESET_TOKEN = "/api/auth/admin/reset/token";
   static const String ADMIN_RESET_INVITE = "/api/auth/admin/reset/invite/";
+  static const String APP_VERSION_CACHE_CLEAR = "/api/auth/admin/cache/clear";
   static const String QINIU_UPLOAD_FILES = "/api/source/qiniu/upload_files";
+  static const String APP_VERSION_LATEST = "/api/app/version/latest";
+  static const String APP_VERSION_LIST = "/api/app/version/list";
 
   // 我的站点列表增删改查
   static const String DASHBOARD_DATA = "/api/mysite/dashboard";
@@ -78,23 +81,18 @@ class API {
   // 下载器分类列表
   static const String DOWNLOADER_TORRENTS = "/api/ws/downloader";
   static const String DOWNLOADER_STATUS = "/api/ws/downloader/speed";
-  static const String DOWNLOADER_TOGGLE_SPEED_LIMIT_ENABLE =
-      "/api/option/downloaders/toggle_speed_limit/";
+  static const String DOWNLOADER_TOGGLE_SPEED_LIMIT_ENABLE = "/api/option/downloaders/toggle_speed_limit/";
   static const String DOWNLOADER_MAIN = "/api/option/downloaders/main/";
   static const String DOWNLOADER_TEST = "/api/option/downloaders/test/";
   static const String DOWNLOADER_TAGS = "/api/option/downloaders/tags/";
-  static const String DOWNLOADER_TRACKER_REPLACE =
-      "/api/option/downloaders/trackers/replace/";
+  static const String DOWNLOADER_TRACKER_REPLACE = "/api/option/downloaders/trackers/replace/";
   static const String DOWNLOADER_SET_TAGS = "/api/option/downloaders/tags/set/";
   static const String DOWNLOADER_CATEGORY = "/api/option/downloaders/category/";
-  static const String DOWNLOADER_SET_CATEGORY =
-      "/api/option/downloaders/category/set/";
+  static const String DOWNLOADER_SET_CATEGORY = "/api/option/downloaders/category/set/";
   static const String DOWNLOADER_CONTROL = "/api/option/downloaders/control/";
   static const String DOWNLOADER_PUSH_TORRENT = "/api/option/push_torrent";
-  static const String DOWNLOADER_PREFERENCES =
-      "/api/option/downloaders/preferences/";
-  static const String DOWNLOADER_TORRENT_DETAIL =
-      "/api/option/downloaders/torrent/detail/";
+  static const String DOWNLOADER_PREFERENCES = "/api/option/downloaders/preferences/";
+  static const String DOWNLOADER_TORRENT_DETAIL = "/api/option/downloaders/torrent/detail/";
 
   // 推送种子到下载器
   static const String PUSH_TORRENT_URL = "/api/option/push_torrent/";
@@ -173,8 +171,7 @@ class API {
   static const String TMDB_MOVIE_INFO = "/api/tmdb/movie/";
   static const String TMDB_TV_INFO = "/api/tmdb/tv/";
   static const String TMDB_SEASON = "/api/tmdb/season/{tv_id}/{season_id}";
-  static const String TMDB_EPISODE =
-      "/api/tmdb/episode/{tv_id}/{season_id}/{episode_id}";
+  static const String TMDB_EPISODE = "/api/tmdb/episode/{tv_id}/{season_id}/{episode_id}";
   static const String TMDB_ON_THE_AIR = "/api/tmdb/on_the_air/tvs";
   static const String TMDB_AIRING_TODAY = "/api/tmdb/airing_today/tvs";
   static const String TMDB_UPCOMING_MOVIES = "/api/tmdb/upcoming/movies";
@@ -245,6 +242,9 @@ const _apiEndpointNames = <String, String>{
   API.ADMIN_SEND_TOKEN: '授权邮件接口',
   API.ADMIN_RESET_TOKEN: '重置令牌接口',
   API.QINIU_UPLOAD_FILES: '七牛上传接口',
+  API.APP_VERSION_LATEST: 'APP 最新版本接口',
+  API.APP_VERSION_LIST: 'APP 版本列表接口',
+  API.APP_VERSION_CACHE_CLEAR: 'APP 版本缓存清理接口',
   API.DASHBOARD_DATA: '仪表盘数据接口',
   API.WEBSITE_LIST: '站点配置列表接口',
   API.WEBSITE_TO_ADD: '待添加站点接口',

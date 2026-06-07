@@ -57,6 +57,10 @@ class AdminUserService {
     await Http.get(API.ADMIN_RESET_INVITE, queryParameters: {'count': count});
   }
 
+  static Future<void> clearAppVersionCache() async {
+    await Http.get(API.APP_VERSION_CACHE_CLEAR);
+  }
+
   static Future<void> deleteUser(int userId) async {
     await Http.delete('${API.ADMIN_USER}/$userId');
   }

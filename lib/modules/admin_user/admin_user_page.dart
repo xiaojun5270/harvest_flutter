@@ -5,17 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:harvest/core/theme/app_surface.dart';
 import 'package:harvest/core/utils/utils.dart';
-import 'package:harvest/widgets/app_menu.dart';
+import 'package:harvest/modules/shell/widgets/global_drawer_swipe_area.dart';
 import 'package:harvest/widgets/app_header_layout.dart';
+import 'package:harvest/widgets/app_menu.dart';
 import 'package:harvest/widgets/escape_back_scope.dart';
 import 'package:harvest/widgets/shad_text_field.dart';
-import 'package:harvest/modules/shell/widgets/global_drawer_swipe_area.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../user/provider/user_management_provider.dart';
 import 'admin_user_access.dart';
 import 'model/admin_user_model.dart';
 import 'provider/admin_user_provider.dart';
+import 'service/admin_user_service.dart';
 
 shadcn.ColorScheme _adminColors(BuildContext context) =>
     shadcn.Theme.of(context).colorScheme;
@@ -108,6 +109,7 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
   final _searchCtrl = TextEditingController();
   String _keyword = '';
   bool _chartsExpanded = true;
+  bool _clearingAppVersionCache = false;
   int _page = 1;
   int _pageSize = 100;
 
@@ -265,6 +267,7 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
                   controller: _searchCtrl,
                   total: users.length,
                   current: filtered.length,
+                  clearingAppVersionCache: _clearingAppVersionCache,
                   onSearch: (value) => setState(() {
                     _keyword = value;
                     _page = 1;
@@ -278,6 +281,7 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
                   },
                   onAdd: _openCreateDialog,
                   onResetAllInvite: _openResetAllInviteDialog,
+                  onClearAppVersionCache: _clearAppVersionCache,
                 ),
                 const SizedBox(height: 10),
                 if (filtered.isEmpty)
@@ -353,6 +357,19 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
       start: startIndex + 1,
       end: endIndex,
     );
+  }
+
+  Future<void> _clearAppVersionCache() async {
+    if (_clearingAppVersionCache) return;
+    setState(() => _clearingAppVersionCache = true);
+    try {
+      await AdminUserService.clearAppVersionCache();
+      Toast.success('APP 版本缓存已清理');
+    } catch (_) {
+      Toast.error('APP 版本缓存清理失败');
+    } finally {
+      if (mounted) setState(() => _clearingAppVersionCache = false);
+    }
   }
 
   void _openCreateDialog() {
@@ -474,25 +491,32 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
                           FocusManager.instance.primaryFocus?.unfocus(),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: _discounts
-                          .map(
-                            (discount) => _DiscountButton(
-                              label: _discountLabel(discount),
-                              onPressed: saving
-                                  ? null
-                                  : () {
-                                      payCtrl.text =
-                                          (_defaultPay * discount / 10)
-                                              .round()
-                                              .toString();
-                                      setDialogState(() {});
-                                    },
-                            ),
-                          )
-                          .toList(),
+                    _PresetButtonGroup(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _discounts
+                            .map(
+                              (discount) => _DiscountButton(
+                                label: _discountLabel(discount),
+                                selected:
+                                    payCtrl.text.trim() ==
+                                    (_defaultPay * discount / 10)
+                                        .round()
+                                        .toString(),
+                                onPressed: saving
+                                    ? null
+                                    : () {
+                                        payCtrl.text =
+                                            (_defaultPay * discount / 10)
+                                                .round()
+                                                .toString();
+                                        setDialogState(() {});
+                                      },
+                              ),
+                            )
+                            .toList(),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     ShadTextField(
@@ -638,21 +662,25 @@ class _AdminUserPageState extends ConsumerState<AdminUserPage> {
                           FocusManager.instance.primaryFocus?.unfocus(),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        for (final count in const [3, 4, 5])
-                          _DiscountButton(
-                            label: '$count 次',
-                            onPressed: saving
-                                ? null
-                                : () {
-                                    countCtrl.text = count.toString();
-                                    setDialogState(() {});
-                                  },
-                          ),
-                      ],
+                    _PresetButtonGroup(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final count in const [3, 4, 5])
+                            _DiscountButton(
+                              label: '$count 次',
+                              selected:
+                                  countCtrl.text.trim() == count.toString(),
+                              onPressed: saving
+                                  ? null
+                                  : () {
+                                      countCtrl.text = count.toString();
+                                      setDialogState(() {});
+                                    },
+                            ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 16),
                     _DialogActions(
@@ -999,19 +1027,23 @@ class _AdminUserToolbar extends StatelessWidget {
   final TextEditingController controller;
   final int total;
   final int current;
+  final bool clearingAppVersionCache;
   final ValueChanged<String> onSearch;
   final VoidCallback onClear;
   final VoidCallback onAdd;
   final VoidCallback onResetAllInvite;
+  final VoidCallback onClearAppVersionCache;
 
   const _AdminUserToolbar({
     required this.controller,
     required this.total,
     required this.current,
+    required this.clearingAppVersionCache,
     required this.onSearch,
     required this.onClear,
     required this.onAdd,
     required this.onResetAllInvite,
+    required this.onClearAppVersionCache,
   });
 
   @override
@@ -1046,6 +1078,51 @@ class _AdminUserToolbar extends StatelessWidget {
               style: typo.small.copyWith(color: cs.mutedForeground),
             ),
             const SizedBox(width: 8),
+            shadcn.Tooltip(
+              tooltip: (_) => const Text('清理 APP 版本缓存'),
+              child: shadcn.Clickable(
+                behavior: HitTestBehavior.opaque,
+                onPressed: clearingAppVersionCache
+                    ? null
+                    : onClearAppVersionCache,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 160),
+                  opacity: clearingAppVersionCache ? 0.72 : 1,
+                  child: AppSurfaceContainer(
+                    padding: const EdgeInsets.all(9),
+                    borderRadius: BorderRadius.circular(999),
+                    color: _adminWarning(
+                      context,
+                      alpha: clearingAppVersionCache ? 0.10 : 0.14,
+                    ),
+                    borderColor: _adminWarning(
+                      context,
+                      alpha: clearingAppVersionCache ? 0.30 : 0.46,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        clearingAppVersionCache
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: shadcn.CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: _adminWarning(context),
+                                ),
+                              )
+                            : Icon(
+                                shadcn.LucideIcons.eraser,
+                                size: 16,
+                                color: _adminWarning(context),
+                              ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
             shadcn.IconButton.primary(
               onPressed: onResetAllInvite,
               icon: const Icon(shadcn.LucideIcons.rotateCcw, size: 18),
@@ -1423,8 +1500,8 @@ class _AdminUserTile extends StatelessWidget {
                       const _AdminPill(text: '有效', dense: true),
                       if (user.tryUser)
                         const _AdminPill(text: '试用', dense: true),
+                      _AdminPill(text: user.pay > 0 ? '收费' : '免费', dense: true),
                     ],
-                    _AdminPill(text: user.pay > 0 ? '收费' : '免费', dense: true),
                   ],
                 ),
               ),
@@ -1546,9 +1623,12 @@ class _AdminUserMetricGrid extends StatelessWidget {
                 width: width,
                 child: _AdminUserMetricItem(
                   label: '授权',
-                  value: '${user.expire}天',
+                  value: _adminAuthorizeDisplay(user),
                   icon: shadcn.LucideIcons.calendarDays,
-                  color: _adminSuccess(context),
+                  color: _isExpired(user)
+                      ? _adminColors(context).destructive
+                      : _adminSuccess(context),
+                  highlight: _isExpired(user),
                 ),
               ),
             ],
@@ -1564,12 +1644,14 @@ class _AdminUserMetricItem extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final bool highlight;
 
   const _AdminUserMetricItem({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    this.highlight = false,
   });
 
   @override
@@ -1598,7 +1680,7 @@ class _AdminUserMetricItem extends StatelessWidget {
           value,
           softWrap: true,
           style: typo.small.copyWith(
-            color: cs.foreground,
+            color: highlight ? color : cs.foreground,
             fontWeight: FontWeight.w700,
             height: 1.15,
           ),
@@ -1967,23 +2049,108 @@ class _ReadOnlyField extends StatelessWidget {
 
 class _DiscountButton extends StatelessWidget {
   final String label;
+  final bool selected;
   final VoidCallback? onPressed;
 
-  const _DiscountButton({required this.label, required this.onPressed});
+  const _DiscountButton({
+    required this.label,
+    this.selected = false,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 28,
-      child: shadcn.Button.outline(
-        onPressed: onPressed,
-        child: Text(
-          label,
-          maxLines: 1,
-          style: shadcn.Theme.of(context).typography.xSmall.copyWith(height: 1),
+    final cs = _adminColors(context);
+    final theme = shadcn.Theme.of(context);
+    final enabled = onPressed != null;
+    final accent = _adminInfo(context);
+    final radius = _adminRadius(context, size: 'sm');
+    final foreground = selected
+        ? accent
+        : enabled
+        ? cs.foreground
+        : cs.mutedForeground;
+    final background = selected
+        ? accent.withValues(alpha: 0.12)
+        : cs.secondary.withValues(alpha: enabled ? 0.26 : 0.18);
+    final borderColor = selected
+        ? accent.withValues(alpha: 0.42)
+        : cs.border.withValues(alpha: enabled ? 0.62 : 0.36);
+    final markerColor = selected
+        ? accent
+        : enabled
+        ? cs.mutedForeground.withValues(alpha: 0.78)
+        : cs.mutedForeground.withValues(alpha: 0.42);
+
+    return shadcn.Clickable(
+      behavior: HitTestBehavior.opaque,
+      onPressed: onPressed,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        constraints: const BoxConstraints(minWidth: 58, minHeight: 30),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: radius,
+          border: Border.all(color: borderColor, width: selected ? 1 : 0.8),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                    spreadRadius: -5,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: selected ? 10 : 7,
+              height: selected ? 16 : 12,
+              decoration: BoxDecoration(
+                color: markerColor,
+                borderRadius: _adminRadius(context, size: 'xs'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: theme.typography.xSmall.copyWith(
+                height: 1,
+                color: foreground,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _PresetButtonGroup extends StatelessWidget {
+  final Widget child;
+
+  const _PresetButtonGroup({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = _adminColors(context);
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: cs.secondary.withValues(alpha: 0.16),
+        borderRadius: _adminRadius(context),
+        border: Border.all(color: cs.border.withValues(alpha: 0.5), width: 0.8),
+      ),
+      child: child,
     );
   }
 }
@@ -2226,4 +2393,21 @@ bool _isExpired(AdminUser user) {
   final expireAt = parseDateTimeOrEpoch(user.timeExpire);
   if (expireAt.millisecondsSinceEpoch == 0) return false;
   return expireAt.isBefore(DateTime.now());
+}
+
+String _adminAuthorizeDisplay(AdminUser user) {
+  if (user.timeExpire.contains('已过期')) return '过期';
+  final expireAt = parseDateTimeOrEpoch(user.timeExpire);
+  if (expireAt.millisecondsSinceEpoch == 0) {
+    return user.expire > 0 ? '${user.expire}天' : '-';
+  }
+
+  final now = DateTime.now();
+  if (!expireAt.isAfter(now)) return '过期';
+
+  final remaining = expireAt.difference(now);
+  final days = remaining.inSeconds <= 0
+      ? 0
+      : (remaining.inSeconds / Duration.secondsPerDay).ceil();
+  return '${days.clamp(0, 1 << 31)}天';
 }
