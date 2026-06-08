@@ -506,23 +506,14 @@ struct HarvestLoginView: View {
 
   var body: some View {
     ZStack {
-      HarvestPalette.background.edgesIgnoringSafeArea(.all)
-      Image("HarvestBackground")
-        .resizable()
-        .scaledToFill()
-        .opacity(0.06)
-        .edgesIgnoringSafeArea(.all)
+      HarvestAppBackground()
 
       ScrollView {
         VStack(spacing: 0) {
           Spacer(minLength: 64)
 
-          VStack(spacing: 16) {
-            Image("HarvestLogo")
-              .resizable()
-              .scaledToFit()
-              .frame(width: 96, height: 96)
-              .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+          VStack(spacing: 18) {
+            HarvestLogoMark(size: 96)
 
             Text("PT 一下")
               .font(.system(size: 24, weight: .heavy))
@@ -532,13 +523,13 @@ struct HarvestLoginView: View {
               HarvestTextField(
                 title: "服务器地址",
                 text: $server,
-                systemImage: "server.rack"
+                systemImage: "network"
               )
 
               HarvestTextField(
                 title: "账号",
                 text: $username,
-                systemImage: "person"
+                systemImage: "person.crop.circle"
               )
 
               HarvestPasswordField(
@@ -561,31 +552,30 @@ struct HarvestLoginView: View {
                     .font(.system(size: 15, weight: .heavy))
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(HarvestPalette.primary)
+                .frame(height: 48)
+                .background(HarvestPalette.primaryGradient)
                 .foregroundColor(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(HarvestRoundedBorder(radius: 8, color: Color.white, opacity: 0.20))
               }
               .disabled(store.isLoading)
 
-              HarvestIconButton(systemImage: "clock.arrow.circlepath") {
+              HarvestIconButton(systemImage: "clock.arrow.2.circlepath") {
                 fillLatestHistory()
               }
               .disabled(store.loginHistory.isEmpty)
 
-              HarvestIconButton(systemImage: "terminal") {
+              HarvestIconButton(systemImage: "waveform.path.ecg.rectangle") {
                 store.showInfo("SwiftUI 原生复制版日志中心")
               }
 
-              HarvestIconButton(systemImage: "externaldrive.badge.xmark") {
+              HarvestIconButton(systemImage: "trash") {
                 store.clearPersistentData()
               }
             }
 
             HStack(spacing: 10) {
-              Image(systemName: "arrow.up.circle")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(HarvestPalette.primary)
+              HarvestSymbolBadge(systemImage: "arrow.down.circle.fill", color: HarvestPalette.primary, size: 28, iconSize: 13)
               Text("APP 升级")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(HarvestPalette.primary)
@@ -596,12 +586,15 @@ struct HarvestLoginView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 42)
-            .background(HarvestPalette.card)
+            .background(HarvestGlassBackground(radius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(HarvestRoundedBorder(radius: 8))
+            .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.30))
           }
-          .padding(18)
+          .padding(20)
           .frame(maxWidth: 440)
+          .background(HarvestGlassBackground(radius: 8))
+          .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.30))
+          .shadow(color: HarvestPalette.shadow, radius: 28, x: 0, y: 18)
 
           Spacer(minLength: 56)
         }
@@ -631,7 +624,7 @@ struct HarvestShellView: View {
   var body: some View {
     GeometryReader { proxy in
       ZStack(alignment: .bottom) {
-        HarvestPalette.background.edgesIgnoringSafeArea(.all)
+        HarvestAppBackground()
 
         VStack(spacing: 0) {
           if store.selectedTab != .search {
@@ -715,7 +708,7 @@ struct HarvestShellHeader: View {
 
       HarvestHeaderNoticeButton()
 
-      HarvestHeaderIcon(systemImage: "arrow.up.circle") {
+      HarvestHeaderIcon(systemImage: "arrow.down.circle.fill") {
         store.showInfo("当前为 SwiftUI 原生复制版")
       }
       .overlay(
@@ -733,17 +726,24 @@ struct HarvestShellHeader: View {
       }) {
         Text(store.currentUserInitial)
           .font(.system(size: 15, weight: .black))
-          .frame(width: 32, height: 32)
-          .background(HarvestPalette.primary)
+          .frame(width: 34, height: 34)
+          .background(HarvestPalette.primaryGradient)
           .foregroundColor(.white)
-          .clipShape(Circle())
+          .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+          .overlay(HarvestRoundedBorder(radius: 8, color: Color.white, opacity: 0.22))
       }
       .buttonStyle(PlainButtonStyle())
     }
     .padding(.horizontal, 12)
     .padding(.top, 8)
     .padding(.bottom, 8)
-    .background(HarvestPalette.background)
+    .background(HarvestGlassBackground(radius: 0))
+    .overlay(
+      Rectangle()
+        .fill(HarvestPalette.border.opacity(0.20))
+        .frame(height: 1),
+      alignment: .bottom
+    )
   }
 }
 
@@ -758,9 +758,9 @@ struct HarvestNoticeTicker: View {
     }) {
       HStack(spacing: 10) {
         ZStack {
-          Circle()
+          RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(HarvestPalette.danger)
-            .frame(width: 22, height: 22)
+            .frame(width: 24, height: 24)
           Text(count > 99 ? "99+" : "\(count)")
             .font(.system(size: 8, weight: .black))
             .foregroundColor(.white)
@@ -781,9 +781,9 @@ struct HarvestNoticeTicker: View {
       }
       .padding(.horizontal, 10)
       .frame(height: 38)
-      .background(HarvestPalette.card)
+      .background(HarvestGlassBackground(radius: 8))
       .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-      .overlay(HarvestRoundedBorder(radius: 8))
+      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.26))
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -793,7 +793,7 @@ struct HarvestHeaderNoticeButton: View {
   @EnvironmentObject private var store: HarvestNativeAppStore
 
   var body: some View {
-    HarvestHeaderIcon(systemImage: "bell") {
+    HarvestHeaderIcon(systemImage: "bell.fill") {
       if let first = store.unreadNotices.first {
         store.markNoticeRead(first)
       } else {
@@ -833,17 +833,19 @@ struct HarvestBottomControls: View {
           )
         }
       }
-      .frame(height: 58)
-      .background(HarvestGlassBackground(radius: 22))
-      .overlay(HarvestRoundedBorder(radius: 22, opacity: 0.24))
+      .frame(height: 62)
+      .background(HarvestGlassBackground(radius: 8))
+      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.28))
 
       Button(action: { store.openSearch() }) {
         Image(systemName: "magnifyingglass")
           .font(.system(size: 22, weight: .heavy))
-          .foregroundColor(HarvestPalette.primary)
-          .frame(width: 58, height: 58)
-          .background(HarvestGlassBackground(radius: 22))
-          .overlay(HarvestRoundedBorder(radius: 22, opacity: 0.24))
+          .foregroundColor(.white)
+          .frame(width: 62, height: 62)
+          .background(HarvestPalette.primaryGradient)
+          .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+          .overlay(HarvestRoundedBorder(radius: 8, color: Color.white, opacity: 0.22))
+          .shadow(color: HarvestPalette.primary.opacity(0.30), radius: 18, x: 0, y: 10)
       }
       .buttonStyle(PlainButtonStyle())
     }
@@ -870,9 +872,18 @@ struct HarvestBottomTabButton: View {
       .background(
         Group {
           if selected {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-              .fill(HarvestPalette.primary.opacity(0.12))
-              .padding(.vertical, 6)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+              .fill(
+                LinearGradient(
+                  gradient: Gradient(colors: [
+                    HarvestPalette.primary.opacity(0.16),
+                    HarvestPalette.cyan.opacity(0.09)
+                  ]),
+                  startPoint: .topLeading,
+                  endPoint: .bottomTrailing
+                )
+              )
+              .padding(.vertical, 5)
               .padding(.horizontal, 4)
           }
         }
@@ -909,7 +920,7 @@ struct HarvestDashboardPage: View {
             HarvestDistributionCard(title: "今日增量", items: data.incrementItems)
           } else {
             HarvestEmptyState(
-              systemImage: "square.grid.2x2",
+              systemImage: "chart.bar",
               title: "暂无仪表盘数据",
               subtitle: "登录后刷新即可查看站点数量、上传下载、做种体积和今日增量。"
             )
@@ -921,10 +932,10 @@ struct HarvestDashboardPage: View {
       }
 
       VStack(spacing: 8) {
-        HarvestFloatingButton(systemImage: store.privacyMode ? "eye.slash" : "eye") {
+        HarvestFloatingButton(systemImage: store.privacyMode ? "eye.slash.fill" : "eye.fill") {
           store.privacyMode.toggle()
         }
-        HarvestFloatingButton(systemImage: "arrow.clockwise") {
+        HarvestFloatingButton(systemImage: "arrow.clockwise.circle.fill") {
           store.refresh(tab: .dashboard, showSpinner: true)
         }
         HarvestFloatingButton(systemImage: "slider.horizontal.3") {
@@ -947,8 +958,9 @@ struct HarvestDashboardHero: View {
   let privacy: Bool
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 16) {
       HStack {
+        HarvestSymbolBadge(systemImage: "chart.bar.fill", color: HarvestPalette.primary, size: 44, iconSize: 20)
         VStack(alignment: .leading, spacing: 4) {
           Text("总览")
             .font(.system(size: 14, weight: .heavy))
@@ -978,15 +990,17 @@ struct HarvestDashboardHero: View {
       LinearGradient(
         gradient: Gradient(colors: [
           HarvestPalette.card,
-          HarvestPalette.primary.opacity(0.08),
-          HarvestPalette.warning.opacity(0.07)
+          HarvestPalette.primary.opacity(0.12),
+          HarvestPalette.mint.opacity(0.10),
+          HarvestPalette.warning.opacity(0.06)
         ]),
         startPoint: .topLeading,
         endPoint: .bottomTrailing
       )
     )
-    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    .overlay(HarvestRoundedBorder(radius: 12))
+    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.32))
+    .shadow(color: HarvestPalette.shadow, radius: 18, x: 0, y: 8)
   }
 }
 
@@ -1020,10 +1034,10 @@ struct HarvestDashboardSummaryGrid: View {
 
   var body: some View {
     LazyVGrid(columns: columns, spacing: 10) {
-      HarvestStatCard(title: "今日上传", value: privacy ? "***" : data.todayUploadText, systemImage: "arrow.up", color: HarvestPalette.success)
-      HarvestStatCard(title: "今日下载", value: privacy ? "***" : data.todayDownloadText, systemImage: "arrow.down", color: HarvestPalette.primary)
-      HarvestStatCard(title: "做种数", value: privacy ? "***" : "\(Int(data.totalSeeding))", systemImage: "arrow.triangle.2.circlepath", color: HarvestPalette.warning)
-      HarvestStatCard(title: "总发布", value: privacy ? "***" : "\(Int(data.totalPublished))", systemImage: "doc.text", color: HarvestPalette.danger)
+      HarvestStatCard(title: "今日上传", value: privacy ? "***" : data.todayUploadText, systemImage: "arrow.up.right.circle.fill", color: HarvestPalette.success)
+      HarvestStatCard(title: "今日下载", value: privacy ? "***" : data.todayDownloadText, systemImage: "arrow.down.right.circle.fill", color: HarvestPalette.primary)
+      HarvestStatCard(title: "做种数", value: privacy ? "***" : "\(Int(data.totalSeeding))", systemImage: "leaf.fill", color: HarvestPalette.warning)
+      HarvestStatCard(title: "总发布", value: privacy ? "***" : "\(Int(data.totalPublished))", systemImage: "doc.text.fill", color: HarvestPalette.danger)
     }
   }
 }
@@ -1033,13 +1047,13 @@ struct HarvestDashboardQuickActions: View {
 
   var body: some View {
     HStack(spacing: 10) {
-      HarvestActionTile(title: "刷新数据", systemImage: "arrow.clockwise", color: HarvestPalette.primary) {
+      HarvestActionTile(title: "刷新数据", systemImage: "arrow.clockwise.circle.fill", color: HarvestPalette.primary) {
         store.refresh(tab: .dashboard, showSpinner: true)
       }
-      HarvestActionTile(title: "站点任务", systemImage: "bolt", color: HarvestPalette.warning) {
+      HarvestActionTile(title: "站点任务", systemImage: "bolt.circle.fill", color: HarvestPalette.warning) {
         store.showInfo("站点数据任务已保留入口")
       }
-      HarvestActionTile(title: "签到", systemImage: "checkmark.seal", color: HarvestPalette.success) {
+      HarvestActionTile(title: "签到", systemImage: "checkmark.seal.fill", color: HarvestPalette.success) {
         store.showInfo("站点签到任务已保留入口")
       }
     }
@@ -1127,23 +1141,29 @@ struct HarvestSitesPage: View {
           .font(.system(size: 13, weight: .bold))
           .foregroundColor(HarvestPalette.secondaryText)
 
-        HarvestTextField(title: "搜索站点...", text: $query, systemImage: "magnifyingglass", compact: true)
+        HarvestTextField(title: "搜索站点...", text: $query, systemImage: "magnifyingglass.circle.fill", compact: true)
 
-        HarvestHeaderIcon(systemImage: "slider.horizontal.3") {
+        HarvestHeaderIcon(systemImage: "line.3.horizontal.decrease.circle") {
           store.showInfo("筛选面板已保留入口")
         }
-        HarvestHeaderIcon(systemImage: "plus") {
+        HarvestHeaderIcon(systemImage: "plus.circle.fill") {
           store.showInfo("添加站点已保留入口")
         }
       }
       .padding(.horizontal, 8)
       .padding(.vertical, 8)
-      .background(HarvestPalette.background)
+      .background(HarvestGlassBackground(radius: 0))
+      .overlay(
+        Rectangle()
+          .fill(HarvestPalette.border.opacity(0.18))
+          .frame(height: 1),
+        alignment: .bottom
+      )
 
       ScrollView {
         if filteredSites.isEmpty {
           HarvestEmptyState(
-            systemImage: query.isEmpty ? "globe" : "magnifyingglass",
+            systemImage: query.isEmpty ? "network" : "magnifyingglass.circle.fill",
             title: query.isEmpty ? "暂无站点数据" : "没有符合筛选条件的站点",
             subtitle: query.isEmpty ? "可以从内置配置添加站点，或上传自定义 TOML 配置。" : "清空搜索条件后重新查看。"
           )
@@ -1176,10 +1196,12 @@ struct HarvestSiteCard: View {
     HarvestCard {
       VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .top, spacing: 10) {
-          Circle()
-            .fill(site.available ? HarvestPalette.success : HarvestPalette.secondaryText)
-            .frame(width: 10, height: 10)
-            .padding(.top, 6)
+          HarvestSymbolBadge(
+            systemImage: site.available ? "checkmark.circle.fill" : "pause.circle.fill",
+            color: site.available ? HarvestPalette.success : HarvestPalette.secondaryText,
+            size: 34,
+            iconSize: 16
+          )
 
           VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
@@ -1202,19 +1224,19 @@ struct HarvestSiteCard: View {
         }
 
         HStack(spacing: 8) {
-          HarvestMiniMetric(title: "上传", value: site.uploadedText, systemImage: "arrow.up")
-          HarvestMiniMetric(title: "下载", value: site.downloadedText, systemImage: "arrow.down")
+          HarvestMiniMetric(title: "上传", value: site.uploadedText, systemImage: "arrow.up.right.circle.fill")
+          HarvestMiniMetric(title: "下载", value: site.downloadedText, systemImage: "arrow.down.right.circle.fill")
           HarvestMiniMetric(title: "分享率", value: site.ratioText, systemImage: "percent")
         }
 
         HStack(spacing: 8) {
-          HarvestSmallAction(title: "刷新", systemImage: "arrow.clockwise") {
+          HarvestSmallAction(title: "刷新", systemImage: "arrow.clockwise.circle.fill") {
             store.runSiteAction(.refresh, site: site)
           }
-          HarvestSmallAction(title: "签到", systemImage: "checkmark") {
+          HarvestSmallAction(title: "签到", systemImage: "checkmark.circle.fill") {
             store.runSiteAction(.signIn, site: site)
           }
-          HarvestSmallAction(title: "辅种", systemImage: "bolt") {
+          HarvestSmallAction(title: "辅种", systemImage: "bolt.circle.fill") {
             store.runSiteAction(.repeatTorrent, site: site)
           }
         }
@@ -1237,18 +1259,25 @@ struct HarvestNewsPage: View {
           selection: $source
         )
         Spacer()
-        HarvestHeaderIcon(systemImage: "arrow.clockwise") {
+        HarvestHeaderIcon(systemImage: "arrow.clockwise.circle.fill") {
           store.refresh(tab: .news, showSpinner: true)
         }
       }
       .padding(.horizontal, 12)
       .padding(.vertical, 6)
+      .background(HarvestGlassBackground(radius: 0))
+      .overlay(
+        Rectangle()
+          .fill(HarvestPalette.border.opacity(0.18))
+          .frame(height: 1),
+        alignment: .bottom
+      )
 
       ScrollView {
         let sections = source == .tmdb ? store.tmdbSections : store.doubanSections
         if sections.flatMap({ $0.items }).isEmpty {
           HarvestEmptyState(
-            systemImage: "newspaper",
+            systemImage: "sparkles",
             title: "暂无资讯数据",
             subtitle: "刷新后可查看 TMDB 和豆瓣的热门影视信息。"
           )
@@ -1277,10 +1306,14 @@ struct HarvestMediaSectionView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text(section.title)
-        .font(.system(size: 16, weight: .black))
-        .foregroundColor(HarvestPalette.text)
-        .padding(.horizontal, 12)
+      HStack(spacing: 8) {
+        HarvestSymbolBadge(systemImage: section.source.systemImage, color: section.source.color, size: 28, iconSize: 13)
+        Text(section.title)
+          .font(.system(size: 16, weight: .black))
+          .foregroundColor(HarvestPalette.text)
+        Spacer()
+      }
+      .padding(.horizontal, 12)
 
       ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 10) {
@@ -1303,6 +1336,8 @@ struct HarvestMediaCard: View {
         .frame(width: 122, height: 180)
         .background(HarvestPalette.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.20))
+        .shadow(color: HarvestPalette.shadow, radius: 14, x: 0, y: 7)
 
       Text(item.title)
         .font(.system(size: 13, weight: .heavy))
@@ -1334,7 +1369,7 @@ struct HarvestDownloadsPage: View {
       VStack(spacing: 10) {
         if store.downloaders.isEmpty {
           HarvestEmptyState(
-            systemImage: "arrow.down.circle",
+            systemImage: "tray.and.arrow.down",
             title: "暂无下载器",
             subtitle: "配置 qBittorrent 或 Transmission 后可在这里查看状态。"
           )
@@ -1364,11 +1399,11 @@ struct HarvestDownloaderCard: View {
     HarvestCard {
       VStack(alignment: .leading, spacing: 12) {
         HStack(spacing: 10) {
-          Image(downloader.isTransmission ? "HarvestTR" : "HarvestQB")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 42, height: 42)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+          HarvestAssetBadge(
+            imageName: downloader.isTransmission ? "HarvestTR" : "HarvestQB",
+            color: downloader.isTransmission ? HarvestPalette.indigo : HarvestPalette.primary,
+            size: 46
+          )
 
           VStack(alignment: .leading, spacing: 3) {
             Text(downloader.name)
@@ -1386,9 +1421,9 @@ struct HarvestDownloaderCard: View {
         }
 
         HStack(spacing: 8) {
-          HarvestMiniMetric(title: "下载", value: downloader.downloadSpeedText, systemImage: "arrow.down")
-          HarvestMiniMetric(title: "上传", value: downloader.uploadSpeedText, systemImage: "arrow.up")
-          HarvestMiniMetric(title: "剩余", value: downloader.freeSpaceText, systemImage: "internaldrive")
+          HarvestMiniMetric(title: "下载", value: downloader.downloadSpeedText, systemImage: "arrow.down.right.circle.fill")
+          HarvestMiniMetric(title: "上传", value: downloader.uploadSpeedText, systemImage: "arrow.up.right.circle.fill")
+          HarvestMiniMetric(title: "剩余", value: downloader.freeSpaceText, systemImage: "internaldrive.fill")
         }
       }
     }
@@ -1405,7 +1440,7 @@ struct HarvestTasksPage: View {
       VStack(spacing: 10) {
         if store.schedules.isEmpty {
           HarvestEmptyState(
-            systemImage: "checkmark.square",
+            systemImage: "calendar",
             title: "暂无任务",
             subtitle: "计划任务会显示执行规则、启用状态和快捷操作。"
           )
@@ -1436,9 +1471,12 @@ struct HarvestScheduleCard: View {
     HarvestCard {
       VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .top, spacing: 10) {
-          Image(systemName: schedule.enabled ? "checkmark.square.fill" : "xmark.square")
-            .font(.system(size: 22, weight: .heavy))
-            .foregroundColor(schedule.enabled ? HarvestPalette.success : HarvestPalette.secondaryText)
+          HarvestSymbolBadge(
+            systemImage: schedule.enabled ? "checkmark.circle.fill" : "xmark.circle.fill",
+            color: schedule.enabled ? HarvestPalette.success : HarvestPalette.secondaryText,
+            size: 38,
+            iconSize: 18
+          )
 
           VStack(alignment: .leading, spacing: 4) {
             Text(schedule.name.isEmpty ? schedule.task : schedule.name)
@@ -1456,7 +1494,7 @@ struct HarvestScheduleCard: View {
         }
 
         HStack {
-          Image(systemName: "clock")
+          Image(systemName: "clock.fill")
             .font(.system(size: 13, weight: .bold))
           Text(schedule.crontabText)
             .font(.system(size: 12, weight: .bold))
@@ -1465,14 +1503,15 @@ struct HarvestScheduleCard: View {
         }
         .foregroundColor(HarvestPalette.secondaryText)
         .padding(10)
-        .background(HarvestPalette.surface)
+        .background(HarvestPalette.field)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.18))
 
         HStack(spacing: 8) {
-          HarvestSmallAction(title: schedule.enabled ? "停用" : "启用", systemImage: "power") {
+          HarvestSmallAction(title: schedule.enabled ? "停用" : "启用", systemImage: "power.circle.fill") {
             store.toggleSchedule(schedule)
           }
-          HarvestSmallAction(title: "执行", systemImage: "play.fill") {
+          HarvestSmallAction(title: "执行", systemImage: "play.circle.fill") {
             store.runSchedule(schedule)
           }
         }
@@ -1491,17 +1530,18 @@ struct HarvestSearchPage: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
-        HarvestHeaderIcon(systemImage: "xmark") {
+        HarvestHeaderIcon(systemImage: "xmark.circle.fill") {
           store.closeSearch()
         }
-        HarvestTextField(title: "搜索影视信息与站点资源", text: $query, systemImage: "magnifyingglass", compact: true)
-        HarvestHeaderIcon(systemImage: "arrow.right") {
+        HarvestTextField(title: "搜索影视信息与站点资源", text: $query, systemImage: "magnifyingglass.circle.fill", compact: true)
+        HarvestHeaderIcon(systemImage: "arrow.right.circle.fill") {
           store.search(query, source: source)
         }
       }
       .padding(.horizontal, 12)
       .padding(.top, 10)
       .padding(.bottom, 8)
+      .background(HarvestGlassBackground(radius: 0))
 
       HStack {
         HarvestSegmentedPicker(items: HarvestSearchSource.allCases, selection: $source)
@@ -1509,6 +1549,7 @@ struct HarvestSearchPage: View {
       }
       .padding(.horizontal, 12)
       .padding(.bottom, 8)
+      .background(HarvestGlassBackground(radius: 0))
 
       ScrollView {
         if store.isSearching {
@@ -1516,7 +1557,7 @@ struct HarvestSearchPage: View {
             .padding(.top, 96)
         } else if store.searchResults.isEmpty {
           HarvestEmptyState(
-            systemImage: "magnifyingglass",
+            systemImage: "magnifyingglass.circle.fill",
             title: "搜索",
             subtitle: "输入关键词后可同时检索 TMDB 与豆瓣。"
           )
@@ -1533,7 +1574,7 @@ struct HarvestSearchPage: View {
         }
       }
     }
-    .background(HarvestPalette.background.edgesIgnoringSafeArea(.all))
+    .background(HarvestAppBackground())
   }
 }
 
@@ -1547,6 +1588,7 @@ struct HarvestSearchResultRow: View {
           .frame(width: 56, height: 78)
           .background(HarvestPalette.surface)
           .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+          .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.20))
 
         VStack(alignment: .leading, spacing: 5) {
           HStack {
@@ -1591,7 +1633,7 @@ struct HarvestDrawerOverlay: View {
             Text(store.currentUserInitial)
               .font(.system(size: 22, weight: .black))
               .frame(width: 52, height: 52)
-              .background(HarvestPalette.primary)
+              .background(HarvestPalette.primaryGradient)
               .foregroundColor(.white)
               .clipShape(Circle())
             VStack(alignment: .leading, spacing: 3) {
@@ -1624,13 +1666,13 @@ struct HarvestDrawerOverlay: View {
         Divider()
 
         VStack(spacing: 4) {
-          HarvestDrawerRow(title: "主题设置", subtitle: "浅色原生主题", systemImage: "paintpalette", selected: false) {
+          HarvestDrawerRow(title: "主题设置", subtitle: "浅色原生主题", systemImage: "paintpalette.fill", selected: false) {
             store.showInfo("主题设置已保留入口")
           }
-          HarvestDrawerRow(title: "设置中心", subtitle: "系统配置与偏好", systemImage: "gearshape", selected: false) {
+          HarvestDrawerRow(title: "设置中心", subtitle: "系统配置与偏好", systemImage: "gearshape.fill", selected: false) {
             store.showInfo("设置中心已保留入口")
           }
-          HarvestDrawerRow(title: "日志中心", subtitle: "查看运行日志", systemImage: "terminal", selected: false) {
+          HarvestDrawerRow(title: "日志中心", subtitle: "查看运行日志", systemImage: "terminal.fill", selected: false) {
             store.showInfo("日志中心已保留入口")
           }
           HarvestDrawerRow(title: "退出登录", subtitle: "清除当前登录态", systemImage: "rectangle.portrait.and.arrow.right", selected: false, destructive: true) {
@@ -1642,7 +1684,7 @@ struct HarvestDrawerOverlay: View {
         Spacer()
       }
       .frame(width: 312)
-      .background(HarvestPalette.background)
+      .background(HarvestGlassBackground(radius: 0))
       .edgesIgnoringSafeArea(.vertical)
       .transition(.move(edge: .leading).combined(with: .opacity))
     }
@@ -1660,10 +1702,12 @@ struct HarvestDrawerRow: View {
   var body: some View {
     Button(action: action) {
       HStack(spacing: 12) {
-        Image(systemName: systemImage)
-          .font(.system(size: 18, weight: .heavy))
-          .frame(width: 28)
-          .foregroundColor(destructive ? HarvestPalette.danger : (selected ? HarvestPalette.primary : HarvestPalette.secondaryText))
+        HarvestSymbolBadge(
+          systemImage: systemImage,
+          color: destructive ? HarvestPalette.danger : (selected ? HarvestPalette.primary : HarvestPalette.secondaryText),
+          size: 34,
+          iconSize: 15
+        )
         VStack(alignment: .leading, spacing: 2) {
           Text(title)
             .font(.system(size: 14, weight: .heavy))
@@ -1678,6 +1722,8 @@ struct HarvestDrawerRow: View {
       .padding(.horizontal, 18)
       .padding(.vertical, 10)
       .background(selected ? HarvestPalette.primary.opacity(0.10) : Color.clear)
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .padding(.horizontal, 8)
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -1699,10 +1745,10 @@ struct HarvestAccountMenuOverlay: View {
 
       VStack(alignment: .leading, spacing: 4) {
         HarvestMenuLabel("账号")
-        HarvestMenuRow(title: "用户中心", systemImage: "person") {
+        HarvestMenuRow(title: "用户中心", systemImage: "person.crop.circle") {
           store.showInfo("用户中心已保留入口")
         }
-        HarvestMenuRow(title: "邀请用户", systemImage: "person.badge.plus") {
+        HarvestMenuRow(title: "邀请用户", systemImage: "person.crop.circle.badge.plus") {
           store.showInfo("邀请用户已保留入口")
         }
         HarvestMenuRow(title: "退出登录", systemImage: "rectangle.portrait.and.arrow.right", color: HarvestPalette.danger) {
@@ -1710,24 +1756,24 @@ struct HarvestAccountMenuOverlay: View {
         }
         Divider().padding(.vertical, 4)
         HarvestMenuLabel("设置")
-        HarvestMenuRow(title: "主题设置", systemImage: "paintpalette") {
+        HarvestMenuRow(title: "主题设置", systemImage: "paintpalette.fill") {
           store.showInfo("主题设置已保留入口")
         }
-        HarvestMenuRow(title: "截图分享", systemImage: "camera") {
+        HarvestMenuRow(title: "截图分享", systemImage: "camera.fill") {
           store.showInfo("截图分享已保留入口")
         }
-        HarvestMenuRow(title: "程序更新", systemImage: "arrow.down.circle") {
+        HarvestMenuRow(title: "程序更新", systemImage: "arrow.down.circle.fill") {
           store.showInfo("程序更新已保留入口")
         }
-        HarvestMenuRow(title: "设置中心", systemImage: "gearshape") {
+        HarvestMenuRow(title: "设置中心", systemImage: "gearshape.fill") {
           store.showInfo("设置中心已保留入口")
         }
       }
       .padding(8)
       .frame(width: 188)
-      .background(HarvestPalette.card)
-      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-      .overlay(HarvestRoundedBorder(radius: 10))
+      .background(HarvestGlassBackground(radius: 8))
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.30))
       .shadow(color: Color.black.opacity(0.14), radius: 24, x: 0, y: 12)
       .padding(.top, topInset + 48)
       .padding(.trailing, 10)
@@ -1763,7 +1809,7 @@ struct HarvestMenuRow: View {
       HStack(spacing: 10) {
         Image(systemName: systemImage)
           .font(.system(size: 15, weight: .heavy))
-          .frame(width: 18)
+          .frame(width: 20)
         Text(title)
           .font(.system(size: 13, weight: .bold))
         Spacer()
@@ -1779,6 +1825,109 @@ struct HarvestMenuRow: View {
 
 // MARK: - Reusable UI
 
+struct HarvestAppBackground: View {
+  var body: some View {
+    ZStack {
+      HarvestPalette.background
+      LinearGradient(
+        gradient: Gradient(colors: [
+          HarvestPalette.primary.opacity(0.10),
+          HarvestPalette.mint.opacity(0.06),
+          HarvestPalette.warning.opacity(0.05),
+          HarvestPalette.background
+        ]),
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      Image("HarvestBackground")
+        .resizable()
+        .scaledToFill()
+        .saturation(0.55)
+        .opacity(0.035)
+        .blur(radius: 2)
+    }
+    .edgesIgnoringSafeArea(.all)
+  }
+}
+
+struct HarvestLogoMark: View {
+  var size: CGFloat = 48
+
+  var body: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(HarvestPalette.primaryGradient)
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(Color.white.opacity(0.18))
+        .padding(size * 0.08)
+      Image("HarvestLogo")
+        .resizable()
+        .scaledToFit()
+        .padding(size * 0.18)
+    }
+    .frame(width: size, height: size)
+    .overlay(HarvestRoundedBorder(radius: 8, color: Color.white, opacity: 0.26))
+    .shadow(color: HarvestPalette.primary.opacity(0.24), radius: size * 0.22, x: 0, y: size * 0.11)
+  }
+}
+
+struct HarvestSymbolBadge: View {
+  let systemImage: String
+  var color: Color = HarvestPalette.primary
+  var size: CGFloat = 36
+  var iconSize: CGFloat = 16
+
+  var body: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(
+          LinearGradient(
+            gradient: Gradient(colors: [
+              color.opacity(0.18),
+              color.opacity(0.08),
+              HarvestPalette.card.opacity(0.34)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+      Image(systemName: systemImage)
+        .font(.system(size: iconSize, weight: .heavy))
+        .foregroundColor(color)
+    }
+    .frame(width: size, height: size)
+    .overlay(HarvestRoundedBorder(radius: 8, color: color, opacity: 0.16))
+  }
+}
+
+struct HarvestAssetBadge: View {
+  let imageName: String
+  var color: Color = HarvestPalette.primary
+  var size: CGFloat = 44
+
+  var body: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(
+          LinearGradient(
+            gradient: Gradient(colors: [
+              color.opacity(0.14),
+              HarvestPalette.card.opacity(0.74)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+      Image(imageName)
+        .resizable()
+        .scaledToFit()
+        .padding(size * 0.18)
+    }
+    .frame(width: size, height: size)
+    .overlay(HarvestRoundedBorder(radius: 8, color: color, opacity: 0.16))
+  }
+}
+
 struct HarvestTextField: View {
   let title: String
   @Binding var text: String
@@ -1789,7 +1938,7 @@ struct HarvestTextField: View {
     HStack(spacing: 9) {
       Image(systemName: systemImage)
         .font(.system(size: 14, weight: .bold))
-        .foregroundColor(HarvestPalette.secondaryText)
+        .foregroundColor(HarvestPalette.primary)
         .frame(width: 18)
       TextField(title, text: $text)
         .font(.system(size: 14, weight: .semibold))
@@ -1808,7 +1957,7 @@ struct HarvestTextField: View {
     .padding(.horizontal, 12)
     .background(HarvestPalette.field)
     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    .overlay(HarvestRoundedBorder(radius: 8))
+    .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.32))
   }
 }
 
@@ -1821,7 +1970,7 @@ struct HarvestPasswordField: View {
     HStack(spacing: 9) {
       Image(systemName: "lock")
         .font(.system(size: 14, weight: .bold))
-        .foregroundColor(HarvestPalette.secondaryText)
+        .foregroundColor(HarvestPalette.primary)
         .frame(width: 18)
       Group {
         if showPassword {
@@ -1845,7 +1994,7 @@ struct HarvestPasswordField: View {
     .padding(.horizontal, 12)
     .background(HarvestPalette.field)
     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    .overlay(HarvestRoundedBorder(radius: 8))
+    .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.32))
   }
 }
 
@@ -1857,8 +2006,10 @@ struct HarvestHeaderIcon: View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 17, weight: .heavy))
-        .foregroundColor(HarvestPalette.text)
-        .frame(width: 32, height: 32)
+        .foregroundColor(HarvestPalette.primary)
+        .frame(width: 34, height: 34)
+        .background(HarvestGlassBackground(radius: 8))
+        .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.22))
         .contentShape(Rectangle())
     }
     .buttonStyle(PlainButtonStyle())
@@ -1873,11 +2024,11 @@ struct HarvestIconButton: View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 17, weight: .heavy))
-        .foregroundColor(HarvestPalette.text)
+        .foregroundColor(HarvestPalette.primary)
         .frame(width: 44, height: 44)
-        .background(HarvestPalette.card)
+        .background(HarvestGlassBackground(radius: 8))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(HarvestRoundedBorder(radius: 8))
+        .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.28))
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -1891,10 +2042,11 @@ struct HarvestFloatingButton: View {
     Button(action: action) {
       Image(systemName: systemImage)
         .font(.system(size: 16, weight: .heavy))
-        .foregroundColor(HarvestPalette.text)
-        .frame(width: 38, height: 38)
-        .background(HarvestGlassBackground(radius: 14))
-        .overlay(HarvestRoundedBorder(radius: 14, opacity: 0.22))
+        .foregroundColor(HarvestPalette.primary)
+        .frame(width: 42, height: 42)
+        .background(HarvestGlassBackground(radius: 8))
+        .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.26))
+        .shadow(color: HarvestPalette.shadow, radius: 12, x: 0, y: 6)
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -1911,10 +2063,20 @@ struct HarvestCard<Content: View>: View {
     content
       .padding(12)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(HarvestPalette.card)
-      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-      .overlay(HarvestRoundedBorder(radius: 10))
-      .shadow(color: Color.black.opacity(0.035), radius: 10, x: 0, y: 4)
+      .background(
+        LinearGradient(
+          gradient: Gradient(colors: [
+            HarvestPalette.card,
+            HarvestPalette.card.opacity(0.86),
+            HarvestPalette.surface.opacity(0.58)
+          ]),
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.34))
+      .shadow(color: HarvestPalette.shadow, radius: 16, x: 0, y: 8)
   }
 }
 
@@ -1927,12 +2089,7 @@ struct HarvestStatCard: View {
   var body: some View {
     HarvestCard {
       HStack(spacing: 10) {
-        Image(systemName: systemImage)
-          .font(.system(size: 17, weight: .heavy))
-          .foregroundColor(color)
-          .frame(width: 34, height: 34)
-          .background(color.opacity(0.11))
-          .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        HarvestSymbolBadge(systemImage: systemImage, color: color, size: 36, iconSize: 16)
 
         VStack(alignment: .leading, spacing: 3) {
           Text(title)
@@ -1958,12 +2115,7 @@ struct HarvestActionTile: View {
   var body: some View {
     Button(action: action) {
       VStack(spacing: 8) {
-        Image(systemName: systemImage)
-          .font(.system(size: 18, weight: .heavy))
-          .foregroundColor(color)
-          .frame(width: 34, height: 34)
-          .background(color.opacity(0.12))
-          .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        HarvestSymbolBadge(systemImage: systemImage, color: color, size: 36, iconSize: 17)
         Text(title)
           .font(.system(size: 12, weight: .heavy))
           .foregroundColor(HarvestPalette.text)
@@ -1971,9 +2123,9 @@ struct HarvestActionTile: View {
       }
       .frame(maxWidth: .infinity)
       .padding(.vertical, 12)
-      .background(HarvestPalette.card)
-      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-      .overlay(HarvestRoundedBorder(radius: 10))
+      .background(HarvestGlassBackground(radius: 8))
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.30))
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -2001,8 +2153,9 @@ struct HarvestMiniMetric: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(9)
-    .background(HarvestPalette.surface)
+    .background(HarvestPalette.field)
     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.18))
   }
 }
 
@@ -2021,9 +2174,19 @@ struct HarvestSmallAction: View {
       }
       .frame(maxWidth: .infinity)
       .frame(height: 34)
-      .background(HarvestPalette.primary.opacity(0.10))
+      .background(
+        LinearGradient(
+          gradient: Gradient(colors: [
+            HarvestPalette.primary.opacity(0.14),
+            HarvestPalette.cyan.opacity(0.08)
+          ]),
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
       .foregroundColor(HarvestPalette.primary)
       .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .overlay(HarvestRoundedBorder(radius: 8, color: HarvestPalette.primary, opacity: 0.16))
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -2038,9 +2201,13 @@ struct HarvestPill: View {
       .font(.system(size: 10, weight: .black))
       .padding(.horizontal, 7)
       .frame(height: 20)
-      .background(color.opacity(0.12))
+      .background(color.opacity(0.10))
       .foregroundColor(color)
       .clipShape(Capsule())
+      .overlay(
+        Capsule()
+          .stroke(color.opacity(0.18), lineWidth: 1)
+      )
   }
 }
 
@@ -2051,12 +2218,7 @@ struct HarvestEmptyState: View {
 
   var body: some View {
     VStack(spacing: 12) {
-      Image(systemName: systemImage)
-        .font(.system(size: 24, weight: .heavy))
-        .foregroundColor(HarvestPalette.primary)
-        .frame(width: 48, height: 48)
-        .background(HarvestPalette.primary.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+      HarvestSymbolBadge(systemImage: systemImage, color: HarvestPalette.primary, size: 54, iconSize: 24)
       Text(title)
         .font(.system(size: 18, weight: .black))
         .foregroundColor(HarvestPalette.text)
@@ -2096,8 +2258,8 @@ struct HarvestLoadingOverlay: View {
         .progressViewStyle(CircularProgressViewStyle())
         .accentColor(HarvestPalette.primary)
         .padding(18)
-        .background(HarvestPalette.card)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(HarvestGlassBackground(radius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .shadow(color: Color.black.opacity(0.16), radius: 24, x: 0, y: 12)
     }
   }
@@ -2121,6 +2283,7 @@ struct HarvestSegmentedPicker<T: HarvestSegmentItem>: View {
                 if selection.id == item.id {
                   RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(HarvestPalette.card)
+                    .shadow(color: HarvestPalette.shadow, radius: 8, x: 0, y: 3)
                 }
               }
             )
@@ -2129,8 +2292,9 @@ struct HarvestSegmentedPicker<T: HarvestSegmentItem>: View {
       }
     }
     .padding(3)
-    .background(HarvestPalette.surface)
-    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .background(HarvestPalette.field)
+    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.22))
   }
 }
 
@@ -2138,19 +2302,20 @@ struct HarvestGlassBackground: View {
   let radius: CGFloat
 
   var body: some View {
-    VisualEffectBlur(effect: UIBlurEffect(style: .systemMaterial))
-      .background(HarvestPalette.card.opacity(0.78))
+    VisualEffectBlur(effect: UIBlurEffect(style: .systemChromeMaterial))
+      .background(HarvestPalette.card.opacity(0.74))
       .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
   }
 }
 
 struct HarvestRoundedBorder: View {
   var radius: CGFloat
+  var color: Color = HarvestPalette.border
   var opacity: Double = 0.55
 
   var body: some View {
     RoundedRectangle(cornerRadius: radius, style: .continuous)
-      .stroke(HarvestPalette.border.opacity(opacity), lineWidth: 1)
+      .stroke(color.opacity(opacity), lineWidth: 1)
   }
 }
 
@@ -2200,9 +2365,7 @@ struct RemoteImageView: View {
           .resizable()
           .scaledToFill()
       } else {
-        Image(systemName: "photo")
-          .font(.system(size: 24, weight: .bold))
-          .foregroundColor(HarvestPalette.secondaryText.opacity(0.5))
+        HarvestSymbolBadge(systemImage: "photo.fill", color: HarvestPalette.secondaryText.opacity(0.72), size: 44, iconSize: 20)
       }
     }
     .clipped()
@@ -2314,21 +2477,22 @@ enum HarvestTab: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
-    case .news: return "newspaper"
-    case .sites: return "globe"
-    case .dashboard: return "square.grid.2x2"
-    case .downloads: return "arrow.down.circle"
-    case .tasks: return "checkmark.square"
+    case .news: return "sparkles"
+    case .sites: return "network"
+    case .dashboard: return "chart.bar"
+    case .downloads: return "tray.and.arrow.down"
+    case .tasks: return "calendar"
     case .search: return "magnifyingglass"
     }
   }
 
   var selectedSystemImage: String {
     switch self {
-    case .news: return "newspaper.fill"
-    case .dashboard: return "square.grid.2x2.fill"
-    case .downloads: return "arrow.down.circle.fill"
-    case .tasks: return "checkmark.square.fill"
+    case .news: return "sparkles"
+    case .sites: return "network"
+    case .dashboard: return "chart.bar.fill"
+    case .downloads: return "tray.and.arrow.down.fill"
+    case .tasks: return "calendar"
     default: return systemImage
     }
   }
@@ -2344,6 +2508,14 @@ enum HarvestMediaSource: String, CaseIterable, HarvestSegmentItem {
 
   var id: String { rawValue }
   var label: String { self == .tmdb ? "TMDB" : "豆瓣" }
+
+  var systemImage: String {
+    self == .tmdb ? "film.fill" : "sparkles"
+  }
+
+  var color: Color {
+    self == .tmdb ? HarvestPalette.success : HarvestPalette.danger
+  }
 }
 
 enum HarvestSearchSource: String, CaseIterable, HarvestSegmentItem {
@@ -2971,17 +3143,29 @@ enum HarvestDefaults {
 // MARK: - Helpers
 
 enum HarvestPalette {
-  static let background = Color(UIColor.systemBackground)
-  static let surface = Color(UIColor.secondarySystemBackground)
-  static let card = Color(UIColor.systemBackground)
-  static let field = Color(UIColor.secondarySystemBackground).opacity(0.72)
+  static let background = Color(UIColor.systemGroupedBackground)
+  static let surface = Color(UIColor.secondarySystemGroupedBackground)
+  static let card = Color(UIColor.systemBackground).opacity(0.92)
+  static let field = Color(UIColor.secondarySystemFill).opacity(0.52)
   static let text = Color(UIColor.label)
   static let secondaryText = Color(UIColor.secondaryLabel)
   static let border = Color(UIColor.separator)
-  static let primary = Color(red: 0.09, green: 0.37, blue: 0.82)
-  static let success = Color(red: 0.04, green: 0.58, blue: 0.37)
-  static let warning = Color(red: 0.88, green: 0.48, blue: 0.08)
-  static let danger = Color(red: 0.88, green: 0.12, blue: 0.24)
+  static let primary = Color(red: 0.00, green: 0.48, blue: 1.00)
+  static let cyan = Color(red: 0.10, green: 0.72, blue: 0.88)
+  static let mint = Color(red: 0.18, green: 0.78, blue: 0.55)
+  static let indigo = Color(red: 0.36, green: 0.35, blue: 0.86)
+  static let success = Color(red: 0.12, green: 0.68, blue: 0.45)
+  static let warning = Color(red: 0.96, green: 0.63, blue: 0.18)
+  static let danger = Color(red: 1.00, green: 0.27, blue: 0.34)
+  static let shadow = Color.black.opacity(0.075)
+
+  static var primaryGradient: LinearGradient {
+    LinearGradient(
+      gradient: Gradient(colors: [primary, cyan, indigo.opacity(0.92)]),
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+  }
 }
 
 @MainActor
