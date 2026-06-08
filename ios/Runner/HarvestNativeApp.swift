@@ -572,7 +572,12 @@ struct HarvestLoginView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .background(HarvestPalette.primaryGradient)
+                .background(
+                  ZStack {
+                    HarvestPalette.primaryGradient
+                    HarvestLiquidGlassBackground(radius: 8, tint: Color.white, strength: 0.92)
+                  }
+                )
                 .foregroundColor(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .shadow(color: HarvestPalette.primary.opacity(0.22), radius: 12, x: 0, y: 6)
@@ -749,7 +754,12 @@ struct HarvestShellHeader: View {
         Text(store.currentUserInitial)
           .font(.system(size: 15, weight: .black))
           .frame(width: 32, height: 32)
-          .background(HarvestPalette.primary)
+          .background(
+            ZStack {
+              HarvestPalette.primaryGradient
+              HarvestLiquidGlassBackground(radius: 16, tint: Color.white, strength: 0.86)
+            }
+          )
           .foregroundColor(.white)
           .clipShape(Circle())
       }
@@ -796,7 +806,7 @@ struct HarvestNoticeTicker: View {
       }
       .padding(.horizontal, 10)
       .frame(height: 38)
-      .background(HarvestPalette.card)
+      .background(HarvestLiquidGlassBackground(radius: 8, tint: HarvestPalette.primary, strength: 0.72))
       .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
       .overlay(HarvestRoundedBorder(radius: 8))
     }
@@ -849,7 +859,7 @@ struct HarvestBottomControls: View {
         }
       }
       .frame(height: 58)
-      .background(HarvestGlassBackground(radius: 22))
+      .background(HarvestLiquidGlassBackground(radius: 22, tint: HarvestPalette.primary, strength: 0.82))
       .overlay(HarvestRoundedBorder(radius: 22, opacity: 0.24))
 
       Button(action: { store.openSearch() }) {
@@ -857,7 +867,7 @@ struct HarvestBottomControls: View {
           .font(.system(size: 22, weight: .heavy))
           .foregroundColor(HarvestPalette.primary)
           .frame(width: 58, height: 58)
-          .background(HarvestGlassBackground(radius: 22))
+          .background(HarvestLiquidGlassBackground(radius: 22, tint: HarvestPalette.primary, strength: 1.0))
           .overlay(HarvestRoundedBorder(radius: 22, opacity: 0.24))
       }
       .buttonStyle(PlainButtonStyle())
@@ -886,11 +896,20 @@ struct HarvestBottomTabButton: View {
         Group {
           if selected {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-              .fill(HarvestPalette.primary.opacity(0.12))
+              .fill(HarvestPalette.primary.opacity(0.10))
               .padding(.vertical, 6)
               .padding(.horizontal, 4)
           }
         }
+      )
+      .background(
+        HarvestLiquidGlassBackground(
+          radius: 18,
+          tint: selected ? HarvestPalette.primary : HarvestPalette.secondaryText,
+          strength: selected ? 0.72 : 0.24
+        )
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
       )
       .overlay(
         Group {
@@ -1692,7 +1711,16 @@ struct HarvestDrawerRow: View {
       }
       .padding(.horizontal, 18)
       .padding(.vertical, 10)
-      .background(selected ? HarvestPalette.primary.opacity(0.10) : Color.clear)
+      .background(
+        HarvestLiquidGlassBackground(
+          radius: 8,
+          tint: destructive ? HarvestPalette.danger : (selected ? HarvestPalette.primary : HarvestPalette.secondaryText),
+          strength: selected ? 0.74 : 0.34
+        )
+      )
+      .background(selected ? HarvestPalette.primary.opacity(0.08) : Color.clear)
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .padding(.horizontal, 8)
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -1786,6 +1814,8 @@ struct HarvestMenuRow: View {
       .foregroundColor(color)
       .padding(.horizontal, 8)
       .frame(height: 34)
+      .background(HarvestLiquidGlassBackground(radius: 8, tint: color, strength: 0.34))
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
       .contentShape(Rectangle())
     }
     .buttonStyle(PlainButtonStyle())
@@ -1815,6 +1845,9 @@ struct HarvestTextField: View {
           Image(systemName: "xmark.circle.fill")
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(HarvestPalette.secondaryText)
+            .frame(width: 24, height: 24)
+            .background(HarvestLiquidGlassBackground(radius: 8, tint: HarvestPalette.secondaryText, strength: 0.28))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(PlainButtonStyle())
       }
@@ -1853,6 +1886,9 @@ struct HarvestPasswordField: View {
         Image(systemName: showPassword ? "eye.slash" : "eye")
           .font(.system(size: 14, weight: .bold))
           .foregroundColor(HarvestPalette.secondaryText)
+          .frame(width: 28, height: 28)
+          .background(HarvestLiquidGlassBackground(radius: 8, tint: HarvestPalette.secondaryText, strength: 0.30))
+          .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
       }
       .buttonStyle(PlainButtonStyle())
     }
@@ -1873,7 +1909,9 @@ struct HarvestHeaderIcon: View {
       Image(systemName: systemImage)
         .font(.system(size: 17, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
-        .frame(width: 32, height: 32)
+        .frame(width: 34, height: 34)
+        .background(HarvestLiquidGlassBackground(radius: 8, tint: HarvestPalette.primary, strength: 0.78))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
     }
     .buttonStyle(PlainButtonStyle())
@@ -1890,7 +1928,7 @@ struct HarvestIconButton: View {
         .font(.system(size: 17, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
         .frame(width: 44, height: 44)
-        .background(HarvestPalette.card)
+        .background(HarvestLiquidGlassBackground(radius: 8, tint: HarvestPalette.primary, strength: 0.88))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.32))
         .shadow(color: HarvestPalette.shadow, radius: 8, x: 0, y: 4)
@@ -1909,7 +1947,7 @@ struct HarvestFloatingButton: View {
         .font(.system(size: 16, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
         .frame(width: 38, height: 38)
-        .background(HarvestGlassBackground(radius: 14))
+        .background(HarvestLiquidGlassBackground(radius: 14, tint: HarvestPalette.primary, strength: 0.92))
         .overlay(HarvestRoundedBorder(radius: 14, opacity: 0.22))
     }
     .buttonStyle(PlainButtonStyle())
@@ -1988,7 +2026,7 @@ struct HarvestActionTile: View {
       }
       .frame(maxWidth: .infinity)
       .padding(.vertical, 12)
-      .background(HarvestPalette.card)
+      .background(HarvestLiquidGlassBackground(radius: 10, tint: color, strength: 0.82))
       .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
       .overlay(HarvestRoundedBorder(radius: 10, opacity: 0.30))
       .shadow(color: HarvestPalette.shadow, radius: 12, x: 0, y: 6)
@@ -2040,9 +2078,10 @@ struct HarvestSmallAction: View {
       }
       .frame(maxWidth: .infinity)
       .frame(height: 34)
-      .background(HarvestPalette.primary.opacity(0.10))
+      .background(HarvestLiquidGlassBackground(radius: 8, tint: HarvestPalette.primary, strength: 0.78))
       .foregroundColor(HarvestPalette.primary)
       .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.18))
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -2147,13 +2186,48 @@ struct HarvestSegmentedPicker<T: HarvestSegmentItem>: View {
                 }
               }
             )
+            .background(
+              HarvestLiquidGlassBackground(
+                radius: 8,
+                tint: selection.id == item.id ? HarvestPalette.primary : HarvestPalette.secondaryText,
+                strength: selection.id == item.id ? 0.64 : 0.24
+              )
+            )
         }
         .buttonStyle(PlainButtonStyle())
       }
     }
     .padding(3)
-    .background(HarvestPalette.surface)
+    .background(HarvestLiquidGlassBackground(radius: 10, tint: HarvestPalette.primary, strength: 0.42))
     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+  }
+}
+
+struct HarvestLiquidGlassBackground: View {
+  let radius: CGFloat
+  var tint: Color = HarvestPalette.primary
+  var strength: Double = 1
+
+  var body: some View {
+    ZStack {
+      VisualEffectBlur(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+      LinearGradient(
+        gradient: Gradient(colors: [
+          Color.white.opacity(0.34 * strength),
+          tint.opacity(0.10 * strength),
+          Color.white.opacity(0.08 * strength)
+        ]),
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      RoundedRectangle(cornerRadius: radius, style: .continuous)
+        .stroke(Color.white.opacity(0.42 * strength), lineWidth: 1)
+      RoundedRectangle(cornerRadius: radius, style: .continuous)
+        .stroke(tint.opacity(0.16 * strength), lineWidth: 1)
+        .padding(1)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    .allowsHitTesting(false)
   }
 }
 
@@ -2164,6 +2238,7 @@ struct HarvestGlassBackground: View {
     VisualEffectBlur(effect: UIBlurEffect(style: .systemMaterial))
       .background(HarvestPalette.card.opacity(0.78))
       .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+      .allowsHitTesting(false)
   }
 }
 
