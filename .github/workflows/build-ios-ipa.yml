@@ -26,26 +26,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.35.7"
-          cache: true
-
       - name: Show tool versions
         run: |
-          flutter --version
           xcodebuild -version
-
-      - name: Install dependencies
-        run: flutter pub get
 
       - name: Build iOS without code signing
         id: build_ios
         shell: bash
         run: |
           set +e
-          flutter build ios --release --no-codesign 2>&1 | tee build-ios.log
+          xcodebuild \
+            -project ios/Runner.xcodeproj \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios-native \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build-ios.log
           status=${PIPESTATUS[0]}
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -59,7 +59,7 @@ jobs:
 
           VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
           FILE_NAME="harvest_${VERSION}_arm64-ios.ipa"
-          APP_PATH="build/ios/iphoneos/Runner.app"
+          APP_PATH="build/ios-native/Build/Products/Release-iphoneos/Runner.app"
 
           if [ ! -d "$APP_PATH" ]; then
             echo "::error::Runner.app was not produced at $APP_PATH"
