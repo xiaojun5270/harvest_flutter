@@ -984,6 +984,8 @@ struct HarvestDashboardHero: View {
         HarvestHeroMetric(title: "上传", value: privacy ? "***" : data.totalUploadedText, color: HarvestPalette.success)
         HarvestHeroMetric(title: "下载", value: privacy ? "***" : data.totalDownloadedText, color: HarvestPalette.primary)
       }
+
+      HarvestHeroActivityStrip(items: data.incrementItems)
     }
     .padding(16)
     .background(
@@ -1001,6 +1003,41 @@ struct HarvestDashboardHero: View {
     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.32))
     .shadow(color: HarvestPalette.shadow, radius: 18, x: 0, y: 8)
+  }
+}
+
+struct HarvestHeroActivityStrip: View {
+  let items: [HarvestMetricItem]
+
+  var body: some View {
+    HStack(alignment: .bottom, spacing: 5) {
+      ForEach(Array(displayItems.enumerated()), id: \.offset) { pair in
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+          .fill(pair.element.color.opacity(pair.offset == 0 ? 0.95 : 0.72))
+          .frame(height: 9 + CGFloat(pair.element.ratio) * 22)
+          .frame(maxWidth: .infinity)
+      }
+    }
+    .frame(height: 34)
+    .padding(.horizontal, 10)
+    .padding(.vertical, 8)
+    .background(Color.white.opacity(0.12))
+    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    .overlay(HarvestRoundedBorder(radius: 8, color: Color.white, opacity: 0.16))
+  }
+
+  private var displayItems: [HarvestMetricItem] {
+    let source = Array(items.prefix(7))
+    guard !source.isEmpty else {
+      return [
+        HarvestMetricItem(name: "1", value: 0, displayValue: "", ratio: 0.80, color: HarvestPalette.primary),
+        HarvestMetricItem(name: "2", value: 0, displayValue: "", ratio: 0.48, color: HarvestPalette.mint),
+        HarvestMetricItem(name: "3", value: 0, displayValue: "", ratio: 0.66, color: HarvestPalette.warning),
+        HarvestMetricItem(name: "4", value: 0, displayValue: "", ratio: 0.36, color: HarvestPalette.cyan),
+        HarvestMetricItem(name: "5", value: 0, displayValue: "", ratio: 0.58, color: HarvestPalette.indigo)
+      ]
+    }
+    return source
   }
 }
 
@@ -1067,9 +1104,13 @@ struct HarvestDistributionCard: View {
   var body: some View {
     HarvestCard {
       VStack(alignment: .leading, spacing: 12) {
-        Text(title)
-          .font(.system(size: 15, weight: .heavy))
-          .foregroundColor(HarvestPalette.text)
+        HStack(spacing: 8) {
+          HarvestSymbolBadge(systemImage: "chart.pie.fill", color: HarvestPalette.indigo, size: 28, iconSize: 13)
+          Text(title)
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundColor(HarvestPalette.text)
+          Spacer()
+        }
 
         if items.isEmpty {
           Text("暂无数据")
@@ -1105,14 +1146,24 @@ struct HarvestMetricBar: View {
       }
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
-          Capsule().fill(HarvestPalette.border.opacity(0.35))
+          Capsule().fill(HarvestPalette.field)
           Capsule()
-            .fill(item.color)
+            .fill(
+              LinearGradient(
+                gradient: Gradient(colors: [item.color.opacity(0.72), item.color]),
+                startPoint: .leading,
+                endPoint: .trailing
+              )
+            )
             .frame(width: max(8, proxy.size.width * CGFloat(item.ratio)))
+            .shadow(color: item.color.opacity(0.22), radius: 6, x: 0, y: 2)
         }
       }
-      .frame(height: 6)
+      .frame(height: 7)
     }
+    .padding(9)
+    .background(HarvestPalette.field.opacity(0.60))
+    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
   }
 }
 
@@ -1354,8 +1405,16 @@ struct HarvestMediaCard: View {
           .foregroundColor(HarvestPalette.secondaryText)
         Spacer()
       }
+      .padding(.horizontal, 7)
+      .frame(height: 22)
+      .background(HarvestPalette.warning.opacity(0.10))
+      .clipShape(Capsule())
       .frame(width: 122)
     }
+    .padding(7)
+    .background(HarvestGlassBackground(radius: 8))
+    .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.24))
+    .shadow(color: HarvestPalette.shadow, radius: 12, x: 0, y: 6)
   }
 }
 
@@ -1866,6 +1925,14 @@ struct HarvestLogoMark: View {
         .padding(size * 0.18)
     }
     .frame(width: size, height: size)
+    .overlay(
+      LinearGradient(
+        gradient: Gradient(colors: [Color.white.opacity(0.34), Color.white.opacity(0.02)]),
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    )
     .overlay(HarvestRoundedBorder(radius: 8, color: Color.white, opacity: 0.26))
     .shadow(color: HarvestPalette.primary.opacity(0.24), radius: size * 0.22, x: 0, y: size * 0.11)
   }
@@ -1896,6 +1963,14 @@ struct HarvestSymbolBadge: View {
         .foregroundColor(color)
     }
     .frame(width: size, height: size)
+    .overlay(
+      LinearGradient(
+        gradient: Gradient(colors: [Color.white.opacity(0.24), Color.white.opacity(0.02)]),
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    )
     .overlay(HarvestRoundedBorder(radius: 8, color: color, opacity: 0.16))
   }
 }
@@ -1924,6 +1999,14 @@ struct HarvestAssetBadge: View {
         .padding(size * 0.18)
     }
     .frame(width: size, height: size)
+    .overlay(
+      LinearGradient(
+        gradient: Gradient(colors: [Color.white.opacity(0.28), Color.white.opacity(0.03)]),
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    )
     .overlay(HarvestRoundedBorder(radius: 8, color: color, opacity: 0.16))
   }
 }
@@ -2075,6 +2158,18 @@ struct HarvestCard<Content: View>: View {
         )
       )
       .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      .overlay(
+        LinearGradient(
+          gradient: Gradient(colors: [
+            Color.white.opacity(0.26),
+            Color.white.opacity(0.02),
+            Color.clear
+          ]),
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+      )
       .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.34))
       .shadow(color: HarvestPalette.shadow, radius: 16, x: 0, y: 8)
   }
@@ -2123,9 +2218,19 @@ struct HarvestActionTile: View {
       }
       .frame(maxWidth: .infinity)
       .padding(.vertical, 12)
-      .background(HarvestGlassBackground(radius: 8))
+      .background(
+        LinearGradient(
+          gradient: Gradient(colors: [
+            HarvestPalette.card,
+            color.opacity(0.09)
+          ]),
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
       .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-      .overlay(HarvestRoundedBorder(radius: 8, opacity: 0.30))
+      .overlay(HarvestRoundedBorder(radius: 8, color: color, opacity: 0.16))
+      .shadow(color: HarvestPalette.shadow, radius: 12, x: 0, y: 6)
     }
     .buttonStyle(PlainButtonStyle())
   }
@@ -2141,10 +2246,14 @@ struct HarvestMiniMetric: View {
       HStack(spacing: 4) {
         Image(systemName: systemImage)
           .font(.system(size: 10, weight: .heavy))
+          .foregroundColor(HarvestPalette.primary)
+          .frame(width: 18, height: 18)
+          .background(HarvestPalette.primary.opacity(0.08))
+          .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         Text(title)
           .font(.system(size: 10, weight: .bold))
+          .foregroundColor(HarvestPalette.secondaryText)
       }
-      .foregroundColor(HarvestPalette.secondaryText)
       Text(value)
         .font(.system(size: 12, weight: .black))
         .foregroundColor(HarvestPalette.text)
