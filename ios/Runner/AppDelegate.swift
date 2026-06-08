@@ -1,43 +1,41 @@
 import UIKit
-import Flutter
+import SwiftUI
 import UserNotifications
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
-  private let badgeChannelName = "com.ptools.harvest/app_badge"
+@MainActor
+@objc class AppDelegate: UIResponder, UIApplicationDelegate {
+  var window: UIWindow?
+  private let appStore = HarvestNativeAppStore()
 
-  override func application(
+  func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    if let controller = window?.rootViewController as? FlutterViewController {
-      FlutterMethodChannel(
-        name: badgeChannelName,
-        binaryMessenger: controller.binaryMessenger
-      ).setMethodCallHandler { call, result in
-        guard call.method == "setBadgeCount" else {
-          result(FlutterMethodNotImplemented)
-          return
-        }
+    UNUserNotificationCenter.current().delegate = self
 
-        let count = max(call.arguments as? Int ?? 0, 0)
-        if #available(iOS 16.0, *) {
-          UNUserNotificationCenter.current().setBadgeCount(count) { error in
-            DispatchQueue.main.async {
-              if let error = error {
-                result(FlutterError(code: "BADGE_UPDATE_FAILED", message: error.localizedDescription, details: nil))
-              } else {
-                result(nil)
-              }
-            }
-          }
-        } else {
-          UIApplication.shared.applicationIconBadgeNumber = count
-          result(nil)
-        }
-      }
+    let rootView = HarvestRootView().environmentObject(appStore)
+    let hostingController = UIHostingController(rootView: rootView)
+    hostingController.view.backgroundColor = UIColor.systemBackground
+
+    let window = UIWindow(frame: UIScreen.main.bounds)
+    window.rootViewController = hostingController
+    window.makeKeyAndVisible()
+    self.window = window
+
+    return true
+  }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {}
+
+enum HarvestBadge {
+  static func setBadgeCount(_ count: Int) {
+    let normalized = max(count, 0)
+    if #available(iOS 16.0, *) {
+      UNUserNotificationCenter.current().setBadgeCount(normalized)
+    } else {
+      UIApplication.shared.applicationIconBadgeNumber = normalized
     }
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }
