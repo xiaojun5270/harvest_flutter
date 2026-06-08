@@ -41,10 +41,18 @@ jobs:
         run: flutter pub get
 
       - name: Build iOS without code signing
-        run: flutter build ios --release --no-codesign
+        id: build_ios
+        shell: bash
+        run: |
+          set +e
+          flutter build ios --release --no-codesign 2>&1 | tee build-ios.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Package IPA
         id: package
+        if: steps.build_ios.outputs.status == '0'
         shell: bash
         run: |
           set -euo pipefail
@@ -67,6 +75,7 @@ jobs:
           ls -lh "$FILE_NAME"
 
       - name: Upload IPA artifact
+        if: steps.build_ios.outputs.status == '0'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.file_name }}
@@ -75,7 +84,38 @@ jobs:
           retention-days: 14
 
       - name: Publish IPA to GitHub Releases
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.build_ios.outputs.status == '0' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.package.outputs.file_name }}
+
+      - name: Upload iOS build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: build-ios.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Report iOS build failure
+        if: steps.build_ios.outputs.status != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "### iOS build failed"
+            echo
+            echo '```text'
+            tail -n 160 build-ios.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -Ei \
+            "error:|fatal error:|Could not build|Failed to build|Swift Compiler Error|No such module|The sandbox is not in sync|Provisioning profile|Code signing|Command PhaseScriptExecution failed" \
+            build-ios.log | tail -n 25 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+
+          exit "${{ steps.build_ios.outputs.status }}"
