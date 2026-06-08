@@ -525,7 +525,7 @@ struct HarvestLoginView: View {
               .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
             Text("PT 一下")
-              .font(.system(size: 24, weight: .800))
+              .font(.system(size: 24, weight: .heavy))
               .foregroundColor(HarvestPalette.text)
 
             VStack(spacing: 12) {
@@ -558,7 +558,7 @@ struct HarvestLoginView: View {
                       .scaleEffect(0.78)
                   }
                   Text(store.isLoading ? "登录中..." : "登录")
-                    .font(.system(size: 15, weight: .800))
+                    .font(.system(size: 15, weight: .heavy))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
@@ -584,14 +584,14 @@ struct HarvestLoginView: View {
 
             HStack(spacing: 10) {
               Image(systemName: "arrow.up.circle")
-                .font(.system(size: 15, weight: .700))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundColor(HarvestPalette.primary)
               Text("APP 升级")
-                .font(.system(size: 13, weight: .700))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundColor(HarvestPalette.primary)
               Spacer()
               Text("Harvest iOS SwiftUI")
-                .font(.system(size: 12, weight: .600))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(HarvestPalette.secondaryText)
             }
             .padding(.horizontal, 14)
@@ -701,11 +701,11 @@ struct HarvestShellHeader: View {
         } else {
           VStack(alignment: .leading, spacing: 2) {
             Text(store.selectedTab.title)
-              .font(.system(size: 20, weight: .800))
+              .font(.system(size: 20, weight: .heavy))
               .foregroundColor(HarvestPalette.text)
               .lineLimit(1)
             Text(store.selectedTab.subtitle)
-              .font(.system(size: 11, weight: .600))
+              .font(.system(size: 11, weight: .semibold))
               .foregroundColor(HarvestPalette.secondaryText)
               .lineLimit(1)
           }
@@ -732,7 +732,7 @@ struct HarvestShellHeader: View {
         }
       }) {
         Text(store.currentUserInitial)
-          .font(.system(size: 15, weight: .900))
+          .font(.system(size: 15, weight: .black))
           .frame(width: 32, height: 32)
           .background(HarvestPalette.primary)
           .foregroundColor(.white)
@@ -762,21 +762,21 @@ struct HarvestNoticeTicker: View {
             .fill(HarvestPalette.danger)
             .frame(width: 22, height: 22)
           Text(count > 99 ? "99+" : "\(count)")
-            .font(.system(size: 8, weight: .900))
+            .font(.system(size: 8, weight: .black))
             .foregroundColor(.white)
         }
         VStack(alignment: .leading, spacing: 2) {
           Text(notice.title.isEmpty ? "未命名通知" : notice.title)
-            .font(.system(size: 13, weight: .800))
+            .font(.system(size: 13, weight: .heavy))
             .foregroundColor(HarvestPalette.text)
             .lineLimit(1)
           Text(notice.cleanContent)
-            .font(.system(size: 11, weight: .500))
+            .font(.system(size: 11, weight: .medium))
             .foregroundColor(HarvestPalette.secondaryText)
             .lineLimit(1)
         }
         Image(systemName: "checkmark")
-          .font(.system(size: 13, weight: .800))
+          .font(.system(size: 13, weight: .heavy))
           .foregroundColor(HarvestPalette.secondaryText)
       }
       .padding(.horizontal, 10)
@@ -804,7 +804,7 @@ struct HarvestHeaderNoticeButton: View {
       Group {
         if store.unreadCount > 0 {
           Text(store.unreadCount > 99 ? "99+" : "\(store.unreadCount)")
-            .font(.system(size: 8, weight: .900))
+            .font(.system(size: 8, weight: .black))
             .padding(.horizontal, 4)
             .frame(minWidth: 14, minHeight: 14)
             .background(HarvestPalette.danger)
@@ -839,7 +839,7 @@ struct HarvestBottomControls: View {
 
       Button(action: { store.openSearch() }) {
         Image(systemName: "magnifyingglass")
-          .font(.system(size: 22, weight: .800))
+          .font(.system(size: 22, weight: .heavy))
           .foregroundColor(HarvestPalette.primary)
           .frame(width: 58, height: 58)
           .background(HarvestGlassBackground(radius: 22))
@@ -861,9 +861,9 @@ struct HarvestBottomTabButton: View {
     Button(action: action) {
       VStack(spacing: 3) {
         Image(systemName: selected ? tab.selectedSystemImage : tab.systemImage)
-          .font(.system(size: selected ? 22 : 21, weight: .800))
+          .font(.system(size: selected ? 22 : 21, weight: .heavy))
         Text(tab.shortTitle)
-          .font(.system(size: 10, weight: selected ? .800 : .600))
+          .font(.system(size: 10, weight: selected ? .heavy : .semibold))
       }
       .foregroundColor(selected ? HarvestPalette.primary : HarvestPalette.secondaryText)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -951,19 +951,19 @@ struct HarvestDashboardHero: View {
       HStack {
         VStack(alignment: .leading, spacing: 4) {
           Text("总览")
-            .font(.system(size: 14, weight: .800))
+            .font(.system(size: 14, weight: .heavy))
             .foregroundColor(HarvestPalette.secondaryText)
           Text(privacy ? "***" : "\(Int(data.siteCount)) 个站点")
-            .font(.system(size: 30, weight: .900))
+            .font(.system(size: 30, weight: .black))
             .foregroundColor(HarvestPalette.text)
         }
         Spacer()
         VStack(alignment: .trailing, spacing: 4) {
           Text(data.designation)
-            .font(.system(size: 13, weight: .800))
+            .font(.system(size: 13, weight: .heavy))
             .foregroundColor(HarvestPalette.danger)
           Text(data.updatedText)
-            .font(.system(size: 11, weight: .600))
+            .font(.system(size: 11, weight: .semibold))
             .foregroundColor(HarvestPalette.secondaryText)
         }
       }
@@ -998,10 +998,10 @@ struct HarvestHeroMetric: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text(title)
-        .font(.system(size: 11, weight: .700))
+        .font(.system(size: 11, weight: .bold))
         .foregroundColor(HarvestPalette.secondaryText)
       Text(value)
-        .font(.system(size: 17, weight: .900))
+        .font(.system(size: 17, weight: .black))
         .foregroundColor(HarvestPalette.text)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
@@ -1054,12 +1054,12 @@ struct HarvestDistributionCard: View {
     HarvestCard {
       VStack(alignment: .leading, spacing: 12) {
         Text(title)
-          .font(.system(size: 15, weight: .800))
+          .font(.system(size: 15, weight: .heavy))
           .foregroundColor(HarvestPalette.text)
 
         if items.isEmpty {
           Text("暂无数据")
-            .font(.system(size: 13, weight: .600))
+            .font(.system(size: 13, weight: .semibold))
             .foregroundColor(HarvestPalette.secondaryText)
             .frame(maxWidth: .infinity, minHeight: 48)
         } else {
@@ -1081,12 +1081,12 @@ struct HarvestMetricBar: View {
     VStack(spacing: 5) {
       HStack {
         Text(item.name)
-          .font(.system(size: 12, weight: .700))
+          .font(.system(size: 12, weight: .bold))
           .foregroundColor(HarvestPalette.text)
           .lineLimit(1)
         Spacer()
         Text(item.displayValue)
-          .font(.system(size: 12, weight: .800))
+          .font(.system(size: 12, weight: .heavy))
           .foregroundColor(HarvestPalette.secondaryText)
       }
       GeometryReader { proxy in
@@ -1121,10 +1121,10 @@ struct HarvestSitesPage: View {
     VStack(spacing: 0) {
       HStack(spacing: 8) {
         Text("\(filteredSites.count)")
-          .font(.system(size: 14, weight: .900))
+          .font(.system(size: 14, weight: .black))
           .foregroundColor(query.isEmpty ? HarvestPalette.text : HarvestPalette.primary)
         Text("/ \(store.sites.count)")
-          .font(.system(size: 13, weight: .700))
+          .font(.system(size: 13, weight: .bold))
           .foregroundColor(HarvestPalette.secondaryText)
 
         HarvestTextField(title: "搜索站点...", text: $query, systemImage: "magnifyingglass", compact: true)
@@ -1184,7 +1184,7 @@ struct HarvestSiteCard: View {
           VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
               Text(site.displayName)
-                .font(.system(size: 16, weight: .900))
+                .font(.system(size: 16, weight: .black))
                 .foregroundColor(HarvestPalette.text)
                 .lineLimit(1)
               if site.signInText != nil {
@@ -1192,7 +1192,7 @@ struct HarvestSiteCard: View {
               }
             }
             Text(site.site)
-              .font(.system(size: 12, weight: .600))
+              .font(.system(size: 12, weight: .semibold))
               .foregroundColor(HarvestPalette.secondaryText)
               .lineLimit(1)
           }
@@ -1278,7 +1278,7 @@ struct HarvestMediaSectionView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(section.title)
-        .font(.system(size: 16, weight: .900))
+        .font(.system(size: 16, weight: .black))
         .foregroundColor(HarvestPalette.text)
         .padding(.horizontal, 12)
 
@@ -1305,17 +1305,17 @@ struct HarvestMediaCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
       Text(item.title)
-        .font(.system(size: 13, weight: .800))
+        .font(.system(size: 13, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
         .lineLimit(2)
         .frame(width: 122, alignment: .leading)
 
       HStack(spacing: 4) {
         Image(systemName: "star.fill")
-          .font(.system(size: 10, weight: .800))
+          .font(.system(size: 10, weight: .heavy))
           .foregroundColor(HarvestPalette.warning)
         Text(item.ratingText)
-          .font(.system(size: 11, weight: .800))
+          .font(.system(size: 11, weight: .heavy))
           .foregroundColor(HarvestPalette.secondaryText)
         Spacer()
       }
@@ -1372,11 +1372,11 @@ struct HarvestDownloaderCard: View {
 
           VStack(alignment: .leading, spacing: 3) {
             Text(downloader.name)
-              .font(.system(size: 17, weight: .900))
+              .font(.system(size: 17, weight: .black))
               .foregroundColor(HarvestPalette.text)
               .lineLimit(1)
             Text(downloader.endpoint)
-              .font(.system(size: 12, weight: .600))
+              .font(.system(size: 12, weight: .semibold))
               .foregroundColor(HarvestPalette.secondaryText)
               .lineLimit(1)
           }
@@ -1437,16 +1437,16 @@ struct HarvestScheduleCard: View {
       VStack(alignment: .leading, spacing: 12) {
         HStack(alignment: .top, spacing: 10) {
           Image(systemName: schedule.enabled ? "checkmark.square.fill" : "xmark.square")
-            .font(.system(size: 22, weight: .800))
+            .font(.system(size: 22, weight: .heavy))
             .foregroundColor(schedule.enabled ? HarvestPalette.success : HarvestPalette.secondaryText)
 
           VStack(alignment: .leading, spacing: 4) {
             Text(schedule.name.isEmpty ? schedule.task : schedule.name)
-              .font(.system(size: 16, weight: .900))
+              .font(.system(size: 16, weight: .black))
               .foregroundColor(HarvestPalette.text)
               .lineLimit(1)
             Text(schedule.description.isEmpty ? schedule.task : schedule.description)
-              .font(.system(size: 12, weight: .600))
+              .font(.system(size: 12, weight: .semibold))
               .foregroundColor(HarvestPalette.secondaryText)
               .lineLimit(2)
           }
@@ -1457,9 +1457,9 @@ struct HarvestScheduleCard: View {
 
         HStack {
           Image(systemName: "clock")
-            .font(.system(size: 13, weight: .700))
+            .font(.system(size: 13, weight: .bold))
           Text(schedule.crontabText)
-            .font(.system(size: 12, weight: .700))
+            .font(.system(size: 12, weight: .bold))
             .lineLimit(1)
           Spacer()
         }
@@ -1551,18 +1551,18 @@ struct HarvestSearchResultRow: View {
         VStack(alignment: .leading, spacing: 5) {
           HStack {
             Text(result.title)
-              .font(.system(size: 15, weight: .900))
+              .font(.system(size: 15, weight: .black))
               .foregroundColor(HarvestPalette.text)
               .lineLimit(1)
             Spacer()
             HarvestPill(text: result.source.label, color: result.source.color)
           }
           Text(result.subtitle)
-            .font(.system(size: 12, weight: .600))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundColor(HarvestPalette.secondaryText)
             .lineLimit(2)
           Text(result.ratingText)
-            .font(.system(size: 12, weight: .800))
+            .font(.system(size: 12, weight: .heavy))
             .foregroundColor(HarvestPalette.warning)
         }
       }
@@ -1589,17 +1589,17 @@ struct HarvestDrawerOverlay: View {
         VStack(alignment: .leading, spacing: 12) {
           HStack(spacing: 12) {
             Text(store.currentUserInitial)
-              .font(.system(size: 22, weight: .900))
+              .font(.system(size: 22, weight: .black))
               .frame(width: 52, height: 52)
               .background(HarvestPalette.primary)
               .foregroundColor(.white)
               .clipShape(Circle())
             VStack(alignment: .leading, spacing: 3) {
               Text(store.session?.user.username ?? "Harvest")
-                .font(.system(size: 18, weight: .900))
+                .font(.system(size: 18, weight: .black))
                 .foregroundColor(HarvestPalette.text)
               Text(store.session?.baseURL ?? "")
-                .font(.system(size: 11, weight: .600))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(HarvestPalette.secondaryText)
                 .lineLimit(1)
             }
@@ -1661,15 +1661,15 @@ struct HarvestDrawerRow: View {
     Button(action: action) {
       HStack(spacing: 12) {
         Image(systemName: systemImage)
-          .font(.system(size: 18, weight: .800))
+          .font(.system(size: 18, weight: .heavy))
           .frame(width: 28)
           .foregroundColor(destructive ? HarvestPalette.danger : (selected ? HarvestPalette.primary : HarvestPalette.secondaryText))
         VStack(alignment: .leading, spacing: 2) {
           Text(title)
-            .font(.system(size: 14, weight: .800))
+            .font(.system(size: 14, weight: .heavy))
             .foregroundColor(destructive ? HarvestPalette.danger : HarvestPalette.text)
           Text(subtitle)
-            .font(.system(size: 11, weight: .600))
+            .font(.system(size: 11, weight: .semibold))
             .foregroundColor(HarvestPalette.secondaryText)
             .lineLimit(1)
         }
@@ -1745,7 +1745,7 @@ struct HarvestMenuLabel: View {
 
   var body: some View {
     Text(text)
-      .font(.system(size: 11, weight: .800))
+      .font(.system(size: 11, weight: .heavy))
       .foregroundColor(HarvestPalette.secondaryText)
       .padding(.horizontal, 8)
       .padding(.top, 5)
@@ -1762,10 +1762,10 @@ struct HarvestMenuRow: View {
     Button(action: action) {
       HStack(spacing: 10) {
         Image(systemName: systemImage)
-          .font(.system(size: 15, weight: .800))
+          .font(.system(size: 15, weight: .heavy))
           .frame(width: 18)
         Text(title)
-          .font(.system(size: 13, weight: .700))
+          .font(.system(size: 13, weight: .bold))
         Spacer()
       }
       .foregroundColor(color)
@@ -1788,17 +1788,17 @@ struct HarvestTextField: View {
   var body: some View {
     HStack(spacing: 9) {
       Image(systemName: systemImage)
-        .font(.system(size: 14, weight: .700))
+        .font(.system(size: 14, weight: .bold))
         .foregroundColor(HarvestPalette.secondaryText)
         .frame(width: 18)
       TextField(title, text: $text)
-        .font(.system(size: 14, weight: .600))
+        .font(.system(size: 14, weight: .semibold))
         .autocapitalization(.none)
         .disableAutocorrection(true)
       if !text.isEmpty {
         Button(action: { text = "" }) {
           Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 14, weight: .700))
+            .font(.system(size: 14, weight: .bold))
             .foregroundColor(HarvestPalette.secondaryText)
         }
         .buttonStyle(PlainButtonStyle())
@@ -1820,7 +1820,7 @@ struct HarvestPasswordField: View {
   var body: some View {
     HStack(spacing: 9) {
       Image(systemName: "lock")
-        .font(.system(size: 14, weight: .700))
+        .font(.system(size: 14, weight: .bold))
         .foregroundColor(HarvestPalette.secondaryText)
         .frame(width: 18)
       Group {
@@ -1830,13 +1830,13 @@ struct HarvestPasswordField: View {
           SecureField(title, text: $text)
         }
       }
-      .font(.system(size: 14, weight: .600))
+      .font(.system(size: 14, weight: .semibold))
       .autocapitalization(.none)
       .disableAutocorrection(true)
 
       Button(action: { showPassword.toggle() }) {
         Image(systemName: showPassword ? "eye.slash" : "eye")
-          .font(.system(size: 14, weight: .700))
+          .font(.system(size: 14, weight: .bold))
           .foregroundColor(HarvestPalette.secondaryText)
       }
       .buttonStyle(PlainButtonStyle())
@@ -1856,7 +1856,7 @@ struct HarvestHeaderIcon: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 17, weight: .800))
+        .font(.system(size: 17, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
         .frame(width: 32, height: 32)
         .contentShape(Rectangle())
@@ -1872,7 +1872,7 @@ struct HarvestIconButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 17, weight: .800))
+        .font(.system(size: 17, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
         .frame(width: 44, height: 44)
         .background(HarvestPalette.card)
@@ -1890,7 +1890,7 @@ struct HarvestFloatingButton: View {
   var body: some View {
     Button(action: action) {
       Image(systemName: systemImage)
-        .font(.system(size: 16, weight: .800))
+        .font(.system(size: 16, weight: .heavy))
         .foregroundColor(HarvestPalette.text)
         .frame(width: 38, height: 38)
         .background(HarvestGlassBackground(radius: 14))
@@ -1928,7 +1928,7 @@ struct HarvestStatCard: View {
     HarvestCard {
       HStack(spacing: 10) {
         Image(systemName: systemImage)
-          .font(.system(size: 17, weight: .800))
+          .font(.system(size: 17, weight: .heavy))
           .foregroundColor(color)
           .frame(width: 34, height: 34)
           .background(color.opacity(0.11))
@@ -1936,10 +1936,10 @@ struct HarvestStatCard: View {
 
         VStack(alignment: .leading, spacing: 3) {
           Text(title)
-            .font(.system(size: 11, weight: .700))
+            .font(.system(size: 11, weight: .bold))
             .foregroundColor(HarvestPalette.secondaryText)
           Text(value)
-            .font(.system(size: 15, weight: .900))
+            .font(.system(size: 15, weight: .black))
             .foregroundColor(HarvestPalette.text)
             .lineLimit(1)
             .minimumScaleFactor(0.72)
@@ -1959,13 +1959,13 @@ struct HarvestActionTile: View {
     Button(action: action) {
       VStack(spacing: 8) {
         Image(systemName: systemImage)
-          .font(.system(size: 18, weight: .800))
+          .font(.system(size: 18, weight: .heavy))
           .foregroundColor(color)
           .frame(width: 34, height: 34)
           .background(color.opacity(0.12))
           .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         Text(title)
-          .font(.system(size: 12, weight: .800))
+          .font(.system(size: 12, weight: .heavy))
           .foregroundColor(HarvestPalette.text)
           .lineLimit(1)
       }
@@ -1988,13 +1988,13 @@ struct HarvestMiniMetric: View {
     VStack(alignment: .leading, spacing: 4) {
       HStack(spacing: 4) {
         Image(systemName: systemImage)
-          .font(.system(size: 10, weight: .800))
+          .font(.system(size: 10, weight: .heavy))
         Text(title)
-          .font(.system(size: 10, weight: .700))
+          .font(.system(size: 10, weight: .bold))
       }
       .foregroundColor(HarvestPalette.secondaryText)
       Text(value)
-        .font(.system(size: 12, weight: .900))
+        .font(.system(size: 12, weight: .black))
         .foregroundColor(HarvestPalette.text)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
@@ -2015,9 +2015,9 @@ struct HarvestSmallAction: View {
     Button(action: action) {
       HStack(spacing: 5) {
         Image(systemName: systemImage)
-          .font(.system(size: 12, weight: .800))
+          .font(.system(size: 12, weight: .heavy))
         Text(title)
-          .font(.system(size: 12, weight: .800))
+          .font(.system(size: 12, weight: .heavy))
       }
       .frame(maxWidth: .infinity)
       .frame(height: 34)
@@ -2035,7 +2035,7 @@ struct HarvestPill: View {
 
   var body: some View {
     Text(text)
-      .font(.system(size: 10, weight: .900))
+      .font(.system(size: 10, weight: .black))
       .padding(.horizontal, 7)
       .frame(height: 20)
       .background(color.opacity(0.12))
@@ -2052,16 +2052,16 @@ struct HarvestEmptyState: View {
   var body: some View {
     VStack(spacing: 12) {
       Image(systemName: systemImage)
-        .font(.system(size: 24, weight: .800))
+        .font(.system(size: 24, weight: .heavy))
         .foregroundColor(HarvestPalette.primary)
         .frame(width: 48, height: 48)
         .background(HarvestPalette.primary.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
       Text(title)
-        .font(.system(size: 18, weight: .900))
+        .font(.system(size: 18, weight: .black))
         .foregroundColor(HarvestPalette.text)
       Text(subtitle)
-        .font(.system(size: 13, weight: .600))
+        .font(.system(size: 13, weight: .semibold))
         .foregroundColor(HarvestPalette.secondaryText)
         .multilineTextAlignment(.center)
         .lineSpacing(3)
@@ -2081,7 +2081,7 @@ struct HarvestProgressState: View {
         .progressViewStyle(CircularProgressViewStyle())
         .accentColor(HarvestPalette.primary)
       Text(text)
-        .font(.system(size: 13, weight: .700))
+        .font(.system(size: 13, weight: .bold))
         .foregroundColor(HarvestPalette.secondaryText)
     }
     .frame(maxWidth: .infinity)
@@ -2112,7 +2112,7 @@ struct HarvestSegmentedPicker<T: HarvestSegmentItem>: View {
       ForEach(items) { item in
         Button(action: { selection = item }) {
           Text(item.label)
-            .font(.system(size: 13, weight: .800))
+            .font(.system(size: 13, weight: .heavy))
             .foregroundColor(selection.id == item.id ? HarvestPalette.text : HarvestPalette.secondaryText)
             .padding(.horizontal, 12)
             .frame(height: 32)
@@ -2201,7 +2201,7 @@ struct RemoteImageView: View {
           .scaledToFill()
       } else {
         Image(systemName: "photo")
-          .font(.system(size: 24, weight: .700))
+          .font(.system(size: 24, weight: .bold))
           .foregroundColor(HarvestPalette.secondaryText.opacity(0.5))
       }
     }
